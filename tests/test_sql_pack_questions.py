@@ -80,7 +80,9 @@ def test_requires_order_consistent_and_question_mentions_it(report) -> None:  # 
         assert t.requires_order == has_top_level_order_by(t.gold_sql)
         if t.requires_order:
             assert re.search(
-                r"order|sorted|highest first|newest|from newest|top|latest|most", t.question, re.I
+                r"order|sorted|highest first|newest|top|latest|most|largest|biggest|date order|chronolog",
+                t.question,
+                re.I,
             )
 
 
@@ -244,3 +246,74 @@ def test_local_executor_register_timeout_and_empty_batch(db: bytes) -> None:
     inf = "WITH RECURSIVE r(n) AS (SELECT 1 UNION ALL SELECT n+1 FROM r) SELECT COUNT(*) FROM r"
     (o,) = ex.run_batch("d", [inf])
     assert not o.ok and o.error_kind == "timeout"
+
+
+# ---- caps and difficulty mix -----------------------------------------------------------------
+
+
+@pytest.fixture(scope="module")
+def report_1500(db: bytes):  # type: ignore[no-untyped-def]
+    return generate_tasks(db, 1500, seed=0)
+
+
+def test_caps_hold_at_1500(report_1500) -> None:  # type: ignore[no-untyped-def]
+    assert len(report_1500.tasks) == 1500
+    assert len({t.gold_sql for t in report_1500.tasks}) == 1500
+    assert report_1500.template_cap == 60 and report_1500.family_cap == 375
+    by_tpl = Counter(t.template for t in report_1500.tasks)
+    by_fam = Counter(t.family for t in report_1500.tasks)
+    assert max(by_tpl.values()) <= 0.04 * 1500
+    assert max(by_fam.values()) <= 0.25 * 1500
+    assert len(by_fam) == len(FAMILIES)
+
+
+def test_difficulty_mix_at_1500(report_1500) -> None:  # type: ignore[no-untyped-def]
+    d = Counter(t.difficulty for t in report_1500.tasks)
+    assert d["hard"] >= 0.15 * 1500
+    assert d["medium"] >= 0.35 * 1500
+
+
+def test_caps_are_enforced_and_counted(db: bytes) -> None:
+    from distillery.taskpacks.sql import questions as q
+
+    # one template with a huge parameter space, one tiny: the big one must be capped.
+    big = q.Template(
+        "t_big",
+        "filter",
+        ("accounts",),
+        "easy",
+        lambda rng: (
+            "q",
+            f"SELECT name FROM accounts WHERE account_id > {rng.randint(0, 100000) % 150}",
+        ),
+    )
+    small = q.Template(
+        "t_small", "join", ("accounts",), "easy", lambda rng: ("q", "SELECT name FROM accounts")
+    )
+    other = q.Template(
+        "t_o",
+        "window",
+        ("accounts",),
+        "easy",
+        lambda rng: ("q", f"SELECT name FROM accounts WHERE account_id = {rng.randint(1, 150)}"),
+    )
+    old = q.TEMPLATES
+    q.TEMPLATES = (big, small, other)
+    try:
+        rep = q.generate_tasks(db, 100, seed=0, template_share=0.2, family_share=0.4)
+    finally:
+        q.TEMPLATES = old
+    counts = Counter(t.template for t in rep.tasks)
+    assert rep.template_cap == 34  # ceil(n / len(pool)) lifts the cap so n stays reachable
+    assert counts["t_big"] <= rep.template_cap and counts["t_small"] == 1
+    assert Counter(t.family for t in rep.tasks)["filter"] <= rep.family_cap
+
+
+def test_cap_drops_are_reported(db: bytes) -> None:
+    rep = generate_tasks(db, 400, seed=0, template_share=0.01, family_share=0.25)
+    # tiny template cap (ceil(400/len(pool)) lifts it): every template stays within the cap
+    assert max(Counter(t.template for t in rep.tasks).values()) <= rep.template_cap
+    assert (
+        rep.dropped_total
+        == rep.dropped_error + rep.dropped_empty + rep.dropped_duplicate + rep.dropped_cap
+    )

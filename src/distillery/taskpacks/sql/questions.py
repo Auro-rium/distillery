@@ -9,6 +9,7 @@ executed against the database; tasks that error or return no rows are dropped an
 from __future__ import annotations
 
 import hashlib
+import math
 import random
 from collections import Counter
 from collections.abc import Callable
@@ -182,33 +183,34 @@ def active_subs_country(rng: random.Random) -> tuple[str, str]:
 
 @_register("join", ("subscriptions", "plans", "accounts"), "medium")
 def tier_subscriptions(rng: random.Random) -> tuple[str, str]:
-    t = _pick(rng, TIERS[1:])
+    t, n, st = _pick(rng, TIERS[1:]), rng.randint(1, 40), _pick(rng, _STATUS)
     q = _pick(
         rng,
         [
-            f"Show account name and seats for every subscription on a {t}-tier plan.",
-            f"For subscriptions whose plan tier is '{t}', list the account name and number of seats.",
+            f"Show account name and seats for every subscription on a {t}-tier plan with more than {n} seats, for {st} accounts.",
+            f"For subscriptions whose plan tier is '{t}' and seats exceed {n}, list the account name and number of seats (accounts with status '{st}' only).",
         ],
     )
     return q, (
         "SELECT a.name, s.seats FROM subscriptions s JOIN plans p ON p.plan_id = s.plan_id "
-        f"JOIN accounts a ON a.account_id = s.account_id WHERE p.tier = '{t}'"
+        f"JOIN accounts a ON a.account_id = s.account_id WHERE p.tier = '{t}' AND s.seats > {n} "
+        f"AND a.status = '{st}'"
     )
 
 
 @_register("join", ("users", "support_tickets"), "medium")
 def users_with_ticket_priority(rng: random.Random) -> tuple[str, str]:
-    p = _pick(rng, PRIORITIES)
+    p, c, r = _pick(rng, PRIORITIES), _pick(rng, CATEGORIES), _pick(rng, _ROLES)
     q = _pick(
         rng,
         [
-            f"Which users have opened at least one {p}-priority ticket? Return distinct emails.",
-            f"List the distinct emails of users who submitted a ticket with priority {p}.",
+            f"Which {r} users have opened at least one {p}-priority {c} ticket? Return distinct emails.",
+            f"List the distinct emails of {r} users who submitted a {c} ticket with priority {p}.",
         ],
     )
     return q, (
         "SELECT DISTINCT u.email FROM users u JOIN support_tickets t ON t.user_id = u.user_id "
-        f"WHERE t.priority = '{p}'"
+        f"WHERE t.priority = '{p}' AND t.category = '{c}' AND u.role = '{r}'"
     )
 
 
@@ -311,18 +313,20 @@ def countries_many_accounts(rng: random.Random) -> tuple[str, str]:
 
 @_register("window", ("accounts", "users"), "hard")
 def biggest_account_per_industry(rng: random.Random) -> tuple[str, str]:
+    d, st = _date(rng, "2022-06-01", "2025-06-30"), _pick(rng, _STATUS)
     q = _pick(
         rng,
         [
-            "For each industry, which account has the most users (count all user rows)? "
+            f"Among {st} accounts created before {d}, which account in each industry has the most users (count all user rows)? "
             "Break ties by lowest account_id. Return industry, account name and user count.",
-            "Find the account with the largest number of users in every industry (ties: lowest "
+            f"For {st} accounts created before {d}, find the account with the largest number of users in every industry (ties: lowest "
             "account_id). Show industry, name, and user count.",
         ],
     )
     return q, (
         "WITH c AS (SELECT a.account_id, a.name, a.industry, COUNT(u.user_id) AS n FROM accounts a "
-        "LEFT JOIN users u ON u.account_id = a.account_id GROUP BY a.account_id), "
+        "LEFT JOIN users u ON u.account_id = a.account_id "
+        f"WHERE a.status = '{st}' AND a.created_at < '{d}' GROUP BY a.account_id), "
         "r AS (SELECT *, ROW_NUMBER() OVER (PARTITION BY industry ORDER BY n DESC, account_id) AS rn "
         "FROM c) SELECT industry, name, n FROM r WHERE rn = 1"
     )
@@ -515,16 +519,18 @@ def never_logged_in(rng: random.Random) -> tuple[str, str]:
 
 @_register("null_handling", ("invoices",), "medium")
 def avg_amount_missing_as_zero(rng: random.Random) -> tuple[str, str]:
+    cur, d1, d2 = _pick(rng, ("USD", "EUR")), *_span(rng)
     q = _pick(
         rng,
         [
-            "Per invoice status, what is the average invoice amount in cents when a missing amount "
+            f"For {cur} invoices issued between {d1} and {d2}, what is the average invoice amount in cents per status when a missing amount "
             "counts as 0? Round to 2 decimals.",
-            "For each invoice status, average amount_cents treating NULL as zero, rounded to 2 decimals.",
+            f"For each status of {cur} invoices issued {d1} to {d2}, average amount_cents treating NULL as zero, rounded to 2 decimals.",
         ],
     )
     return q, (
-        "SELECT status, ROUND(AVG(COALESCE(amount_cents, 0)), 2) FROM invoices GROUP BY status"
+        "SELECT status, ROUND(AVG(COALESCE(amount_cents, 0)), 2) FROM invoices "
+        f"WHERE currency = '{cur}' AND issued_date BETWEEN '{d1}' AND '{d2}' GROUP BY status"
     )
 
 
@@ -559,17 +565,18 @@ def one_off_invoices(rng: random.Random) -> tuple[str, str]:
 
 @_register("null_handling", ("support_tickets",), "medium")
 def tickets_without_user(rng: random.Random) -> tuple[str, str]:
+    p, d1, d2 = _pick(rng, PRIORITIES), *_span(rng)
     q = _pick(
         rng,
         [
-            "For each category, how many tickets were submitted without a user, and how many tickets "
+            f"For {p}-priority tickets opened between {d1} and {d2}, per category: how many were submitted without a user, and how many tickets "
             "are there in total? Return category, count without user, total count.",
-            "Per ticket category, give the number of tickets with no user_id next to the total number of tickets.",
+            f"Per ticket category among {p} tickets opened {d1} to {d2}, give the number with no user_id next to the total number of tickets.",
         ],
     )
     return q, (
         "SELECT category, SUM(CASE WHEN user_id IS NULL THEN 1 ELSE 0 END), COUNT(*) "
-        "FROM support_tickets GROUP BY category"
+        f"FROM support_tickets WHERE priority = '{p}' AND opened_at >= '{d1}' AND opened_at < '{d2}' GROUP BY category"
     )
 
 
@@ -578,18 +585,20 @@ def tickets_without_user(rng: random.Random) -> tuple[str, str]:
 
 @_register("subquery_cte", ("payments", "invoices"), "hard")
 def accounts_above_avg_paid(rng: random.Random) -> tuple[str, str]:
+    m, cur = _pick(rng, _PAY_METHOD), _pick(rng, ("USD", "EUR"))
     q = _pick(
         rng,
         [
-            "Which accounts have a total of succeeded payments above the average total across "
-            "accounts that have any succeeded payment? Return account_id.",
-            "List account_ids whose succeeded-payment total exceeds the mean of per-account totals "
-            "(only accounts with at least one succeeded payment count toward the mean).",
+            f"Considering succeeded {m} payments on {cur} invoices, which accounts have a total above the average total across "
+            "accounts that have any such payment? Return account_id.",
+            f"List account_ids whose succeeded {m} payment total on {cur} invoices exceeds the mean of per-account totals "
+            "(only accounts with at least one such payment count toward the mean).",
         ],
     )
     return q, (
         "WITH t AS (SELECT i.account_id, SUM(p.amount_cents) AS total FROM payments p "
         "JOIN invoices i ON i.invoice_id = p.invoice_id WHERE p.status = 'succeeded' "
+        f"AND p.method = '{m}' AND i.currency = '{cur}' "
         "GROUP BY i.account_id) SELECT account_id FROM t WHERE total > (SELECT AVG(total) FROM t)"
     )
 
@@ -612,17 +621,19 @@ def users_in_tier_accounts(rng: random.Random) -> tuple[str, str]:
 
 @_register("subquery_cte", ("support_tickets",), "medium")
 def accounts_more_tickets_than_avg(rng: random.Random) -> tuple[str, str]:
+    c, y = _pick(rng, CATEGORIES), rng.choice((2022, 2023, 2024, 2025))
     q = _pick(
         rng,
         [
-            "Which accounts have more support tickets than the average ticket count per account "
-            "(averaged over accounts that have at least one ticket)? Return account_id and count.",
-            "Return account_id and ticket count for accounts above the mean per-account ticket "
-            "count (accounts without tickets are excluded from the mean).",
+            f"Counting {c} tickets opened in or after {y}, which accounts have more tickets than the average count per account "
+            "(averaged over accounts that have at least one such ticket)? Return account_id and count.",
+            f"Return account_id and {c}-ticket count (tickets opened {y} or later) for accounts above the mean per-account count "
+            "(accounts without such tickets are excluded from the mean).",
         ],
     )
     return q, (
-        "WITH c AS (SELECT account_id, COUNT(*) AS n FROM support_tickets GROUP BY account_id) "
+        "WITH c AS (SELECT account_id, COUNT(*) AS n FROM support_tickets "
+        f"WHERE category = '{c}' AND opened_at >= '{y}-01-01' GROUP BY account_id) "
         "SELECT account_id, n FROM c WHERE n > (SELECT AVG(n) FROM c)"
     )
 
@@ -835,16 +846,17 @@ def tickets_open_closed_split(rng: random.Random) -> tuple[str, str]:
 
 @_register("set_ops", ("support_tickets", "invoices"), "hard")
 def urgent_or_overdue(rng: random.Random) -> tuple[str, str]:
+    c, d = _pick(rng, CATEGORIES), _date(rng, "2023-01-01", "2025-09-30")
     q = _pick(
         rng,
         [
-            "Which accounts have either an urgent ticket or an overdue invoice (or both)? Return distinct account_id.",
-            "Give the union of account_ids that have an urgent-priority ticket and those that have an overdue invoice.",
+            f"Which accounts have either an urgent {c} ticket or an overdue invoice issued after {d} (or both)? Return distinct account_id.",
+            f"Give the union of account_ids that have an urgent-priority {c} ticket and those that have an overdue invoice issued after {d}.",
         ],
     )
     return q, (
-        "SELECT account_id FROM support_tickets WHERE priority = 'urgent' UNION "
-        "SELECT account_id FROM invoices WHERE status = 'overdue'"
+        f"SELECT account_id FROM support_tickets WHERE priority = 'urgent' AND category = '{c}' UNION "
+        f"SELECT account_id FROM invoices WHERE status = 'overdue' AND issued_date > '{d}'"
     )
 
 
@@ -1255,7 +1267,11 @@ def busy_months(rng: random.Random) -> tuple[str, str]:
 
 @_register("subquery_cte", ("accounts", "subscriptions"), "hard")
 def accounts_latest_sub_plan(rng: random.Random) -> tuple[str, str]:
-    pid, st, c = rng.randint(1, 6), _pick(rng, ("active", "cancelled", "past_due", "trialing")), _pick(rng, COUNTRIES)
+    pid, st, c = (
+        rng.randint(1, 6),
+        _pick(rng, ("active", "cancelled", "past_due", "trialing")),
+        _pick(rng, COUNTRIES),
+    )
     q = _pick(
         rng,
         [
@@ -1272,7 +1288,11 @@ def accounts_latest_sub_plan(rng: random.Random) -> tuple[str, str]:
 
 @_register("null_handling", ("subscriptions", "plans", "accounts"), "hard")
 def effective_revenue(rng: random.Random) -> tuple[str, str]:
-    st, c, y = _pick(rng, ("active", "cancelled", "past_due", "trialing")), _pick(rng, COUNTRIES), rng.choice((2022, 2023, 2024, 2025))
+    st, c, y = (
+        _pick(rng, ("active", "cancelled", "past_due", "trialing")),
+        _pick(rng, COUNTRIES),
+        rng.choice((2022, 2023, 2024, 2025)),
+    )
     q = _pick(
         rng,
         [
@@ -1654,6 +1674,10 @@ def _task_id(family: str, gold_sql: str) -> str:
     return "sql-" + hashlib.sha256(f"{family}|{gold_sql}".encode()).hexdigest()[:12]
 
 
+DEFAULT_TEMPLATE_SHARE = 0.04
+DEFAULT_FAMILY_SHARE = 0.25
+
+
 @dataclass
 class GenerationReport:
     """Generated tasks plus a count of everything that was dropped, and why."""
@@ -1662,12 +1686,17 @@ class GenerationReport:
     dropped_error: int = 0
     dropped_empty: int = 0
     dropped_duplicate: int = 0
+    dropped_cap: int = 0
     attempts: int = 0
     dropped_by_template: Counter[str] = field(default_factory=Counter)
+    capped_templates: set[str] = field(default_factory=set)
+    capped_families: set[str] = field(default_factory=set)
+    template_cap: int = 0
+    family_cap: int = 0
 
     @property
     def dropped_total(self) -> int:
-        return self.dropped_error + self.dropped_empty + self.dropped_duplicate
+        return self.dropped_error + self.dropped_empty + self.dropped_duplicate + self.dropped_cap
 
 
 def generate_tasks(
@@ -1676,21 +1705,33 @@ def generate_tasks(
     seed: int,
     *,
     families: tuple[str, ...] | None = None,
-    max_attempt_factor: int = 40,
+    max_attempt_factor: int = 60,
+    template_share: float = DEFAULT_TEMPLATE_SHARE,
+    family_share: float = DEFAULT_FAMILY_SHARE,
 ) -> GenerationReport:
     """Generate up to ``n`` distinct tasks whose gold SQL executes and returns >= 1 row.
 
-    Templates are cycled round-robin (with randomised parameters) so families are balanced.
-    Tasks that error, return an empty result, or repeat an existing gold SQL are dropped and
-    counted in the report. Deterministic for (db contents, n, seed, families).
+    Templates are cycled round-robin (with randomised parameters). No template may contribute more
+    than ``template_share * n`` tasks and no family more than ``family_share * n`` (each cap is
+    raised only as far as needed to make ``n`` reachable with the templates/families selected, e.g.
+    when ``families`` restricts the pool). Tasks that error, return an empty result, repeat an
+    existing gold SQL, or exceed a cap are dropped and counted in the report; a template whose
+    parameter space is exhausted or capped leaves the pool. The result can be shorter than ``n``
+    when the capped, deduplicated pool cannot supply that many. Deterministic for
+    (db contents, n, seed, families, shares).
     """
     rng = random.Random(seed)
     pool = [t for t in TEMPLATES if families is None or t.family in families]
     if not pool:
         raise ValueError(f"no templates for families {families!r}")
-    report = GenerationReport(tasks=[])
+    n_fams = len({t.family for t in pool})
+    tpl_cap = max(1, math.ceil(template_share * n), math.ceil(n / len(pool)))
+    fam_cap = max(1, math.ceil(family_share * n), math.ceil(n / n_fams))
+    report = GenerationReport(tasks=[], template_cap=tpl_cap, family_cap=fam_cap)
     seen: set[str] = set()
     dup_streak: Counter[str] = Counter()
+    per_tpl: Counter[str] = Counter()
+    per_fam: Counter[str] = Counter()
     i = 0
     while pool and len(report.tasks) < n and report.attempts < n * max_attempt_factor:
         tpl = pool[i % len(pool)]
@@ -1714,7 +1755,26 @@ def generate_tasks(
             report.dropped_empty += 1
             report.dropped_by_template[tpl.name] += 1
             continue
+        if per_tpl[tpl.name] >= tpl_cap or per_fam[tpl.family] >= fam_cap:
+            report.dropped_cap += 1
+            report.dropped_by_template[tpl.name] += 1
+            if per_tpl[tpl.name] >= tpl_cap:
+                report.capped_templates.add(tpl.name)
+                pool = [t for t in pool if t.name != tpl.name]
+            if per_fam[tpl.family] >= fam_cap:
+                report.capped_families.add(tpl.family)
+                pool = [t for t in pool if t.family != tpl.family]
+            continue
         seen.add(sql)
+        per_tpl[tpl.name] += 1
+        per_fam[tpl.family] += 1
+        # remove from the pool as soon as a cap is reached, so no attempts are wasted
+        if per_tpl[tpl.name] >= tpl_cap:
+            report.capped_templates.add(tpl.name)
+            pool = [t for t in pool if t.name != tpl.name]
+        if per_fam[tpl.family] >= fam_cap:
+            report.capped_families.add(tpl.family)
+            pool = [t for t in pool if t.family != tpl.family]
         report.tasks.append(
             SqlTask(
                 task_id=_task_id(tpl.family, sql),
