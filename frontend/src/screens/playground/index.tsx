@@ -110,7 +110,7 @@ export default function Playground() {
         <div className="row">
           <button className="btn primary" type="submit" disabled={busy || q.trim() === "" || (pg !== null && !pg.enabled)}>Ask</button>
           <span className="muted">{q.length}/{MAX}</span>
-          {busy && <Spinner label="Asking the models" />}
+          {busy && <Spinner inline label="Asking the models" />}
         </div>
       </form>
       {err !== null && <Failure e={err} />}

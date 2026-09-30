@@ -1,4 +1,7 @@
+import type { CSSProperties } from "react";
 import { fmtInt, fmtPercent } from "../../api/format";
+import { CountUp } from "../../motion/CountUp";
+import { useInView } from "../../motion/useInView";
 // Hand-written SVG accuracy bars with optional confidence-interval whiskers.
 // Draws only values it is given: it computes no statistics. Position = value on a 0..1 axis.
 export interface BarRow {
@@ -18,12 +21,18 @@ export function rowDescription(r: BarRow): string {
   return `${r.label} ${fmtPercent(r.value)}, ${ci}, n=${fmtInt(r.n)}`;
 }
 
+/**
+ * The DOM always carries the final values (bar widths, CI positions, labels). Once, when the chart
+ * first scrolls into view, CSS grows the bars and whiskers from zero to those same values with
+ * transform/opacity; reduced motion or no IntersectionObserver shows them at once.
+ */
 export function AccuracyChart({ rows, title }: { rows: BarRow[]; title: string }) {
+  const [ref, seen] = useInView<HTMLElement>();
   return (
-    <figure className="acc" aria-label={title}>
+    <figure className="acc" aria-label={title} ref={ref} data-reveal={seen ? "done" : "pending"}>
       <div className="acc-rows">
-        {rows.map((r) => (
-          <div className="acc-row" key={r.key}>
+        {rows.map((r, i) => (
+          <div className="acc-row" key={r.key} style={{ "--i": i } as CSSProperties}>
             <span className="acc-label">{r.label}</span>
             <svg
               className={`acc-svg ${r.key}`}
@@ -48,7 +57,7 @@ export function AccuracyChart({ rows, title }: { rows: BarRow[]; title: string }
               )}
             </svg>
             <span className="acc-val">
-              <strong>{fmtPercent(r.value)}</strong>
+              <strong><CountUp value={r.value} format={(v) => fmtPercent(v)} fromZero /></strong>
               <span className="muted">
                 {r.ci ? ` CI ${fmtPercent(r.ci[0])} to ${fmtPercent(r.ci[1])}` : " no CI in report"} · n={fmtInt(r.n)}
               </span>

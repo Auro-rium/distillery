@@ -34,3 +34,17 @@ export function applyEvents(base: RunDetail, events: RunEvent[]): LiveView {
   if (events.some((e) => e.type === "stage") && status === "pending") status = "running";
   return { run: { ...base, stages, spend }, logs, done, status, decision };
 }
+
+// ---- connection state of the live stream, as shown by the heartbeat dot ----
+export type Connection = "connecting" | "connected" | "stale" | "disconnected";
+
+/**
+ * `state` is the SSE state from useSSE, `stale` is true when no update can be trusted as current
+ * (stream down, silent past the limit, or the last refresh failed). Anything but a healthy open
+ * stream is never presented as live.
+ */
+export function connectionOf(state: "connecting" | "open" | "reconnecting" | "closed", stale: boolean): Connection {
+  if (state === "reconnecting" || state === "closed") return "disconnected";
+  if (stale) return "stale";
+  return state === "connecting" ? "connecting" : "connected";
+}

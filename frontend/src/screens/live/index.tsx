@@ -1,13 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { ApiError, api, hasAdminToken, setAdminToken } from "../../api/client";
+import { ApiError, api, apiUrl, hasAdminToken, setAdminToken } from "../../api/client";
 import { fmtInt, fmtUsd } from "../../api/format";
-import type { Decision, RunDetail, StageStatus } from "../../api/types";
+import type { Decision, RunDetail } from "../../api/types";
 import { useSSE } from "../../api/useSSE";
-import { ApiErrorState, Badge, Card, CodeBlock, ErrorState, LabelBanner, Spinner, Stat, type Tone } from "../../components";
-import { applyEvents } from "./state";
-
-const STAGE_TONE: Record<StageStatus, Tone> = { pending: "neutral", running: "info", done: "ok", failed: "bad" };
+import { ApiErrorState, Badge, Card, CodeBlock, ErrorState, LabelBanner, Spinner, Stat } from "../../components";
+import { CountUp } from "../../motion/CountUp";
+import { EventLog } from "./EventLog";
+import { Heartbeat } from "./Heartbeat";
+import { SpendMeter } from "./SpendMeter";
+import { StageTimeline } from "./StageTimeline";
+import { applyEvents, connectionOf } from "./state";
 
 function ApiErrorText({ error }: { error: unknown }) {
   const code = error instanceof ApiError ? `${error.code}: ` : "";
@@ -28,12 +31,15 @@ export default function LiveRun() {
   useEffect(() => { setDetail(null); load(); }, [load]);
 
   const active = detail !== null && (detail.status === "running" || detail.status === "pending");
-  const { events, state, stale: streamStale, refusal } = useSSE(active ? `/api/runs/${encodeURIComponent(id)}/events` : null);
+  const { events, state, stale: streamStale, refusal } = useSSE(active ? apiUrl(`/api/runs/${encodeURIComponent(id)}/events`) : null);
   const view = useMemo(() => (detail ? applyEvents(detail, events) : null), [detail, events]);
   const finished = view?.done ?? false;
   // Stale = the stream is down or silent for 30 s, or the last refresh failed. The values on
   // screen are then last-known, not current, and are presented that way.
   const stale = active && !finished && (streamStale || (error !== null && detail !== null));
+  const conn = connectionOf(state, stale);
+  // Motion that implies activity (pulse, flowing connector, ripple) runs only while truly live.
+  const live = active && !finished && conn === "connected";
 
   // SSE carries no sandbox/verifier data: poll while active, refetch once when done.
   useEffect(() => {
@@ -62,16 +68,15 @@ export default function LiveRun() {
   if (error !== null && !detail) return <ApiErrorState error={error} onRetry={load} />;
   if (!detail || !view) return <Spinner label="Loading run" />;
   const { run } = view;
-  const models = Object.entries(run.spend.by_model);
   const st = run.verifier.selftest;
 
   return (
-    <div className="stack" data-stale={stale}>
+    <div className="stack" data-stale={stale} data-live={live}>
       <LabelBanner dry_run={run.dry_run} recorded={run.recorded} recorded_at={run.recorded_at} />
       <div className="row">
         <h1 style={{ margin: 0 }}>Run <span className="mono">{run.run_id}</span></h1>
         <Badge tone={view.status === "failed" ? "bad" : view.status === "complete" ? "ok" : "info"}>{view.status}</Badge>
-        {active && !finished && (stale ? <Badge tone="bad">Disconnected / stale</Badge> : <Badge>{state === "open" ? "live" : state}</Badge>)}
+        {active && !finished && <Heartbeat conn={conn} events={events.length} />}
         <Link to={`/runs/${encodeURIComponent(id)}/tree`}>Experiment tree</Link>
       </div>
       {run.error && <ErrorState title="Run error" message={run.error} />}
@@ -99,32 +104,18 @@ export default function LiveRun() {
       )}
 
       <Card title={stale ? "Stages (last known, not current)" : "Stages"}>
-        <ol style={{ margin: 0, paddingLeft: 20 }} aria-label="Stage timeline">
-          {run.stages.map((s) => (
-            <li key={s.name}><span className="mono">{s.name}</span> <Badge tone={STAGE_TONE[s.status]}>{s.status}</Badge></li>
-          ))}
-        </ol>
+        <StageTimeline stages={run.stages} live={live} />
         {run.stages.length === 0 && <p className="muted">No stages reported yet.</p>}
       </Card>
 
       <Card title={stale ? "Spend (last known, not current)" : "Spend"}>
         <div className="grid">
-          <Stat label="Total" value={fmtUsd(run.spend.total_usd)} hint={`cap ${fmtUsd(run.spend.cap_usd)}`} />
+          <Stat label="Total" value={<CountUp value={run.spend.total_usd} format={fmtUsd} />} hint={`cap ${fmtUsd(run.spend.cap_usd)}`} />
           <Stat label="Sandbox ops" value={fmtInt(run.sandbox.operations)} hint={`peak concurrency ${fmtInt(run.sandbox.concurrency_peak)}`} />
-          <Stat label="Fine-tune (estimate)" value={fmtUsd(run.spend.finetune_usd_estimate)} />
+          <Stat label="Fine-tune (estimate)" value={<CountUp value={run.spend.finetune_usd_estimate} format={fmtUsd} />} />
         </div>
-        {Number.isFinite(run.spend.total_usd) && Number.isFinite(run.spend.cap_usd) && run.spend.cap_usd > 0 && (
-          <progress value={run.spend.total_usd} max={run.spend.cap_usd} aria-label="Spend against cap" style={{ width: "100%", marginTop: 12 }} />
-        )}
-        <table style={{ width: "100%", marginTop: 8 }}>
-          <thead><tr><th align="left">Model</th><th align="right">USD</th><th align="right">Calls</th><th align="right">In tok</th><th align="right">Out tok</th></tr></thead>
-          <tbody>
-            {models.map(([m, v]) => (
-              <tr key={m}><td className="mono">{m}</td><td align="right">{fmtUsd(v.usd)}</td><td align="right">{fmtInt(v.calls)}</td><td align="right">{fmtInt(v.input_tokens)}</td><td align="right">{fmtInt(v.output_tokens)}</td></tr>
-            ))}
-          </tbody>
-        </table>
-        {models.length === 0 && <p className="muted">No model calls recorded yet.</p>}
+        <SpendMeter spend={run.spend} />
+        {Object.keys(run.spend.by_model).length === 0 && <p className="muted">No model calls recorded yet.</p>}
       </Card>
 
       <Card title="Verifier">
@@ -136,9 +127,7 @@ export default function LiveRun() {
       </Card>
 
       <Card title="Log">
-        <pre className="code" style={{ maxHeight: 240, overflow: "auto" }} role="log" aria-live="off">
-          {view.logs.slice(-200).map((l) => `seen ${l.observed_at} [${l.level}] ${l.message}`).join("\n") || "No log lines yet."}
-        </pre>
+        <EventLog lines={view.logs.slice(-200)} />
       </Card>
 
       {active && !finished && (

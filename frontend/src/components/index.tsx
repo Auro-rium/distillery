@@ -1,5 +1,7 @@
-import type { ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ApiError } from "../api/client";
+import type { Seg } from "../lib/diff";
+import { COPY_FEEDBACK_MS } from "../motion/timing";
 
 export const DRY_RUN_TEXT = "DRY RUN — fake models, numbers are NOT results";
 
@@ -58,14 +60,28 @@ export function Badge(props: { tone?: Tone; children: ReactNode }) {
   return <span className={`badge${t}`}>{props.children}</span>;
 }
 
-export function Spinner(props: { label?: string }) {
-  return (
-    <span role="status" aria-live="polite">
-      <span className="spinner" aria-hidden="true" />
-      <span className={props.label ? "muted" : "sr-only"} style={{ marginLeft: 8 }}>
-        {props.label ?? ""}
+/**
+ * Loading state. By default a shimmering skeleton block (decorative; it shows no data-shaped
+ * content) with the label as text. `inline` is the small dot pulse used next to a button.
+ * Distinct from the error and empty states, which have their own components.
+ */
+export function Spinner(props: { label?: string; inline?: boolean; lines?: number }) {
+  const label = <span className={props.label ? "muted skeleton-label" : "sr-only"}>{props.label ?? "Loading"}</span>;
+  if (props.inline) {
+    return (
+      <span role="status" aria-live="polite" className="dots-wrap">
+        <span className="dots" aria-hidden="true"><i /><i /><i /></span>
+        {label}
       </span>
-    </span>
+    );
+  }
+  return (
+    <div role="status" aria-live="polite" aria-busy="true" className="skeleton-wrap">
+      {label}
+      <div className="skeleton" aria-hidden="true">
+        {Array.from({ length: props.lines ?? 3 }, (_, i) => <i key={i} className={`sk-line sk-${i % 3}`} />)}
+      </div>
+    </div>
   );
 }
 
@@ -88,11 +104,43 @@ export function EmptyState(props: { title: string; children?: ReactNode }) {
   );
 }
 
-export function CodeBlock(props: { code: string; caption?: string }) {
+/** Copy-to-clipboard button. "Copied" is shown only after the write actually succeeded. */
+export function CopyButton({ text }: { text: string }) {
+  const [st, setSt] = useState<"idle" | "copied" | "failed">("idle");
+  const timer = useRef<ReturnType<typeof setTimeout>>();
+  useEffect(() => () => clearTimeout(timer.current), []);
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(text);
+      setSt("copied");
+    } catch {
+      setSt("failed");
+    }
+    clearTimeout(timer.current);
+    timer.current = setTimeout(() => setSt("idle"), COPY_FEEDBACK_MS);
+  }
+  const msg = st === "copied" ? "Copied" : st === "failed" ? "Copy failed" : "Copy";
   return (
-    <div>
+    <>
+      <button type="button" className={`copy-btn ${st}`} onClick={copy} aria-label="Copy to clipboard">{msg}</button>
+      <span className="sr-only" aria-live="polite">{st === "idle" ? "" : msg}</span>
+    </>
+  );
+}
+
+/** Code with a copy button. `segments` (from lib/diff) highlight tokens; their text joins back to `code`. */
+export function CodeBlock(props: { code: string; caption?: string; segments?: Seg[]; side?: "gold" | "other" }) {
+  return (
+    <div className="codeblock">
       {props.caption && <p className="code-cap">{props.caption}</p>}
-      <pre className="code"><code>{props.code}</code></pre>
+      <div className="code-wrap">
+        <pre className="code"><code>
+          {props.segments
+            ? props.segments.map((g, i) => (g.changed ? <mark key={i} className={`diff-${props.side ?? "other"}`}>{g.text}</mark> : g.text))
+            : props.code}
+        </code></pre>
+        <CopyButton text={props.code} />
+      </div>
     </div>
   );
 }

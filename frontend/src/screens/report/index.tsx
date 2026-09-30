@@ -1,8 +1,10 @@
+import { useId, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { ApiError, api } from "../../api/client";
 import { NOT_MEASURED, fmtInt, fmtNumber, fmtPercent, fmtUsd } from "../../api/format";
 import type { Example, ExamplesResult, Report, TeacherCostPer1k } from "../../api/types";
 import { ApiErrorState, Badge, Card, CodeBlock, EmptyState, LabelBanner, Spinner, Stat } from "../../components";
+import { diffAgainstGold, type SideBySide } from "../../lib/diff";
 import { AccuracyChart, type BarRow } from "./AccuracyChart";
 import { useAsync } from "./useAsync";
 import "./report.css";
@@ -150,11 +152,55 @@ export function Clusters({ r }: { r: Report }) {
   );
 }
 
-function Sql({ label, sql, ok }: { label: string; sql: string; ok: boolean }) {
+type Model = "base" | "student" | "teacher";
+const MODELS: [Model, string][] = [["base", "Base"], ["student", "Student"], ["teacher", "Teacher"]];
+
+function Sql({ label, sql, ok, d }: { label: string; sql: string; ok: boolean; d: SideBySide | null }) {
   return (
     <div>
       <div className="row" style={{ gap: 6 }}><span className="eyebrow">{label}</span><Badge tone={ok ? "ok" : "bad"}>{ok ? "correct" : "wrong"}</Badge></div>
-      <CodeBlock code={sql} />
+      <CodeBlock code={sql} segments={d?.other} side="other" />
+      <p className="diff-note muted">{d === null ? "diff skipped: SQL too long" : d.identical ? "same tokens as gold" : "tokens not in gold are highlighted"}</p>
+    </div>
+  );
+}
+
+/** One example. Correctness flags come from the API; highlighting is a plain token diff of the returned SQL strings. */
+function ExampleCard({ e, open0 }: { e: Example; open0: boolean }) {
+  const [open, setOpen] = useState(open0);
+  const [against, setAgainst] = useState<Model>("student");
+  const body = useId();
+  const diffs = useMemo(
+    () => (open ? { base: diffAgainstGold(e.gold_sql, e.base_sql), student: diffAgainstGold(e.gold_sql, e.student_sql), teacher: diffAgainstGold(e.gold_sql, e.teacher_sql) } : null),
+    [open, e.gold_sql, e.base_sql, e.student_sql, e.teacher_sql],
+  );
+  return (
+    <div className={`ex${open ? " open" : ""}`}>
+      <button type="button" className="ex-head" aria-expanded={open} aria-controls={open ? body : undefined} onClick={() => setOpen((o) => !o)}>
+        <strong>{e.question}</strong>
+        <span className="chev" aria-hidden="true" />
+      </button>
+      <div className="muted mono">{e.task_id} · {e.family} · {e.heldout_class}</div>
+      {open && diffs && (
+        <div id={body} className="ex-body">
+          <div className="row seg" role="group" aria-label="Highlight gold tokens missing from">
+            <span className="eyebrow">Gold vs</span>
+            {MODELS.map(([k, name]) => (
+              <button key={k} type="button" className="seg-btn" aria-pressed={against === k} onClick={() => setAgainst(k)}>{name}</button>
+            ))}
+          </div>
+          <div className="cmp">
+            <div>
+              <span className="eyebrow">Gold</span>
+              <CodeBlock code={e.gold_sql} segments={diffs[against]?.gold} side="gold" />
+              <p className="diff-note muted">tokens missing from {against} SQL are highlighted</p>
+            </div>
+            <Sql label="Base" sql={e.base_sql} ok={e.base_ok} d={diffs.base} />
+            <Sql label="Student" sql={e.student_sql} ok={e.student_ok} d={diffs.student} />
+            <Sql label="Teacher" sql={e.teacher_sql} ok={e.teacher_ok} d={diffs.teacher} />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -167,17 +213,8 @@ export function ExampleList(
   return (
     <div>
       <h3>{title} ({count})</h3>
-      {items.length === 0 ? <p className="muted">None returned.</p> : items.map((e) => (
-        <div className="ex" key={`${title}-${e.task_id}`}>
-          <p style={{ marginBottom: 4 }}><strong>{e.question}</strong></p>
-          <div className="muted mono">{e.task_id} · {e.family} · {e.heldout_class}</div>
-          <div className="cmp">
-            <div><span className="eyebrow">Gold</span><CodeBlock code={e.gold_sql} /></div>
-            <Sql label="Base" sql={e.base_sql} ok={e.base_ok} />
-            <Sql label="Student" sql={e.student_sql} ok={e.student_ok} />
-            <Sql label="Teacher" sql={e.teacher_sql} ok={e.teacher_ok} />
-          </div>
-        </div>
+      {items.length === 0 ? <p className="muted">None returned.</p> : items.map((e, i) => (
+        <ExampleCard key={`${title}-${e.task_id}`} e={e} open0={i === 0} />
       ))}
     </div>
   );
