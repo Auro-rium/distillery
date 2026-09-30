@@ -6,6 +6,82 @@
   "installCommand": "npm ci",
   "rewrites": [
     {
+      "source": "/api/health",
+      "destination": "/static-api/health"
+    },
+    {
+      "source": "/api/config",
+      "destination": "/static-api/config"
+    },
+    {
+      "source": "/api/replay",
+      "destination": "/static-api/replay"
+    },
+    {
+      "source": "/api/runs/sql-tiny-live1",
+      "destination": "/static-api/runs/sql-tiny-live1/detail"
+    },
+    {
+      "source": "/api/runs/sql-tiny-live1/report",
+      "destination": "/static-api/runs/sql-tiny-live1/report"
+    },
+    {
+      "source": "/api/runs/sql-tiny-live1/tree",
+      "destination": "/static-api/runs/sql-tiny-live1/tree"
+    },
+    {
+      "source": "/api/runs/sql-tiny-live1/events",
+      "destination": "/static-api/runs/sql-tiny-live1/events"
+    },
+    {
+      "source": "/api/runs/sql-tiny-live1/examples",
+      "has": [
+        {
+          "type": "query",
+          "key": "kind",
+          "value": "all"
+        }
+      ],
+      "destination": "/static-api/runs/sql-tiny-live1/examples-all"
+    },
+    {
+      "source": "/api/runs/sql-tiny-live1/examples",
+      "has": [
+        {
+          "type": "query",
+          "key": "kind",
+          "value": "fixed"
+        }
+      ],
+      "destination": "/static-api/runs/sql-tiny-live1/examples-fixed"
+    },
+    {
+      "source": "/api/runs/sql-tiny-live1/examples",
+      "has": [
+        {
+          "type": "query",
+          "key": "kind",
+          "value": "still_wrong"
+        }
+      ],
+      "destination": "/static-api/runs/sql-tiny-live1/examples-still_wrong"
+    },
+    {
+      "source": "/api/runs/sql-tiny-live1/examples",
+      "has": [
+        {
+          "type": "query",
+          "key": "kind",
+          "value": "regressed"
+        }
+      ],
+      "destination": "/static-api/runs/sql-tiny-live1/examples-regressed"
+    },
+    {
+      "source": "/api/runs",
+      "destination": "/static-api/runs-index"
+    },
+    {
       "source": "/((?!api/|assets/|.*\\..*).*)",
       "destination": "/index.html"
     }
@@ -60,6 +136,96 @@
         {
           "key": "Content-Security-Policy",
           "value": "default-src 'self'; script-src 'self' 'sha256-4EDjg6SqtC+vvrW1RBVkSwHxntCpS8JHIMD5RFAjbh4='; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://REPLACE-WITH-API-ORIGIN.example; base-uri 'self'; form-action 'self'; object-src 'none'; frame-ancestors 'none'"
+        }
+      ]
+    },
+    {
+      "source": "/static-api/(.*)",
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "application/json"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "no-cache"
+        }
+      ]
+    },
+    {
+      "source": "/static-api/runs/sql-tiny-live1/events",
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "text/event-stream; charset=utf-8"
+        }
+      ]
+    },
+    {
+      "source": "/static-api/runs/sql-tiny-live1/examples-all",
+      "headers": [
+        {
+          "key": "x-examples-available",
+          "value": "true"
+        },
+        {
+          "key": "x-examples-cap-per-kind",
+          "value": "20"
+        },
+        {
+          "key": "x-examples-totals",
+          "value": "{\"fixed\":0,\"still_wrong\":17,\"regressed\":0}"
+        }
+      ]
+    },
+    {
+      "source": "/static-api/runs/sql-tiny-live1/examples-fixed",
+      "headers": [
+        {
+          "key": "x-examples-available",
+          "value": "true"
+        },
+        {
+          "key": "x-examples-cap-per-kind",
+          "value": "20"
+        },
+        {
+          "key": "x-examples-totals",
+          "value": "{\"fixed\":0,\"still_wrong\":17,\"regressed\":0}"
+        }
+      ]
+    },
+    {
+      "source": "/static-api/runs/sql-tiny-live1/examples-still_wrong",
+      "headers": [
+        {
+          "key": "x-examples-available",
+          "value": "true"
+        },
+        {
+          "key": "x-examples-cap-per-kind",
+          "value": "20"
+        },
+        {
+          "key": "x-examples-totals",
+          "value": "{\"fixed\":0,\"still_wrong\":17,\"regressed\":0}"
+        }
+      ]
+    },
+    {
+      "source": "/static-api/runs/sql-tiny-live1/examples-regressed",
+      "headers": [
+        {
+          "key": "x-examples-available",
+          "value": "true"
+        },
+        {
+          "key": "x-examples-cap-per-kind",
+          "value": "20"
+        },
+        {
+          "key": "x-examples-totals",
+          "value": "{\"fixed\":0,\"still_wrong\":17,\"regressed\":0}"
         }
       ]
     }
