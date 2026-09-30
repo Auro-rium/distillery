@@ -42,8 +42,8 @@ from distillery.endpoint_student import EndpointBackend, EndpointSpec
 from distillery.evaluator import ExpectedArtifact, ModelScores, score_model
 from distillery.finetune import (
     ACTIVE_STATUSES,
-    CheckpointInfo,
     PINNED_HYPERPARAMETERS,
+    CheckpointInfo,
     DownloadedFile,
     EventInfo,
     FineTuneClient,
@@ -1408,7 +1408,7 @@ class Pipeline:
         )  # fmt: skip
 
     def _finetune_preflight(self, train_rows: int) -> None:
-        """Refuse (before any upload or spend) hyperparameters that would under-train the student."""
+        """Refuse (before any upload or spend) hyperparameters that would under-train."""
         hp = self.cfg.hyperparameters
         try:
             require_explicit_hyperparameters(hp)

@@ -426,6 +426,14 @@ class FineTuneClient:
             for c in page.data
         ]
 
+    def raw_job(self, job_id: str) -> dict[str, Any]:
+        """The job object exactly as the API returns it, as a plain dict (diagnostics)."""
+        job = self._retry(lambda: self._c.fine_tuning.jobs.retrieve(job_id))
+        dump = getattr(job, "model_dump", None)
+        if callable(dump):
+            return dict(dump())
+        return {k: v for k, v in vars(job).items() if not k.startswith("_")}
+
     def loss_curve(self, job_id: str) -> list[dict[str, Any]]:
         """Per checkpoint step: ``{"step", "train_loss", "valid_loss"}`` (None when absent),
         sorted by step."""

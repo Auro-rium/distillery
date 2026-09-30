@@ -11,18 +11,18 @@ import openai
 import pytest
 from pydantic import ValidationError
 
+from distillery.config import ConfigError
 from distillery.finetune import (
+    PINNED_HYPERPARAMETERS,
     FineTuneClient,
     FineTuneError,
     HyperParameters,
     JobFailedError,
-    PINNED_HYPERPARAMETERS,
     PollTimeoutError,
     paid_job,
     planned_steps,
     require_explicit_hyperparameters,
 )
-from distillery.config import ConfigError
 
 _REQ = httpx2.Request("POST", "https://example.invalid/v1/x")
 
@@ -308,7 +308,9 @@ def test_download_rejects_path_traversal(tmp_path: Path) -> None:
 def test_paid_job_cancels_on_exception() -> None:
     c, fake, *_ = make()
     with pytest.raises(RuntimeError, match="boom"):
-        with paid_job(lambda: c.create_job("m", "f", hyperparameters=PINNED_HYPERPARAMETERS), c.cancel) as h:
+        with paid_job(
+            lambda: c.create_job("m", "f", hyperparameters=PINNED_HYPERPARAMETERS), c.cancel
+        ) as h:
             assert h.job_id == "job-1"
             raise RuntimeError("boom")
     assert fake.cancelled == ["job-1"]
@@ -323,7 +325,9 @@ def test_paid_job_cancels_if_not_marked_succeeded() -> None:
 
 def test_paid_job_no_cancel_on_success() -> None:
     c, fake, *_ = make()
-    with paid_job(lambda: c.create_job("m", "f", hyperparameters=PINNED_HYPERPARAMETERS), c.cancel) as h:
+    with paid_job(
+        lambda: c.create_job("m", "f", hyperparameters=PINNED_HYPERPARAMETERS), c.cancel
+    ) as h:
         h.mark_succeeded()
     assert fake.cancelled == []
 
@@ -332,7 +336,9 @@ def test_paid_job_cancel_failure_does_not_mask_original() -> None:
     c, fake, *_ = make()
     fake.cancel_exc = err(409)
     with pytest.raises(RuntimeError) as ei:
-        with paid_job(lambda: c.create_job("m", "f", hyperparameters=PINNED_HYPERPARAMETERS), c.cancel):
+        with paid_job(
+            lambda: c.create_job("m", "f", hyperparameters=PINNED_HYPERPARAMETERS), c.cancel
+        ):
             raise RuntimeError("boom")
     assert any("cancelling job job-1 failed" in n for n in ei.value.__notes__)
 
@@ -341,7 +347,9 @@ def test_paid_job_forced_failure_from_poll_cancels() -> None:
     c, fake, *_ = make()
     fake.job_script = [job("running"), job("failed", error=SimpleNamespace(code="x", message="y"))]
     with pytest.raises(JobFailedError):
-        with paid_job(lambda: c.create_job("m", "f", hyperparameters=PINNED_HYPERPARAMETERS), c.cancel) as h:
+        with paid_job(
+            lambda: c.create_job("m", "f", hyperparameters=PINNED_HYPERPARAMETERS), c.cancel
+        ) as h:
             c.require_success(c.poll(h.job_id))
             h.mark_succeeded()
     assert fake.cancelled == ["job-1"]
