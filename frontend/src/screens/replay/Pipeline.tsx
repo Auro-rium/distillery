@@ -1,36 +1,11 @@
-import type { CSSProperties } from "react";
+import { useId, type CSSProperties } from "react";
+import { LAYOUTS, NEXT_ROUND, type Layout } from "./flow";
+import "./replay.css";
 
-// Static explainer of the method. Stage names are the pipeline's own (docs/ARCHITECTURE.md:
-// schema, questions, gold_crosscheck, split, teacher_data, finetune, dev_eval, analysis,
-// targeted, sandbox_branch, final_eval, gate). It carries no numbers and no run data, and its
-// motion (marching dashes, staggered appearance) is decoration, not progress.
-
-interface Node { id: string; x: number; y: number; title: string; sub: string }
-const W = 170, H = 56;
-const NODES: Node[] = [
-  { id: "a", x: 10, y: 14, title: "Schema + questions", sub: "task pack" },
-  { id: "b", x: 200, y: 14, title: "Gold cross-check", sub: "verified by execution" },
-  { id: "c", x: 390, y: 14, title: "Seal held-out set", sub: "only the evaluator sees it" },
-  { id: "d", x: 580, y: 14, title: "Teacher data", sub: "verified examples" },
-  { id: "e", x: 580, y: 130, title: "Fine-tune student", sub: "small model" },
-  { id: "f", x: 390, y: 130, title: "Dev eval + failures", sub: "cluster what broke" },
-  { id: "g", x: 200, y: 130, title: "Targeted data", sub: "in a sandbox branch" },
-  { id: "h", x: 390, y: 232, title: "Final held-out eval", sub: "base, student, teacher" },
-  { id: "i", x: 200, y: 232, title: "Gate", sub: "PROMOTE or REJECT" },
-];
-// Straight arrows (from, to) and the one curved loop-back.
-const ARROWS: [string, string][] = [["a", "b"], ["b", "c"], ["c", "d"], ["d", "e"], ["e", "f"], ["f", "g"], ["f", "h"], ["h", "i"]];
-const at = (id: string) => NODES.find((n) => n.id === id)!;
-
-function line(from: string, to: string): string {
-  const a = at(from), b = at(to);
-  if (a.y === b.y) { // same row: side to side
-    const dir = b.x > a.x ? 1 : -1;
-    return `M${a.x + (dir > 0 ? W : 0)},${a.y + H / 2} L${b.x + (dir > 0 ? 0 : W)},${b.y + H / 2}`;
-  }
-  return `M${a.x + W / 2},${a.y + H} L${b.x + W / 2},${b.y}`; // above to below
-}
-const LOOP = `M${at("g").x + W / 2},${at("g").y} C${at("g").x + W / 2},${at("g").y - 48} ${at("e").x + W * 0.8},${at("e").y - 48} ${at("e").x + W * 0.8},${at("e").y}`;
+// Static explainer of the method. It carries no numbers and no run data; its motion (routes drawing in,
+// the return path's dashes moving) is decoration, not progress, and touches only stroke and opacity.
+// Two drawings of the same stages, one shown at a time by CSS: a wide flow and a tall stepper for phones.
+// Both are hidden from assistive technology; the list below carries the same steps as text.
 
 const STEPS = [
   "The task pack supplies a schema and questions.",
@@ -44,34 +19,56 @@ const STEPS = [
   "A fixed gate decides PROMOTE or REJECT.",
 ];
 
+// Text baselines inside a node (offsets from its top edge).
+const TITLE_DY = 26;
+const SUB_DY = 46;
+const CORNER = 8;
+
+function Diagram({ kind, l }: { kind: "wide" | "tall"; l: Layout }) {
+  const uid = useId().replace(/[^a-zA-Z0-9_-]/g, "");
+  const head = `${uid}-head`;
+  const headLoop = `${uid}-head-loop`;
+  const loop = l.edges.find((e) => e.kind === "loop");
+  return (
+    <svg className={`flow flow-${kind}`} viewBox={`0 0 ${l.width} ${l.height}`} aria-hidden="true" focusable="false">
+      <defs>
+        <marker id={head} viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+          <path d="M0,0 L10,5 L0,10 z" className="flow-head" />
+        </marker>
+        <marker id={headLoop} viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+          <path d="M0,0 L10,5 L0,10 z" className="flow-head loop" />
+        </marker>
+      </defs>
+      {l.edges.map((e, i) => (
+        <path
+          key={e.id}
+          d={e.d}
+          pathLength={1}
+          className={e.kind === "loop" ? "flow-edge loop" : "flow-edge"}
+          markerEnd={`url(#${e.kind === "loop" ? headLoop : head})`}
+          style={{ "--i": i } as CSSProperties}
+        />
+      ))}
+      {loop && <path d={loop.d} className="flow-march" />}
+      <text x={l.label.x} y={l.label.y} textAnchor="middle" className="flow-note">{NEXT_ROUND}</text>
+      {l.nodes.map((n, i) => (
+        <g key={n.id} className="flow-node" style={{ "--i": i } as CSSProperties}>
+          <rect x={n.x} y={n.y} width={n.w} height={n.h} rx={CORNER} />
+          <text x={n.x + l.pad} y={n.y + TITLE_DY} className="flow-title">{n.title}</text>
+          <text x={n.x + l.pad} y={n.y + SUB_DY} className="flow-sub">{n.sub}</text>
+        </g>
+      ))}
+    </svg>
+  );
+}
+
 export function Pipeline() {
   return (
     <figure className="pipe">
-      <div className="pipe-scroll">
-        <svg className="pipe-svg" viewBox="0 0 760 300" aria-hidden="true" focusable="false">
-          <defs>
-            <marker id="pipe-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-              <path d="M0,0 L10,5 L0,10 z" className="pipe-head" />
-            </marker>
-          </defs>
-          {ARROWS.map(([f, t], i) => (
-            <path key={`${f}${t}`} d={line(f, t)} className="pipe-line" markerEnd="url(#pipe-arrow)" style={{ "--i": i } as CSSProperties} />
-          ))}
-          <path d={LOOP} className="pipe-line pipe-loop" markerEnd="url(#pipe-arrow)" />
-          <text x={at("g").x + W + 70} y={at("g").y - 30} className="pipe-note" textAnchor="middle">next round</text>
-          {NODES.map((n, i) => (
-            <g key={n.id} transform={`translate(${n.x},${n.y})`}>
-              <g className="pipe-node" style={{ "--i": i } as CSSProperties}>
-                <rect width={W} height={H} rx={8} />
-                <text x={12} y={24} className="pipe-title">{n.title}</text>
-                <text x={12} y={43} className="pipe-sub">{n.sub}</text>
-              </g>
-            </g>
-          ))}
-        </svg>
-      </div>
+      <Diagram kind="wide" l={LAYOUTS.wide} />
+      <Diagram kind="tall" l={LAYOUTS.tall} />
       <ol className="sr-only">{STEPS.map((s) => <li key={s}>{s}</li>)}</ol>
-      <figcaption className="muted">The method as a diagram. It shows no run's progress and no results.</figcaption>
+      <figcaption className="muted">The method as a diagram. It shows no run&rsquo;s progress and no results.</figcaption>
     </figure>
   );
 }

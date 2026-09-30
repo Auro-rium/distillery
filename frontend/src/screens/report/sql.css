@@ -1,0 +1,8 @@
+/* SQL blocks shared by the report examples and the playground. Loaded before styles.css, so selectors carry a second class. */
+.sql-block { min-width: 0; }
+.sql-head { display: flex; align-items: center; gap: var(--space-2); min-height: 2rem; margin-bottom: 4px; }
+.sql-head .code-cap { margin: 0; flex: 1 1 auto; min-width: 0; }
+.sql-head .sql-copy { flex: none; margin-left: auto; }
+/* the kit's copy button floats over code and is hidden until hover; here it is a normal, always visible control */
+.sql-head .copy-btn { position: static; opacity: 1; min-width: 4.4rem; min-height: 1.75rem; }
+.sql-block .code { padding-right: 14px; white-space: pre-wrap; overflow-wrap: anywhere; font-size: .8rem; line-height: 1.55; }

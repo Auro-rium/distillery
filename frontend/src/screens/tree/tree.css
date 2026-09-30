@@ -1,0 +1,77 @@
+/* Experiment tree screen. Scoped under .treev: this file is emitted before styles.css, so overrides of the shared
+   .pz-box / .edge rules win on specificity, not on source order. Colours, type, spacing and motion come from the
+   tokens in styles.css. Only transform and opacity animate. */
+
+.treev { display: block; }
+.treev > * + * { margin-top: var(--space-4); }
+.treev .state { padding: var(--space-4); }
+.tv-layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-4); align-items: start; }
+@media (min-width: 1024px) {
+  .tv-layout { grid-template-columns: minmax(0, 1fr) minmax(19rem, 23rem); gap: var(--space-5); }
+}
+
+/* ---------- master: the tree ---------- */
+.treev .tv-canvas { display: flex; flex-direction: column; min-width: 0; padding: var(--space-4); }
+.tv-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2) var(--space-3); margin-bottom: var(--space-2); }
+.tv-title { margin: 0; font: 500 var(--step-1)/1.2 var(--font-display); }
+.tv-tools { display: flex; gap: var(--space-2); }
+.tv-legend { list-style: none; display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-4); margin: 0 0 var(--space-3); padding: 0; font-size: .82rem; color: var(--ink-2); }
+.tv-legend li { display: inline-flex; align-items: center; gap: 6px; }
+.tv-legend .sw { display: inline-block; flex: none; }
+.tv-legend .sw-path { width: 20px; border-top: 3px solid var(--accent); }
+.tv-legend .sw-cand { width: 14px; height: 14px; border: 2px solid var(--ok); border-radius: 4px; background: var(--surface); }
+
+/* the viewport height depends on the window only (not on the detail beside it), so the auto-fit never chases it */
+.treev .pz-box { flex: none; height: clamp(20rem, 58vh, 30rem); min-height: 0; }
+@media (min-width: 1024px) { .treev .pz-box { height: clamp(24rem, 62vh, 40rem); } }
+.treev .pz-layer { position: absolute; left: 0; top: 0; transform-origin: 0 0; will-change: transform; }
+.tv-edges { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; }
+.treev .edge { stroke: var(--control-line); stroke-width: 2; animation-delay: calc(min(var(--depth), 8) * 140ms); }
+.treev .edge.on-path { stroke: var(--accent); stroke-width: 3; }
+.treev .pz-box[data-hot="true"] .tnode:not(.on-path), .treev .pz-box[data-hot="true"] .edge:not(.on-path) { opacity: .4; }
+
+.treev .tnode {
+  position: absolute; display: flex; flex-direction: column; justify-content: center; gap: 6px; min-width: 0; padding: 0 var(--space-3); overflow: hidden;
+  border: 1.5px solid var(--control-line); border-radius: var(--radius); background: var(--surface); color: var(--ink); text-align: left; font: inherit; cursor: pointer;
+  animation: tree-node-in 450ms var(--ease) backwards; animation-delay: calc(min(var(--depth), 8) * 140ms + 80ms); /* capped: a deep tree must not take seconds to appear */
+  transition: opacity var(--dur-2), border-color var(--dur-2), background-color var(--dur-2);
+}
+@keyframes tree-node-in { from { opacity: 0; transform: translateX(-10px); } }
+.treev .tnode:hover { border-color: var(--ink-2); }
+.treev .tnode.cand { border-color: var(--ok); border-width: 3px; }
+.treev .tnode.on-path { border-color: var(--accent); }
+.treev .tnode.sel { border-color: var(--accent); border-width: 3px; background: var(--surface-2); }
+.treev .tnode:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.tn-name { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 600 15px/1.25 var(--font-body); overflow-wrap: normal; }
+.tn-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.tn-dev { font: 500 1rem/1.2 var(--font-display); font-variant-numeric: tabular-nums; white-space: nowrap; overflow-wrap: normal; }
+.tn-k { font: 500 .68rem/1 var(--font-mono); letter-spacing: .1em; text-transform: uppercase; color: var(--ink-2); }
+.tn-tag, .tn-flag { flex: none; padding: 3px 7px; border-radius: var(--radius-pill); background: var(--surface-2); color: var(--ink-2); font: 500 .7rem/1 var(--font-mono); white-space: nowrap; overflow-wrap: normal; }
+.treev .tnode.sel .tn-tag { background: var(--surface); }
+.tn-flag { margin-left: auto; background: var(--ok-bg); color: var(--ok); text-transform: uppercase; letter-spacing: .06em; }
+.treev .absent { font-style: italic; color: var(--ink-2); font-size: .82rem; }
+.tv-hint { margin: var(--space-3) 0 0; font-size: .8rem; }
+.tv-hint .hint-touch { display: none; }
+@media (pointer: coarse) { .tv-hint .hint-fine { display: none; } .tv-hint .hint-touch { display: inline; } }
+
+/* ---------- detail ---------- */
+.treev .tv-detail { align-self: start; min-width: 0; padding: var(--space-4); }
+.nd-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); margin-bottom: var(--space-2); }
+.nd-title { margin: 0; font: 500 var(--step-2)/1.15 var(--font-display); }
+.crumbs { list-style: none; display: flex; flex-wrap: wrap; align-items: center; gap: 2px var(--space-1); margin: 0 0 var(--space-4); padding: 0; font-size: .86rem; }
+.crumbs li + li::before { content: "›"; margin-right: var(--space-1); color: var(--ink-2); }
+.crumb { min-height: 1.75rem; padding: 2px 4px; border: 0; border-radius: var(--radius-sm); background: none; color: var(--accent); font: inherit; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; overflow-wrap: normal; }
+.crumbs [aria-current] { padding: 2px 4px; font-weight: 600; }
+.nd-list { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: var(--space-3) var(--space-4); margin: 0; }
+.nd-list dt { padding-top: 3px; font-size: .86rem; color: var(--ink-2); }
+.nd-list dd { margin: 0; }
+.nd-big { font: 500 var(--step-2)/1.1 var(--font-display); font-variant-numeric: tabular-nums; }
+.nd-id { overflow-wrap: anywhere; }
+.nd-id .absent { font-family: var(--font-body); }
+.chips { list-style: none; display: flex; flex-wrap: wrap; gap: 6px; margin: var(--space-2) 0 0; padding: 0; }
+.chips li { padding: 2px 8px; border-radius: var(--radius-pill); background: var(--surface-2); font-size: .8rem; }
+@media (max-width: 480px) {
+  .treev .tv-canvas, .treev .tv-detail { padding: var(--space-3); }
+  .nd-list { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  .nd-list dt { padding-top: var(--space-3); }
+}

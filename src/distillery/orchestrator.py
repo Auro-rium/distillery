@@ -1059,8 +1059,12 @@ class Pipeline:
                 outs = ex.run_batch(self.db_ref, [t.gold_sql, *[v.sql for v in variants]])
                 g_exec, v_outs = outs[0], outs[1:]
                 g_local = run_select(self.db_ref, t.gold_sql)
-                if not g_exec.ok or not compare_outcomes(g_exec, g_local, t.requires_order).ok:
-                    failures.append(f"gold rejected/inconsistent for {t.task_id}: {g_exec.error}")
+                cmp = compare_outcomes(g_exec, g_local, t.requires_order)
+                if not g_exec.ok or not cmp.ok:
+                    failures.append(
+                        f"gold rejected/inconsistent for {t.task_id}: sandbox ok={g_exec.ok} "
+                        f"kind={g_exec.error_kind} error={g_exec.error!r}; vs local: {cmp.reason}"
+                    )
                     continue
                 for v, o in zip(variants, v_outs, strict=True):
                     tested += 1

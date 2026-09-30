@@ -1,0 +1,136 @@
+/* Live run screen. Everything is scoped under .live / .live-grid: this file is emitted before styles.css, so the
+   overrides of shared classes (.card, .meter, .log ...) win on specificity, not on source order. Colours, type,
+   spacing and motion come from the tokens in styles.css. Only transform and opacity animate. */
+
+.live { display: block; }
+.live > * + * { margin-top: var(--space-4); }
+.live-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-4); align-items: start; }
+.live-col { display: grid; gap: var(--space-4); min-width: 0; align-content: start; }
+.live-grid > .skeleton-wrap { min-height: 9rem; }
+@media (min-width: 1024px) {
+  .live-grid { grid-template-columns: minmax(17rem, 4fr) minmax(0, 7fr); gap: var(--space-5); }
+  /* the stage timeline stays in view while the taller right column scrolls; a long list scrolls inside its own panel.
+     --live-shell is the measured height of the RunShell header (useShellTop); the fallback is used until it is measured. */
+  .live { --live-sticky-top: calc(var(--header-h) + var(--live-shell, 12.5rem) + var(--space-3)); }
+  .live-col-stages { position: sticky; top: var(--live-sticky-top); }
+  .live-col-stages .lp-stages { display: flex; flex-direction: column; max-height: calc(100dvh - var(--live-sticky-top) - var(--space-4)); }
+  .live-col-stages .stg-scroll { min-height: 0; margin: -4px; padding: 4px; overflow: auto; }
+}
+
+/* ---------- panels ---------- */
+.live .lp { min-width: 0; padding: var(--space-4); animation: live-rise var(--dur-3) var(--ease) backwards; }
+.live .lp-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2) var(--space-3); margin-bottom: var(--space-3); }
+.live .lp-title { margin: 0; font: 500 var(--step-1)/1.2 var(--font-display); letter-spacing: -.01em; }
+.live .lp-sub { margin: var(--space-4) 0 var(--space-2); font: 500 .72rem/1.2 var(--font-mono); letter-spacing: .1em; text-transform: uppercase; color: var(--ink-2); }
+.live .lp-head + .lp-sub, .live .lp-head + .metrics { margin-top: 0; }
+.live .lp-note { margin: var(--space-3) 0 0; font-size: .86rem; }
+.live .lp-none { margin: 0; }
+@keyframes live-rise { from { opacity: 0; transform: translateY(8px); } }
+
+/* ---------- figures ---------- */
+.live .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr)); gap: var(--space-3); margin: 0; }
+.live .metric { min-width: 0; padding: var(--space-3); background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); }
+.live .metric dt { font: 500 .72rem/1.3 var(--font-mono); letter-spacing: .1em; text-transform: uppercase; color: var(--ink-2); }
+.live .metric dd { margin: var(--space-1) 0 0; font: 500 var(--step-2)/1.15 var(--font-display); font-variant-numeric: tabular-nums; }
+.live .metric .hint { display: block; margin-top: 2px; font: 400 .8rem/1.35 var(--font-body); color: var(--ink-2); }
+.live .tone-ok { color: var(--ok); }
+.live .tone-bad { color: var(--bad); }
+/* absent data: plain words, quieter than a real figure */
+.live .absent { font: 400 var(--step-0)/1.3 var(--font-body); font-style: italic; color: var(--ink-2); }
+
+/* ---------- spend ---------- */
+.live .meter { height: 10px; margin: var(--space-4) 0 0; border-radius: var(--radius-pill); background: var(--surface-2); overflow: hidden; }
+/* the fill is scaled, not stretched: square-ended so a short bar keeps its true proportions */
+.live .meter-fill, .live .mbar-fill { border-radius: 0; }
+.live .models { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-4); }
+.live .model { min-width: 0; }
+.live .model-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-3); }
+.live .model-name { min-width: 0; font-weight: 500; overflow-wrap: anywhere; }
+.live .model-usd { flex: none; font: 500 var(--step-1)/1.2 var(--font-display); font-variant-numeric: tabular-nums; }
+.live .mbar { margin: 6px 0 var(--space-2); }
+.live .model-meta { display: flex; flex-wrap: wrap; gap: 0 var(--space-4); margin: 0; font-size: .86rem; }
+.live .model-meta > div { display: flex; gap: 6px; }
+.live .model-meta dt { color: var(--ink-2); }
+.live .model-meta dt::after { content: ":"; }
+.live .model-meta dd { margin: 0; font-variant-numeric: tabular-nums; }
+
+/* ---------- status strip ---------- */
+.live .live-status { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-4); padding: var(--space-2) var(--space-3); background: var(--glass); border: 1px solid var(--line); border-radius: var(--radius); }
+.live .ls-item { display: inline-flex; align-items: baseline; gap: var(--space-2); min-width: 0; }
+.live .ls-stage { overflow-wrap: anywhere; }
+
+/* ---------- stage timeline ---------- */
+.live .timeline { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-2); }
+.live .stg-group { min-width: 0; }
+.live .stg-head { margin: 0; font: inherit; letter-spacing: 0; }
+.live .stg-toggle { display: flex; align-items: center; gap: var(--space-2); width: 100%; min-height: 2.25rem; padding: 4px var(--space-2); border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--ink); cursor: pointer; text-align: left; font: 600 .9rem/1.2 var(--font-mono); overflow-wrap: normal; transition: background-color var(--dur-1); }
+.live .stg-toggle:hover { background: var(--surface-2); }
+.live .stg-label { flex: 1 1 auto; min-width: 0; }
+.live .stg-chev { flex: none; width: .55rem; height: .55rem; margin: 0 .25rem 0 .2rem; border-right: 2px solid var(--ink-2); border-bottom: 2px solid var(--ink-2); transform: translateY(-2px) rotate(-45deg); transition: transform var(--dur-1) var(--ease); }
+.live .stg-toggle[aria-expanded="true"] .stg-chev { transform: translateY(-2px) rotate(45deg); }
+.live .stg-steps { list-style: none; margin: 2px 0 0; padding: 0; }
+.live .stg-steps[hidden] { display: none; }
+
+.live .stg-step { position: relative; display: flex; align-items: center; gap: var(--space-2); min-height: 2rem; padding: 4px var(--space-2) 4px 2.1rem; border-radius: var(--radius-sm); transition: background-color var(--dur-2); }
+.live .stg-name { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; font-size: .84rem; line-height: 1.3; }
+/* connector: upper half joins the previous dot, lower half joins the next; a finished stage's connectors are green */
+.live .stg-step::before, .live .stg-step::after { content: ""; position: absolute; left: calc(var(--space-2) + 6px); width: 2px; background: var(--line); }
+.live .stg-step::before { top: 50%; bottom: 0; }
+.live .stg-step::after { top: 0; height: 50%; }
+.live .stg-step:first-child::after, .live .stg-step:last-child::before { display: none; }
+.live .stg-step[data-status="done"]::before, .live .stg-step[data-status="done"] + .stg-step::after { background: var(--ok); }
+.live .stg-dot { position: absolute; z-index: 1; left: var(--space-2); top: 50%; width: 14px; height: 14px; margin-top: -7px; display: grid; place-items: center; border: 2px solid var(--control-line); border-radius: 50%; background: var(--surface); transition: border-color var(--dur-2); }
+.live .stg-dot i { width: 6px; height: 6px; border-radius: 50%; background: transparent; }
+.live .stg-step[data-status="done"] .stg-dot { border-color: var(--ok); }
+.live .stg-step[data-status="done"] .stg-dot i { background: var(--ok); animation: live-pop var(--dur-2) var(--ease); }
+.live .stg-step[data-status="failed"] .stg-dot { border-color: var(--bad); }
+.live .stg-step[data-status="failed"] .stg-dot i { background: var(--bad); animation: live-pop var(--dur-2) var(--ease); }
+.live .stg-step[data-status="running"] .stg-dot { border-color: var(--info); }
+.live .stg-step[data-status="running"] .stg-dot i { background: var(--info); }
+.live .stg-step[data-status="pending"] { color: var(--ink-2); }
+/* the current step: tinted row, accent edge, heavier name */
+.live .stg-step[data-status="running"] { background: var(--info-bg); box-shadow: inset 3px 0 0 var(--info); }
+.live .stg-step[data-status="running"] .stg-name { font-weight: 500; color: var(--ink); }
+.live .stg-step[data-status="failed"] { background: var(--bad-bg); box-shadow: inset 3px 0 0 var(--bad); }
+.live .stg-step[data-status="failed"] .stg-name { color: var(--ink); }
+/* live-only motion */
+.live .stg-dot::after { content: ""; position: absolute; inset: -2px; border-radius: 50%; border: 2px solid var(--info); opacity: 0; }
+.live .timeline[data-live="true"] .stg-step[data-status="running"] .stg-dot::after { animation: live-ring 1.6s ease-out infinite; }
+.live .timeline[data-live="true"] .stg-step[data-status="done"] + .stg-step[data-status="running"]::after { animation: live-breathe 1.4s ease-in-out infinite; }
+@keyframes live-pop { from { transform: scale(0); } 60% { transform: scale(1.35); } }
+@keyframes live-ring { from { transform: scale(1); opacity: .7; } to { transform: scale(2); opacity: 0; } }
+@keyframes live-breathe { 50% { opacity: .3; } }
+
+/* ---------- verifier code, log ---------- */
+.live .code-wrap .code { max-height: 20rem; overflow: auto; }
+.live .log { max-height: 18rem; padding: var(--space-2) var(--space-3); overflow: auto; white-space: normal; font-size: .8rem; }
+.live .log-empty { margin: 0; color: var(--ink-2); }
+.live .log-line { display: grid; grid-template-columns: 4.5rem minmax(0, 1fr); gap: 0 var(--space-2); padding: 4px 0; border-bottom: 1px dashed var(--line); }
+.live .log-line:last-child { border-bottom: 0; }
+.live .log-level { font-size: .72rem; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-2); padding-top: 1px; }
+.live .log-msg { white-space: pre-wrap; overflow-wrap: anywhere; }
+.live .log-seen { grid-column: 2; font-size: .72rem; color: var(--ink-2); }
+.live .lv-error .log-level, .live .lv-critical .log-level { color: var(--bad); }
+.live .lv-warning .log-level, .live .lv-warn .log-level { color: var(--warn); }
+.live .log-new { animation: live-slide var(--dur-2) var(--ease); }
+@keyframes live-slide { from { opacity: 0; transform: translateX(-12px); } }
+
+/* ---------- alerts, cancel ---------- */
+.live .live-alert { padding: var(--space-3) var(--space-4); border: 1px solid var(--warn); border-radius: var(--radius); background: var(--warn-bg); color: var(--warn); }
+.live .live-alert h3 { margin: 0 0 var(--space-1); font-size: var(--step-0); font-family: var(--font-body); font-weight: 600; }
+.live .live-alert p { margin: 0; color: var(--ink); font-size: .92rem; }
+.live .state { padding: var(--space-4); text-align: left; }
+.live .state h3 { margin-bottom: var(--space-1); }
+.live .state p { margin: 0; }
+.live .cancel-row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--space-3); }
+.live .cancel-row .field { flex: 1 1 14rem; max-width: 22rem; }
+@media (pointer: coarse) { .live .stg-toggle { min-height: 2.75rem; } .live .stg-step { min-height: 2.5rem; } }
+
+/* ---------- phones: the status strip stays in view ---------- */
+/* Where it sticks: just under the site header. The RunShell tab bar is not itself sticky today (its sticky parent is
+   static), so nothing sits between the two. If the tab bar is made to stick, raise this to header + control height. */
+@media (max-width: 560px) {
+  .live { --live-status-top: var(--header-h); }
+  .live .live-status { position: sticky; top: var(--live-status-top); z-index: calc(var(--z-run) - 1); margin-inline: calc(-1 * var(--gutter)); padding-inline: var(--gutter); border-radius: 0; border-inline: 0; background: var(--bg); }
+  .live .metrics { grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr)); }
+}

@@ -1,0 +1,43 @@
+/* Replay landing. Loaded before styles.css, so selectors carry a second class to win over its single-class rules. */
+
+/* ---------- the method diagram ---------- */
+.pipe.pipe { margin: var(--space-5) 0 0; padding: var(--space-4); background: var(--glass); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow-1); }
+.pipe figcaption { margin-top: var(--space-3); font-size: .86rem; }
+.pipe .flow { display: block; width: 100%; height: auto; overflow: visible; }
+.pipe .flow-tall { max-width: 24rem; margin-inline: auto; }
+@media (max-width: 480px) {
+  .pipe.pipe { padding: var(--space-3) 0; background: none; border: 0; box-shadow: none; }
+}
+.pipe .flow-wide { display: none; }
+@media (min-width: 940px) {
+  .pipe .flow-wide { display: block; }
+  .pipe .flow-tall { display: none; }
+}
+.flow-node rect { fill: var(--surface); stroke: var(--line); stroke-width: 1.5; }
+.flow-title { fill: var(--ink); font: 600 13px var(--font-body); }
+.flow-sub { fill: var(--ink-2); font: 400 11px var(--font-mono); }
+.flow-note { fill: var(--accent); font: 500 11px var(--font-mono); }
+.flow-edge { fill: none; stroke: var(--ink-2); stroke-width: 1.5; stroke-dasharray: 1; stroke-dashoffset: 0; animation: flow-draw 700ms var(--ease) backwards; animation-delay: calc(var(--i) * 120ms + 200ms); }
+.flow-edge.loop { stroke: var(--accent); stroke-width: 2; opacity: .55; }
+.flow-head { fill: var(--ink-2); }
+.flow-head.loop { fill: var(--accent); }
+.flow-node { animation: flow-fade 500ms var(--ease) backwards; animation-delay: calc(var(--i) * 90ms); }
+/* dashes travelling along the return path: the round repeats */
+.flow-march { fill: none; stroke: var(--accent); stroke-width: 2; stroke-dasharray: 3 9; stroke-linecap: round; animation: flow-fade 500ms var(--ease) 1400ms backwards, flow-march 1.8s linear 1400ms infinite; }
+@keyframes flow-draw { from { stroke-dashoffset: 1; opacity: 0; } }
+@keyframes flow-fade { from { opacity: 0; } }
+@keyframes flow-march { to { stroke-dashoffset: -24; } }
+@media (prefers-reduced-motion: reduce) {
+  .flow-edge, .flow-node, .flow-march { animation: none; }
+}
+
+/* ---------- run cards ---------- */
+.bundles { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-4); grid-template-columns: repeat(auto-fill, minmax(min(100%, 19rem), 1fr)); }
+.bundles > li { min-width: 0; display: flex; }
+.bundles .bundle { flex: 1; display: flex; flex-direction: column; gap: var(--space-3); }
+.bundle-head { display: grid; gap: var(--space-2); }
+.bundle-head h3 { margin: 0; font-size: var(--step-1); overflow-wrap: anywhere; }
+.bundle-tags { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; }
+.bundle-date { margin: 0; font-size: .9rem; }
+.bundle-date time { font-family: var(--font-mono); font-size: .86em; }
+.bundle-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: auto; }

@@ -1,75 +1,123 @@
-import { useCallback, useEffect, useRef } from "react";
-import { PAN_STEP, ZOOM_MAX, ZOOM_MIN, ZOOM_STEP } from "../../motion/timing";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { PAN_STEP, ZOOM_MAX, ZOOM_STEP } from "../../motion/timing";
+import { FIT_PAD, READABLE_MIN, ZOOM_FLOOR } from "./constants";
+
+/** A rectangle in content coordinates. */
+export interface Rect { x: number; y: number; w: number; h: number }
+/** What a fit shows: everything, the path to the selected node, or (automatic) everything when it is readable and the path otherwise. */
+export type FitMode = "all" | "path" | "auto";
 
 const DRAG_PX = 4;
-const PAD = 16;
-const clampK = (k: number) => Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, k));
+const clampK = (k: number) => Math.min(ZOOM_MAX, Math.max(ZOOM_FLOOR, k));
+
+/** Size of an element, kept up to date by a ResizeObserver (0 x 0 until it is mounted or where there is no layout). */
+export function useElementSize(el: HTMLElement | null): { w: number; h: number } {
+  const [size, setSize] = useState({ w: 0, h: 0 });
+  useLayoutEffect(() => {
+    if (!el) return;
+    const read = () => setSize((s) => (s.w === el.clientWidth && s.h === el.clientHeight ? s : { w: el.clientWidth, h: el.clientHeight }));
+    read();
+    if (typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(read);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [el]);
+  return size;
+}
 
 /**
- * Pan and zoom of an SVG layer. The transform lives in a ref and is written straight to the DOM
- * (no React state, no per-frame renders). Wheel zooms only when the tree is larger than its
- * viewport (or with ctrl/cmd, which is also what a trackpad pinch sends), so page scrolling is
- * never hijacked for small trees. Drag pans; buttons and keys zoom, pan and fit.
+ * Pan and zoom of a layer inside a viewport element. The transform lives in a ref and is written straight to
+ * the DOM (no React state, no per-frame renders).
+ *
+ * Auto-fit: on load, when the tree or its orientation changes, and whenever the viewport is resized (until the
+ * user pans or zooms), the whole tree is fitted into the viewport, centred, never above natural size. If that would
+ * shrink it below READABLE_MIN the view is instead framed on `focus` (the boxes of the path from the root to the
+ * selected node), at a readable zoom, ending at the selected node. The Fit button and the 0 key always show everything.
+ *
+ * Wheel zooms only when the tree is larger than its viewport (or with ctrl/cmd, which is also what a trackpad
+ * pinch sends), so page scrolling is never hijacked for small trees. Drag pans; buttons and keys zoom, pan and fit.
  */
-export function usePanZoom(content: { w: number; h: number }, resetKey: unknown) {
-  const box = useRef<HTMLDivElement>(null);
-  const layer = useRef<SVGGElement>(null);
+export function usePanZoom(el: HTMLDivElement | null, content: { w: number; h: number }, resetKey: unknown, focus: Rect[] = []) {
+  const layer = useRef<HTMLDivElement>(null);
   const v = useRef({ x: 0, y: 0, k: 1 });
   const moved = useRef(false);
+  const touched = useRef(false); // the user has taken control since the last fit
+  const focusRef = useRef(focus); // read when a fit runs; a change of selection alone must not move the view
+  focusRef.current = focus;
 
   const apply = useCallback((smooth: boolean) => {
-    const el = layer.current;
-    if (!el) return;
+    const node = layer.current;
+    if (!node) return;
     const { x, y, k } = v.current;
-    el.classList.toggle("smooth", smooth);
-    el.style.transform = `translate(${x}px, ${y}px) scale(${k})`;
+    node.classList.toggle("smooth", smooth);
+    node.style.transform = `translate(${x}px, ${y}px) scale(${k})`;
   }, []);
 
   const zoomAt = useCallback((factor: number, cx: number, cy: number, smooth = true) => {
+    touched.current = true;
     const cur = v.current;
     const k = clampK(cur.k * factor);
     v.current = { k, x: cx - ((cx - cur.x) * k) / cur.k, y: cy - ((cy - cur.y) * k) / cur.k };
     apply(smooth);
   }, [apply]);
 
-  const center = () => {
-    const b = box.current;
-    return { cx: (b?.clientWidth ?? 0) / 2, cy: (b?.clientHeight ?? 0) / 2 };
-  };
-  const zoomBy = useCallback((factor: number) => { const c = center(); zoomAt(factor, c.cx, c.cy); }, [zoomAt]);
-  const panBy = useCallback((dx: number, dy: number) => { v.current = { ...v.current, x: v.current.x + dx, y: v.current.y + dy }; apply(true); }, [apply]);
-  const fit = useCallback(() => {
-    const b = box.current;
-    const cw = b?.clientWidth ?? 0, ch = b?.clientHeight ?? 0;
-    if (cw > 0 && ch > 0 && content.w > 0 && content.h > 0) {
-      const k = clampK(Math.min(1, (cw - 2 * PAD) / content.w, (ch - 2 * PAD) / content.h));
-      v.current = { k, x: PAD, y: PAD };
-    } else v.current = { x: 0, y: 0, k: 1 };
+  const zoomBy = useCallback((factor: number) => {
+    zoomAt(factor, (el?.clientWidth ?? 0) / 2, (el?.clientHeight ?? 0) / 2);
+  }, [zoomAt, el]);
+  const panBy = useCallback((dx: number, dy: number) => {
+    touched.current = true;
+    v.current = { ...v.current, x: v.current.x + dx, y: v.current.y + dy };
     apply(true);
-  }, [apply, content.w, content.h]);
+  }, [apply]);
+
+  const fit = useCallback((smooth = true, mode: FitMode = "all") => {
+    touched.current = false;
+    const cw = el?.clientWidth ?? 0, ch = el?.clientHeight ?? 0;
+    const room = (extent: number) => extent - 2 * FIT_PAD;
+    const kFit = (w: number, h: number) => Math.min(1, room(cw) / w, room(ch) / h);
+    if (cw > 0 && ch > 0 && content.w > 0 && content.h > 0) {
+      const kAll = clampK(kFit(content.w, content.h));
+      const boxes = focusRef.current;
+      if (boxes.length > 0 && (mode === "path" || (mode === "auto" && kAll < READABLE_MIN))) {
+        const x0 = Math.min(...boxes.map((b) => b.x)), y0 = Math.min(...boxes.map((b) => b.y));
+        const x1 = Math.max(...boxes.map((b) => b.x + b.w)), y1 = Math.max(...boxes.map((b) => b.y + b.h));
+        const last = boxes[boxes.length - 1];
+        const k = clampK(Math.max(READABLE_MIN, kFit(x1 - x0, y1 - y0)));
+        // On an axis where the path fits it is centred. Where it does not, the selected node is kept in view at the edge
+        // the rest of the path leads away from (the far edge when the path comes from before it, the near edge otherwise).
+        const place = (start: number, end: number, extent: number, lastStart: number, lastEnd: number) => {
+          if ((end - start) * k <= room(extent)) return (extent - (end - start) * k) / 2 - start * k;
+          return (lastStart + lastEnd) / 2 >= (start + end) / 2 ? extent - FIT_PAD - lastEnd * k : FIT_PAD - lastStart * k;
+        };
+        v.current = { k, x: place(x0, x1, cw, last.x, last.x + last.w), y: place(y0, y1, ch, last.y, last.y + last.h) };
+      } else v.current = { k: kAll, x: (cw - content.w * kAll) / 2, y: (ch - content.h * kAll) / 2 };
+    } else v.current = { x: 0, y: 0, k: 1 }; // no layout to fit into (not laid out yet)
+    apply(smooth);
+  }, [apply, el, content.w, content.h]);
 
   /** Pan just enough that a node at (x, y, w, h) in content coordinates is inside the viewport. */
   const reveal = useCallback((x: number, y: number, w: number, h: number) => {
-    const b = box.current;
-    if (!b || b.clientWidth === 0) return;
+    if (!el || el.clientWidth === 0) return;
     const { x: ox, y: oy, k } = v.current;
     let dx = 0, dy = 0;
-    if (x * k + ox < PAD) dx = PAD - (x * k + ox);
-    else if ((x + w) * k + ox > b.clientWidth - PAD) dx = b.clientWidth - PAD - ((x + w) * k + ox);
-    if (y * k + oy < PAD) dy = PAD - (y * k + oy);
-    else if ((y + h) * k + oy > b.clientHeight - PAD) dy = b.clientHeight - PAD - ((y + h) * k + oy);
+    if (x * k + ox < FIT_PAD) dx = FIT_PAD - (x * k + ox);
+    else if ((x + w) * k + ox > el.clientWidth - FIT_PAD) dx = el.clientWidth - FIT_PAD - ((x + w) * k + ox);
+    if (y * k + oy < FIT_PAD) dy = FIT_PAD - (y * k + oy);
+    else if ((y + h) * k + oy > el.clientHeight - FIT_PAD) dy = el.clientHeight - FIT_PAD - ((y + h) * k + oy);
     if (dx || dy) panBy(dx, dy);
-  }, [panBy]);
+  }, [panBy, el]);
 
-  // Start fitted when the tree is wider than the viewport, otherwise at natural size.
+  // Fit on load, and when the tree (or its orientation, which changes its size) changes.
+  useLayoutEffect(() => { fit(false, "auto"); }, [resetKey, fit]);
+  // Re-fit when the viewport is resized, unless the user has taken control.
   useEffect(() => {
-    const b = box.current;
-    if (b && b.clientWidth > 0 && (content.w > b.clientWidth || content.h > b.clientHeight)) fit();
-    else { v.current = { x: 0, y: 0, k: 1 }; apply(false); }
-  }, [resetKey, content.w, fit, apply]);
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => { if (!touched.current) fit(false, "auto"); });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [el, fit]);
 
   useEffect(() => {
-    const el = box.current;
     if (!el) return;
     const onWheel = (e: WheelEvent) => {
       const larger = content.w * v.current.k > el.clientWidth || content.h * v.current.k > el.clientHeight;
@@ -88,7 +136,7 @@ export function usePanZoom(content: { w: number; h: number }, resetKey: unknown)
       if (!start || e.pointerId !== start.id) return;
       const dx = e.clientX - start.x, dy = e.clientY - start.y;
       if (!moved.current && Math.hypot(dx, dy) < DRAG_PX) return;
-      if (!moved.current) { moved.current = true; el.setPointerCapture?.(e.pointerId); el.classList.add("dragging"); }
+      if (!moved.current) { moved.current = true; touched.current = true; el.setPointerCapture?.(e.pointerId); el.classList.add("dragging"); }
       v.current = { ...v.current, x: start.ox + dx, y: start.oy + dy };
       apply(false);
     };
@@ -109,7 +157,7 @@ export function usePanZoom(content: { w: number; h: number }, resetKey: unknown)
       el.removeEventListener("pointercancel", onUp);
       el.removeEventListener("click", onClick, true);
     };
-  }, [content.w, content.h, zoomAt, apply]);
+  }, [el, content.w, content.h, zoomAt, apply]);
 
   /** Keys: + - zoom, 0 fits (anywhere in the viewport); arrows pan only when the viewport itself has focus. */
   const onKeyDown = useCallback((e: React.KeyboardEvent) => {
@@ -123,5 +171,6 @@ export function usePanZoom(content: { w: number; h: number }, resetKey: unknown)
     }
   }, [zoomBy, fit, panBy]);
 
-  return { box, layer, zoomBy, fit, reveal, onKeyDown };
+  const showPath = useCallback(() => fit(true, "path"), [fit]);
+  return { layer, zoomBy, fit, showPath, reveal, onKeyDown };
 }

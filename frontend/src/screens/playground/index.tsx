@@ -1,127 +1,111 @@
-import { useState, type FormEvent } from "react";
+import { useState, type FormEvent, type KeyboardEvent } from "react";
 import { Link } from "react-router-dom";
-import { ApiError, api } from "../../api/client";
-import type { PlaygroundResponse, PlaygroundResult } from "../../api/types";
-import { fmtInt, fmtUsd } from "../../api/format";
-import { ApiErrorState, Badge, Card, CodeBlock, Spinner } from "../../components";
-import { useAsync } from "../report/useAsync";
+import { api } from "../../api/client";
+import { fmtUsd } from "../../api/format";
+import type { PlaygroundResponse } from "../../api/types";
+import { ApiErrorState } from "../../components";
+import { Badge, Button, Card, Field, Spinner, Textarea } from "../../ui";
+import { Allowance } from "./Allowance";
+import { Failure } from "./Failure";
+import { Pane } from "./Pane";
+import { useLimits } from "./useLimits";
+import "./playground.css";
 
+export { Pane, RowsPreview } from "./Pane";
+export { Failure } from "./Failure";
+
+/** The API's own limit on the question (docs/API_CONTRACT.md: question <= 500 chars); the input enforces it. */
 const MAX = 500;
-const PANES = [
+const MODELS = [
   ["teacher", "Teacher"],
   ["base", "Base"],
   ["student", "Student"],
 ] as const;
 
-export function RowsPreview({ rows }: { rows: NonNullable<PlaygroundResult["rows_preview"]> }) {
-  if (rows.length === 0) return <p className="muted">Query returned no rows.</p>;
-  const first = rows[0];
-  const cols = Array.isArray(first) ? first.map((_, i) => `col ${i + 1}`) : Object.keys(first);
-  const cell = (r: unknown[] | Record<string, unknown>, i: number, c: string) =>
-    String((Array.isArray(r) ? r[i] : r[c]) ?? "NULL");
-  return (
-    <div className="tbl-wrap">
-      <table className="tbl">
-        <thead><tr>{cols.map((c) => <th key={c}>{c}</th>)}</tr></thead>
-        <tbody>{(rows as (unknown[] | Record<string, unknown>)[]).slice(0, 10).map((r, ri) => (
-          <tr key={ri}>{cols.map((c, ci) => <td key={c}>{cell(r, ci, c)}</td>)}</tr>
-        ))}</tbody>
-      </table>
-    </div>
-  );
-}
-
-export function Pane({ name, r }: { name: string; r: PlaygroundResult }) {
-  return (
-    <Card title={name}>
-      {!r.available ? (
-        <p><Badge tone="warn">not available</Badge> <span>{r.reason ?? "No reason was given."}</span></p>
-      ) : (
-        <div className="stack">
-          {r.verified === true && <Badge tone="ok">verified: matches the known answer</Badge>}
-          {r.verified === false && <Badge tone="bad">verified: wrong result</Badge>}
-          {r.verified === null && <Badge>not verified (question is not a known task)</Badge>}
-          {r.sql ? <CodeBlock code={r.sql} /> : <p className="muted">No SQL returned.</p>}
-          {r.error && <p role="alert" style={{ color: "var(--bad)" }}>Error: {r.error}</p>}
-          {r.rows_preview && <RowsPreview rows={r.rows_preview} />}
-        </div>
-      )}
-    </Card>
-  );
-}
-
-export function Failure({ e }: { e: unknown }) {
-  if (e instanceof ApiError && e.code === "demo_budget_exhausted")
-    return (
-      <div className="state" role="alert">
-        <h3>Demo budget exhausted</h3>
-        <p>The daily demo budget is used up. <Link to="/">See replay</Link> for stored runs.</p>
-      </div>
-    );
-  if (e instanceof ApiError && e.status === 429)
-    return (
-      <div className="state" role="alert">
-        <h3>Rate limit reached</h3>
-        <p>{e.retryAfter ? `Try again in ${e.retryAfter} seconds.` : "Try again later."}</p>
-      </div>
-    );
-  return <ApiErrorState error={e} />;
-}
-
+/**
+ * Ask one question of the served models. Everything shown is what the API returned: the caps and today's
+ * spend (GET /api/config), each model's availability with its own reason, its SQL, whether it was verified,
+ * its rows, the request's cost and note. Nothing is generated here, and a request that failed is never drawn
+ * as an empty answer.
+ */
 export default function Playground() {
   const [q, setQ] = useState("");
   const [busy, setBusy] = useState(false);
   const [out, setOut] = useState<PlaygroundResponse | null>(null);
   const [err, setErr] = useState<unknown>(null);
-  const [cfg] = useAsync(() => api.config(), "config");
-  const pg = cfg.state === "ok" ? cfg.data.playground : null;
+  const [limits, refreshLimits] = useLimits();
+  const pg = limits.state === "ok" ? limits.pg : null;
+  const disabled = pg !== null && !pg.enabled;
 
-  async function submit(ev: FormEvent) {
-    ev.preventDefault();
+  async function submit(ev?: FormEvent) {
+    ev?.preventDefault();
+    if (busy || disabled || q.trim() === "") return;
     setBusy(true);
     setErr(null);
+    setOut(null);
     try {
       setOut(await api.playground(q.trim()));
     } catch (e) {
-      setOut(null);
       setErr(e);
     } finally {
       setBusy(false);
+      refreshLimits(); // the day's spend has moved, or the limit was hit: show the server's current figures
     }
   }
+  const onKey = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); void submit(); }
+  };
+  const nobody = out !== null && MODELS.every(([k]) => !out.results[k].available);
 
   return (
-    <div className="stack">
-      <h1>Playground</h1>
-      <p className="muted">Ask one question. Each model that can be served answers; the rest say why not.</p>
-      {cfg.state === "error" && <ApiErrorState title="Could not load the playground limits" error={cfg.error} />}
-      {pg && !pg.enabled && <p role="status"><Badge tone="warn">playground disabled</Badge> <Link to="/">See replay</Link></p>}
-      {pg && (
-        <p className="muted">
-          Limit {fmtInt(pg.per_ip_per_hour)} requests per hour per IP · daily budget spent {fmtUsd(pg.spent_today_usd, 2)} of {fmtUsd(pg.daily_cap_usd, 2)}
-        </p>
-      )}
-      <form onSubmit={submit} className="stack">
-        <label htmlFor="q" className="eyebrow">Question</label>
-        <textarea
-          id="q" rows={3} maxLength={MAX} value={q} onChange={(e) => setQ(e.target.value)}
-          style={{ width: "100%", padding: 10, background: "var(--surface)", border: "1px solid var(--line)", borderRadius: "var(--radius)" }}
-        />
-        <div className="row">
-          <button className="btn primary" type="submit" disabled={busy || q.trim() === "" || (pg !== null && !pg.enabled)}>Ask</button>
-          <span className="muted">{q.length}/{MAX}</span>
-          {busy && <Spinner inline label="Asking the models" />}
+    <div className="pg">
+      <header className="pg-head">
+        <h1>Playground</h1>
+        <p className="muted pg-lead">Ask one question. Each model that can be served answers; the rest say why not.</p>
+      </header>
+
+      <div className="pg-top">
+        <Card className="pg-ask">
+          <h2 className="pg-h">Ask a question</h2>
+          {disabled && (
+            <div role="status" className="pg-off">
+              <Badge tone="warn">playground disabled</Badge>
+              <p>The server reports the playground as disabled, so no question can be sent. <Link to="/">See replay</Link></p>
+            </div>
+          )}
+          <form onSubmit={submit} className="pg-form">
+            <Field label="Question" help="One question about the demo database, in plain English.">
+              <Textarea rows={4} maxLength={MAX} value={q} disabled={disabled} onChange={(e) => setQ(e.target.value)} onKeyDown={onKey} />
+            </Field>
+            <div className="pg-actions">
+              <Button type="submit" variant="primary" disabled={disabled || q.trim() === ""} loading={busy}>Ask</Button>
+              <span className="muted pg-count">{q.length} / {MAX}</span>
+              <span className="muted pg-hint">Ctrl+Enter also sends</span>
+            </div>
+          </form>
+        </Card>
+        <div className="pg-side">
+          {limits.state === "loading" && <Spinner lines={2} label="Loading the playground limits" />}
+          {limits.state === "error" && <ApiErrorState title="Could not load the playground limits" error={limits.error} />}
+          {pg && <Allowance pg={pg} />}
         </div>
-      </form>
-      {err !== null && <Failure e={err} />}
-      {out && (
-        <>
-          <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))" }}>
-            {PANES.map(([k, label]) => <Pane key={k} name={label} r={out.results[k]} />)}
+      </div>
+
+      <section className="pg-out">
+        <span className="sr-only" role="status">{out && !busy ? "Answers are ready." : ""}</span>
+        {busy && <Spinner label="Asking the models" />}
+        {err !== null && <Failure e={err} />}
+        {out && !busy && (
+          <div className="pg-answers" role="region" aria-label="Answers">
+            <h2 className="pg-h">Answers</h2>
+            {nobody && <p className="pg-none">None of the models could answer this request.</p>}
+            <div className="pg-panes">
+              {MODELS.map(([k, label]) => <Pane key={k} name={label} r={out.results[k]} />)}
+            </div>
+            <p className="muted pg-cost">Cost of this request: {fmtUsd(out.cost_usd, 6)} · {out.note}</p>
           </div>
-          <p className="muted">Cost of this request: {fmtUsd(out.cost_usd, 6)} · {out.note}</p>
-        </>
-      )}
+        )}
+      </section>
     </div>
   );
 }

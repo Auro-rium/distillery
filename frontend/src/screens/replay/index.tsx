@@ -1,28 +1,12 @@
 import { Link } from "react-router-dom";
 import { api } from "../../api/client";
-import { fmtText } from "../../api/format";
+import { NOT_MEASURED } from "../../api/format";
 import type { RunSummary } from "../../api/types";
-import { Badge, Card, ApiErrorState, EmptyState, LabelBanner, Spinner } from "../../components";
+import { ApiErrorState, Badge, Card, EmptyState, LabelBanner, Spinner } from "../../components";
+import { LabelTag, labelKey } from "../report/label";
 import { useAsync } from "../report/useAsync";
 import { Pipeline } from "./Pipeline";
-
-type Flags = Pick<RunSummary, "dry_run" | "recorded" | "recorded_at">;
-
-/** What the label says, by the same rule as LabelBanner: a missing flag is never read as real. */
-function labelKey(b: Flags): string {
-  if (b.dry_run === true) return "dry";
-  if (b.dry_run === false && b.recorded === true) return `recorded:${b.recorded_at ?? ""}`;
-  if (b.dry_run === false && b.recorded === false) return "live";
-  return "unknown";
-}
-
-function LabelTag({ b }: { b: Flags }) {
-  const k = labelKey(b);
-  if (k === "dry") return <Badge tone="warn">dry run</Badge>;
-  if (k.startsWith("recorded")) return <Badge tone="info">recorded</Badge>;
-  if (k === "live") return <Badge tone="info">live run</Badge>;
-  return <Badge tone="warn">label unknown</Badge>;
-}
+import "./replay.css";
 
 /** One banner per distinct label among the listed runs, above everything else on the page. */
 function LabelBanners({ runs }: { runs: RunSummary[] }) {
@@ -35,21 +19,24 @@ function LabelBanners({ runs }: { runs: RunSummary[] }) {
   );
 }
 
+/** Label badge, status, decision and date: each only from the payload; the date is shown as the API wrote it. */
 export function Bundle({ b }: { b: RunSummary }) {
   const id = encodeURIComponent(b.run_id);
   const done = b.status === "complete";
   return (
-    <Card className="lift">
-      <div className="row" style={{ justifyContent: "space-between" }}>
-        <h3 style={{ margin: 0 }} className="mono">{b.run_id}</h3>
-        <span className="row" style={{ gap: 6 }}>
+    <Card className="bundle lift">
+      <div className="bundle-head">
+        <h3 className="mono">{b.run_id}</h3>
+        <div className="bundle-tags">
           <LabelTag b={b} />
           <Badge>{b.status}</Badge>
           {b.decision && <Badge tone={b.decision === "PROMOTE" ? "ok" : "bad"}>{b.decision}</Badge>}
-        </span>
+        </div>
       </div>
-      <p className="muted">Created {fmtText(b.created_at)}</p>
-      <div className="row">
+      <p className="muted bundle-date">
+        Created {b.created_at ? <time dateTime={b.created_at}>{b.created_at}</time> : NOT_MEASURED}
+      </p>
+      <div className="bundle-actions">
         {done ? (
           <>
             <Link className="btn primary" to={`/runs/${id}/report`}>Report</Link>
@@ -85,7 +72,11 @@ export default function Replay() {
       {res.state === "ok" && res.data.length === 0 && (
         <EmptyState title="No replay bundles available">Nothing has been exported yet.</EmptyState>
       )}
-      {res.state === "ok" && res.data.map((b) => <Bundle key={b.run_id} b={b} />)}
+      {res.state === "ok" && res.data.length > 0 && (
+        <ul className="bundles" role="list" aria-label="Stored runs">
+          {res.data.map((b) => <li key={b.run_id}><Bundle b={b} /></li>)}
+        </ul>
+      )}
     </div>
   );
 }
