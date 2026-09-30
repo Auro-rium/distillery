@@ -9,6 +9,7 @@ import threading
 from pathlib import Path
 from typing import Any
 
+from distillery.driver import driver_alive
 from distillery.orchestrator import DRY_PREFIX, cost_by_model, stage_rows
 from distillery.server.settings import ServerSettings
 from distillery.server.views import detail_from_report
@@ -159,6 +160,8 @@ class RunReader:
         error: str | None = None
         if job is not None and job.state != "finished":
             status = "pending" if job.state == "queued" else "running"
+        elif report is None and driver_alive(store.run_dir(run_id)):
+            status = "running"  # driven by the CLI in another process; it holds driver.pid
         elif report is not None:
             status = "complete"
         else:

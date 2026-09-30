@@ -18,6 +18,7 @@ from server_helpers import (
 
 from distillery.server import create_app
 from distillery.server import sse as sse_mod
+from distillery.store import Store
 
 
 def _client(tmp_path: Path, **kw: object) -> TestClient:
@@ -154,6 +155,23 @@ def test_failed_run_reports_error(tmp_path: Path) -> None:
         assert "exit code 2" in d["error"] and "refused: nope" in d["error"]
         events = c.get(f"/api/runs/{rid}/events").text
         assert "event: done" in events and '"status":"failed"' in events
+
+
+def test_run_driven_by_the_cli_reads_running_not_failed(tmp_path: Path) -> None:
+    """No report and no in-process job: running only while the CLI process holds driver.pid."""
+    from distillery.driver import driving
+
+    s = make_settings(tmp_path)
+    rid = "sql-tiny-cli"
+    store = Store(s.root)
+    store.create_run(rid)
+    store.close()
+    run_dir = s.root / "runs" / rid
+    with TestClient(create_app(s)) as c:
+        with driving(run_dir):
+            assert c.get(f"/api/runs/{rid}").json()["status"] == "running"
+        d = c.get(f"/api/runs/{rid}").json()
+        assert d["status"] == "failed" and "interrupted" in d["error"]
 
 
 def test_tree_from_real_lineage(client: TestClient, tmp_path: Path) -> None:

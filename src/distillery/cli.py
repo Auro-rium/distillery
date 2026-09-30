@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Any
 
 from distillery.config import Config, ConfigError, load_config
+from distillery.driver import driving
 from distillery.orchestrator import (
     DRY_PREFIX,
     DRY_RUN_LABEL,
@@ -259,7 +260,8 @@ def _cmd_run(
                 deps = deps_factory(config, pcfg, bridge)
             else:
                 deps = make_live_deps(config, pcfg, bridge, env=env)
-            report = Pipeline(pcfg, config, deps, store, run_id, say=out).run()
+            with driving(store.run_dir(run_id)):
+                report = Pipeline(pcfg, config, deps, store, run_id, say=out).run()
     except (ConfigRefusal, ConfigError) as exc:
         out(f"refused: {exc}")
         return EXIT_REFUSED
