@@ -199,6 +199,48 @@ def test_trained_and_expected_must_be_passed_together(env, tmp_path: Path) -> No
         )
 
 
+def test_examples_are_capped_deterministic_and_complete(env) -> None:  # type: ignore[no-untyped-def]
+    store, db, ddl, items, answers = env
+
+    def go():  # type: ignore[no-untyped-def]
+        return evaluate(
+            store, "r1", _gens(answers), LocalExecutor(), db_ref=db, schema_ddl=ddl,
+            gate_cfg=GateThresholds(),
+        ).to_json()["examples"]
+
+    ex = go()
+    assert ex == go() and 0 < len(ex) <= 60
+    fields = {
+        "task_id", "family", "heldout_class", "question", "gold_sql", "base_sql", "student_sql",
+        "teacher_sql", "base_ok", "student_ok", "teacher_ok",
+    }
+    by_id = {it["task_id"]: it for it in items}
+    kinds = {e["kind"] for e in ex}
+    assert kinds <= {"fixed", "still_wrong", "regressed"} and "fixed" in kinds
+    for e in ex:
+        assert fields <= set(e)
+        assert e["gold_sql"] == by_id[e["task_id"]]["gold_sql"]
+        assert e["question"] == by_id[e["task_id"]]["question"]
+        assert e["teacher_ok"] is True and e["student_sql"]
+        if e["kind"] == "fixed":
+            assert e["student_ok"] and not e["base_ok"]
+        elif e["kind"] == "regressed":
+            assert e["base_ok"] and not e["student_ok"]
+        else:
+            assert not e["student_ok"] and not e["base_ok"]
+    assert not any(e["student_ok"] and e["base_ok"] for e in ex)
+
+
+def test_examples_cap_is_20_per_kind(env) -> None:  # type: ignore[no-untyped-def]
+    store, db, ddl, _items, answers = env
+    gens = {**_gens(answers), "student": Garbage(), "base": Garbage()}
+    ex = evaluate(
+        store, "r1", gens, LocalExecutor(), db_ref=db, schema_ddl=ddl, gate_cfg=GateThresholds()
+    ).to_json()["examples"]
+    assert len(ex) == 20 and {e["kind"] for e in ex} == {"still_wrong"}
+    assert ex[0]["student_sql"] == "I cannot help with that."  # raw output kept when unparseable
+
+
 def test_only_evaluator_loads_heldout() -> None:
     """Integrity rule 5.1: no module except evaluator.py (and its definition) may load held-out."""
     offenders: list[str] = []

@@ -63,6 +63,13 @@ def _parser() -> argparse.ArgumentParser:
     g = sub.add_parser("report", help="print the report of a finished run")
     g.add_argument("run")
     g.add_argument("--json", action="store_true", help="print the raw report.json")
+    sv = sub.add_parser("serve", help="run the HTTP API server (docs/API_CONTRACT.md)")
+    sv.add_argument("--host", default="127.0.0.1")
+    sv.add_argument("--port", type=int, default=8000)
+    ex = sub.add_parser("export-replay", help="bundle a finished run into replay/")
+    ex.add_argument("run")
+    ex.add_argument("--replay-dir", default=None, help="default: $DISTILLERY_REPLAY_DIR or replay")
+    ex.add_argument("--allow-dry-run", action="store_true", help="export a dry run (labelled)")
     return p
 
 
@@ -274,6 +281,48 @@ def _cmd_report(
     return EXIT_OK
 
 
+def _cmd_serve(args: argparse.Namespace, env: Mapping[str, str]) -> int:
+    import uvicorn
+
+    from distillery.server import create_app, settings_from_env
+
+    app = create_app(settings_from_env(env, root=_root(args, env)))
+    uvicorn.run(app, host=args.host, port=args.port)
+    return EXIT_OK
+
+
+def _cmd_export_replay(
+    args: argparse.Namespace, env: Mapping[str, str], out: Callable[[str], None]
+) -> int:
+    from distillery.server.reader import RunReader
+    from distillery.server.replay import ExportError, export_bundle
+    from distillery.server.settings import ServerSettings
+
+    root = _root(args, env)
+    try:
+        config = load_config(env)
+    except ConfigError as exc:
+        out(f"configuration error: {exc}")
+        return EXIT_REFUSED
+    replay_dir = Path(args.replay_dir or env.get("DISTILLERY_REPLAY_DIR") or "replay")
+    reader = RunReader(ServerSettings(root=root, config=config))
+    try:
+        dest = export_bundle(
+            reader,
+            args.run,
+            replay_dir,
+            allow_dry_run=args.allow_dry_run,
+            recorded_at=datetime.now(UTC).isoformat(),
+        )
+    except ExportError as exc:
+        out(f"refused: {exc}")
+        return EXIT_REFUSED
+    finally:
+        reader.close()
+    out(f"exported {args.run} -> {dest}")
+    return EXIT_OK
+
+
 def main(
     argv: Sequence[str] | None = None,
     *,
@@ -286,6 +335,10 @@ def main(
     args = _parser().parse_args(argv)
     if args.cmd == "run":
         return _cmd_run(args, e, deps_factory, out, token_prompt)
+    if args.cmd == "serve":
+        return _cmd_serve(args, e)
+    if args.cmd == "export-replay":
+        return _cmd_export_replay(args, e, out)
     if args.cmd == "status":
         return _cmd_status(args, e, out)
     return _cmd_report(args, e, out)

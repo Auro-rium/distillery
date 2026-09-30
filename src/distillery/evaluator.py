@@ -45,6 +45,8 @@ class ModelScores:
     correct: list[bool]
     reasons: list[str]
     unparseable: int  # outputs with no extractable SQL (counted, never skipped)
+    outputs: list[str] = field(default_factory=list)  # raw model output per item
+    sqls: list[str | None] = field(default_factory=list)  # extracted SQL per item
 
     @property
     def accuracy(self) -> float:
@@ -60,6 +62,8 @@ class EvalReport:
     accuracy_by_class: dict[str, dict[str, float]]  # heldout_class -> model -> accuracy
     class_counts: dict[str, int]
     artifact: dict[str, str] = field(default_factory=dict)
+    # Capped per-item examples; revealed only here, after scoring (see build_examples).
+    examples: list[dict[str, Any]] = field(default_factory=list)
 
     def to_json(self) -> dict[str, Any]:
         return {
@@ -71,6 +75,7 @@ class EvalReport:
             "class_counts": self.class_counts,
             "artifact": self.artifact,
             "gate": self.gate.model_dump(mode="json"),
+            "examples": self.examples,
         }
 
 
@@ -129,7 +134,53 @@ def score_model(
         verdict = compare_outcomes(by_index[i], gold[i], bool(it["requires_order"]))
         correct.append(verdict.ok)
         reasons.append(verdict.reason)
-    return ModelScores(correct, reasons, unparseable=sum(1 for s in sqls if s is None))
+    return ModelScores(
+        correct,
+        reasons,
+        unparseable=sum(1 for s in sqls if s is None),
+        outputs=list(outputs),
+        sqls=sqls,
+    )
+
+
+EXAMPLES_PER_KIND = 20  # 3 kinds -> at most 60 examples
+
+
+def build_examples(
+    items: Sequence[Mapping[str, Any]], scores: Mapping[str, ModelScores]
+) -> list[dict[str, Any]]:
+    """Deterministic capped examples in held-out order: the first ``EXAMPLES_PER_KIND`` of each
+    kind. ``fixed`` = student ok, base wrong; ``regressed`` = base ok, student wrong;
+    ``still_wrong`` = both wrong. Items both models solve are omitted."""
+
+    def shown(role: str, i: int) -> str:
+        return scores[role].sqls[i] or scores[role].outputs[i]
+
+    picked: dict[str, list[dict[str, Any]]] = {"fixed": [], "still_wrong": [], "regressed": []}
+    for i, it in enumerate(items):
+        base_ok, student_ok = scores["base"].correct[i], scores["student"].correct[i]
+        if base_ok and student_ok:
+            continue
+        kind = "fixed" if student_ok else "regressed" if base_ok else "still_wrong"
+        if len(picked[kind]) >= EXAMPLES_PER_KIND:
+            continue
+        picked[kind].append(
+            {
+                "kind": kind,
+                "task_id": it.get("task_id"),
+                "family": it.get("family"),
+                "heldout_class": it.get("heldout_class", "seen"),
+                "question": it["question"],
+                "gold_sql": it["gold_sql"],
+                "base_sql": shown("base", i),
+                "student_sql": shown("student", i),
+                "teacher_sql": shown("teacher", i),
+                "base_ok": base_ok,
+                "student_ok": student_ok,
+                "teacher_ok": scores["teacher"].correct[i],
+            }
+        )
+    return [e for kind in ("fixed", "still_wrong", "regressed") for e in picked[kind]]
 
 
 def evaluate(
@@ -201,4 +252,5 @@ def evaluate(
         accuracy_by_class=by_class,
         class_counts=class_counts,
         artifact=artifact,
+        examples=build_examples(items, scores),
     )

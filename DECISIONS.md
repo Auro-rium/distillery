@@ -39,3 +39,26 @@ copyright holder rather than a person, since no legal name was provided; change 
 - **Stage artifacts store checkpoint paths relative to the run dir** so hashes are reproducible across store locations.
 - Budget preflight is per chunk of 50 LLM calls (estimate = prompt chars / 3 + configured output tokens, x price); actual usage
   is recorded from each response.
+
+## 2026-09-30: Student model changed to Qwen/Qwen3-30B-A3B-Instruct-2507
+Qwen3-1.7B is fine-tunable but NOT on the serverless inference API (live-verified), so the base model could not be scored
+without building our own serving. `Qwen/Qwen3-30B-A3B-Instruct-2507` is on the serverless list AND listed as LoRA-fine-tunable
+(post-training/models), so base and teacher/Nemotron all go through the same inference API; it is an Instruct model, so no
+thinking-mode toggle is needed. Set via `DISTILLERY_MODEL_STUDENT` (no code change). Trade-offs, all UNVERIFIED: (1) it is a
+30B MoE (3B active), not a "small" model, so the cost story is "3B-active vs 55B-active teacher", not tiny-vs-huge; (2) base
+accuracy may already be high, so the headroom check (base <= 60% on dev) may fail and the task set would need to get harder;
+(3) MoE LoRA fine-tuning price and time are unknown; (4) serving the fine-tuned adapter still needs a dedicated endpoint
+(custom weights "on request"), so S4 is still open; only the BASE is now servable serverless.
+
+## 2026-09-30 (later): Student reverted to Qwen/Qwen3-1.7B (fallback Qwen3-0.6B)
+The 30B-A3B student above is withdrawn: the product claim is distilling into a genuinely SMALL model, and a 30B MoE undercuts it.
+Consequence, accepted: Qwen3-1.7B is not on the serverless API, so BOTH the base and the fine-tuned student must be served by our
+own path, chosen in spike S4 (sandbox CPU with peft, or a dedicated endpoint with custom weights, or a serverless GPU job). Base and
+student must be scored on the same serving path. The 30B decision stays in the log as a considered-and-rejected option.
+
+## 2026-09-30: All model weights live on Nebius, never on the dev machine
+Base weights for the small student (Qwen/Qwen3-1.7B, public, Apache-2.0, ungated on Hugging Face) are NOT downloaded locally
+(a partial local download was started and deleted). The whole agentic system, including serving, runs in Nebius cloud only.
+So the weights get fetched INSIDE Nebius: either by the Sandbox image build (needs sandbox egress to huggingface.co, unverified,
+spike S2/S4) or by a dedicated endpoint / serverless job pulling from Hugging Face (custom weights path, on request). If sandbox
+egress is blocked, fallback is uploading weights to Nebius storage from a Nebius-hosted step, decided in S4.

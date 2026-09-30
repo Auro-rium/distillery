@@ -11,7 +11,9 @@ Qwen3-1.7B LoRA adapter, based on what the docs/live platform actually allow:
 3. Serverless job: some managed batch/serverless inference for the adapter, if the platform
    offers one (not found in the saved docs).
 
-Nothing here implements real serving.
+Implementations (all UNVERIFIED against the real APIs): ``sandbox_student.SandboxCpuStudent``
+(path 1) and ``endpoint_student.EndpointStudent`` (path 2). Only the interface and the fake
+live here.
 """
 
 from __future__ import annotations
@@ -20,6 +22,10 @@ from collections.abc import Callable, Sequence
 from typing import Any, Protocol
 
 ChatMessages = Sequence[dict[str, Any]]
+
+
+class StudentServingError(RuntimeError):
+    """A serving backend failed (setup, generation, endpoint lifecycle). Never swallowed."""
 
 
 class StudentServer(Protocol):

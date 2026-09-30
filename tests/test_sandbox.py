@@ -149,3 +149,75 @@ def test_contree_sandbox_maps_sdk_calls() -> None:
     ]
     r = run(sb.run("alpine:latest", command="/bin/ls", args=["-l"], timeout=3))
     assert r.stdout == "out" and calls[1]["command"] == "/bin/ls" and calls[1]["timeout"] == 3
+
+
+# ---- real contree-sdk 0.3.6 wiring (stub SDK modules; no network) ---------------------------
+
+
+def _install_stub_sdk(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
+    import sys
+    from types import ModuleType
+
+    seen: dict[str, Any] = {}
+
+    class IAMAuth:
+        def __init__(self, token: str, project_id: str, base_url: str) -> None:
+            seen["auth"] = {"token": token, "project_id": project_id, "base_url": base_url}
+
+    class ContreeConfig:
+        def __init__(self, auth: Any, **kw: Any) -> None:
+            seen["config_auth"] = auth
+
+    class Contree:
+        def __init__(self, config: Any = None, **kw: Any) -> None:
+            seen["contree_args"] = (config, kw)
+            self.images = SimpleNamespace()
+
+    top, auth, cfg = ModuleType("contree_sdk"), ModuleType("contree_sdk.auth"), ModuleType("x")
+    top.Contree = Contree  # type: ignore[attr-defined]
+    auth.IAMAuth = IAMAuth  # type: ignore[attr-defined]
+    cfg.ContreeConfig = ContreeConfig  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "contree_sdk", top)
+    monkeypatch.setitem(sys.modules, "contree_sdk.auth", auth)
+    monkeypatch.setitem(sys.modules, "contree_sdk.config", cfg)
+    return seen
+
+
+def test_contree_sandbox_builds_iam_config_with_project(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen = _install_stub_sdk(monkeypatch)
+    monkeypatch.setenv("NEBIUS_AI_PROJECT", "project-e00abc")
+    sb = ContreeSandbox(lambda: "secret-key", None)
+    sb._get_sdk()
+    assert seen["auth"] == {
+        "token": "secret-key",
+        "project_id": "project-e00abc",
+        "base_url": "https://api.tokenfactory.nebius.com/sandboxes",
+    }
+    assert seen["config_auth"] is not None and seen["contree_args"][0] is not None
+    assert "secret-key" not in repr(sb) and "project-e00abc" not in repr(sb)
+
+
+def test_contree_sandbox_explicit_project_and_url(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen = _install_stub_sdk(monkeypatch)
+    monkeypatch.delenv("NEBIUS_AI_PROJECT", raising=False)
+    ContreeSandbox(lambda: "k", "https://x.invalid", project_id="p1")._get_sdk()
+    assert seen["auth"]["project_id"] == "p1" and seen["auth"]["base_url"] == "https://x.invalid"
+
+
+def test_contree_sandbox_refuses_without_project(monkeypatch: pytest.MonkeyPatch) -> None:
+    _install_stub_sdk(monkeypatch)
+    monkeypatch.delenv("NEBIUS_AI_PROJECT", raising=False)
+    with pytest.raises(SandboxError, match="NEBIUS_AI_PROJECT"):
+        ContreeSandbox(lambda: "k", None)._get_sdk()
+
+
+def test_contree_sandbox_ensure_image_imports_via_oci() -> None:
+    seen: list[str] = []
+
+    class Images:
+        async def oci(self, ref: str) -> Any:
+            seen.append(ref)
+            return SimpleNamespace(uuid="u-9")
+
+    sb = ContreeSandbox(lambda: "k", None, project_id="p", sdk=SimpleNamespace(images=Images()))
+    assert run(sb.ensure_image("python:3.12-slim")) == "u-9" and seen == ["python:3.12-slim"]

@@ -28,9 +28,9 @@ import random
 import sqlite3
 from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Any, Literal, Protocol
 
 import openai
 from pydantic import BaseModel, ConfigDict
@@ -38,6 +38,7 @@ from pydantic import BaseModel, ConfigDict
 from distillery import evaluator as evaluator_mod
 from distillery.budget import Ledger
 from distillery.config import Config
+from distillery.endpoint_student import EndpointBackend, EndpointSpec
 from distillery.evaluator import ExpectedArtifact, ModelScores, score_model
 from distillery.finetune import (
     CheckpointInfo,
@@ -148,6 +149,13 @@ class PipelineConfig(BaseModel):
     finetune_estimate_usd: float | None = None  # docs give no fine-tune price: caller must say
     hyperparameters: HyperParameters = HyperParameters(lora=True, n_epochs=3)
     ultra_verifier_authoring: bool = False  # documented hook, intentionally unimplemented
+    # How the student and base are served. "injected" (default) = use Deps.student_factory /
+    # Deps.base_factory as given. The others build both from Deps (UNVERIFIED against real APIs).
+    student_serving: Literal["injected", "sandbox_cpu", "endpoint"] = "injected"
+    student_sandbox_image: str | None = None  # sandbox_cpu: image with pip (default: sandbox_image)
+    student_batch_size: int = 8  # sandbox_cpu: prompts per generation job
+    student_concurrency: int = 4  # sandbox_cpu: parallel generation jobs
+    student_endpoint: EndpointSpec | None = None  # endpoint: explicit spec incl. hourly price
 
     def extra_tasks(self) -> int:
         return self.round_extra_tasks or max(10, self.scale.train // 4)
@@ -211,6 +219,9 @@ class FineTuner(Protocol):
 
 
 StudentFactory = Callable[[TrainedArtifact], StudentServer]
+# Serves the un-tuned base model through the same StudentServer abstraction as the student
+# (Qwen3-1.7B is not on the serverless inference API, so it cannot go through LLMClient).
+BaseFactory = Callable[[], StudentServer]
 
 
 @dataclass
@@ -227,6 +238,8 @@ class Deps:
     # Oracle registration for FAKE models only (they must know the gold SQL). Called with every
     # task set produced (also when the stage result comes from cache). Real deps leave it None.
     task_observer: Callable[[Sequence[SqlTask]], None] | None = None
+    base_factory: BaseFactory | None = None
+    endpoint: EndpointBackend | None = None  # needed only for student_serving="endpoint"
 
 
 # ---------------------------------------------------------------- usage / metrics
@@ -698,7 +711,52 @@ class Pipeline:
         }
         atomic_write_bytes(meta_path, json.dumps(meta, indent=2, sort_keys=True).encode("utf-8"))
 
+    def _resolve_serving(self) -> None:
+        """Build student/base factories from Deps when ``student_serving`` asks for it."""
+        mode, deps = self.cfg.student_serving, self.deps
+        if mode == "injected":
+            return
+        if deps.student_factory is not None or deps.base_factory is not None:
+            raise ConfigRefusal(f"student_serving={mode!r} but Deps already has serving factories")
+        base_model = self.config.require_model("student")
+        if mode == "sandbox_cpu":
+            from distillery.sandbox_student import SandboxCpuStudent
+
+            sandbox, bridge = deps.sandbox, deps.bridge
+            image = self.cfg.student_sandbox_image or deps.sandbox_image
+            batch, conc = self.cfg.student_batch_size, self.cfg.student_concurrency
+            if sandbox is None:
+                raise ConfigRefusal("student_serving='sandbox_cpu' needs Deps.sandbox")
+            self.deps = replace(
+                deps,
+                student_factory=lambda trained: SandboxCpuStudent.for_artifact(
+                    sandbox, image, bridge, trained, base_model=base_model,
+                    batch_size=batch, concurrency=conc,
+                ),
+                base_factory=lambda: SandboxCpuStudent(
+                    sandbox, image, bridge, base_model=base_model,
+                    batch_size=batch, concurrency=conc,
+                ),
+            )  # fmt: skip
+        else:
+            from distillery import endpoint_student
+
+            if deps.endpoint is None or self.cfg.student_endpoint is None:
+                raise ConfigRefusal(
+                    "student_serving='endpoint' needs Deps.endpoint and PipelineConfig."
+                    "student_endpoint (with an explicit hourly price)"
+                )
+            spec = self.cfg.student_endpoint
+            self.deps = replace(
+                deps,
+                student_factory=endpoint_student.make_student_factory(
+                    deps.endpoint, spec, self.ledger
+                ),
+                base_factory=endpoint_student.make_base_factory(deps.endpoint, spec, self.ledger),
+            )
+
     def _preconditions(self) -> None:
+        self._resolve_serving()
         self._check_identity()
         if self.cfg.ultra_verifier_authoring:
             raise NotImplementedError(
@@ -707,15 +765,16 @@ class Pipeline:
             )
         if self.cfg.max_rounds < 1:
             raise ConfigRefusal("max_rounds must be >= 1")
-        roles = ["planner", "teacher", "student"] + (["triage"] if self.cfg.use_triage else [])
+        self.config.require_model("student")  # fine-tune base id; served via base_factory, not LLM
+        roles = ["planner", "teacher"] + (["triage"] if self.cfg.use_triage else [])
         for role in roles:
             model = self.config.require_model(role)
             if model not in self.config.prices:
                 raise ConfigRefusal(f"no price for {role} model {model!r}; refusing to guess")
-        if self.deps.student_factory is None:
+        if self.deps.student_factory is None or self.deps.base_factory is None:
             raise ServingUnavailableError(
-                "no student serving path is available (spike S4 undecided); refusing to start "
-                "before spending anything"
+                "no student/base serving path is available (spike S4 undecided; the base model is "
+                "not on the serverless API either); refusing to start before spending anything"
             )
         if self.cfg.finetune_estimate_usd is None:
             raise ConfigRefusal(
@@ -1000,8 +1059,12 @@ class Pipeline:
     def _stage_headroom(self, split: Mapping[str, Any]) -> dict[str, Any]:
         def fn() -> dict[str, Any]:
             dev = [_task_from(d) for d in split["dev"]]
-            gen = LLMGenerator(self.runner, "student", "headroom_base", "headroom")
-            scores = self._score(gen, dev, "base")
+            assert self.deps.base_factory is not None  # noqa: S101 - checked in preconditions
+            server = self.deps.base_factory()
+            try:
+                scores = self._score(server, dev, "base")
+            finally:
+                server.close()
             acc = scores.accuracy
             if acc >= self.cfg.headroom_max_base_acc:
                 raise TaskTooEasyError(
@@ -1436,10 +1499,16 @@ class Pipeline:
         def fn() -> dict[str, Any]:
             trained = artifact_from_json(ft_res["artifact"], pipeline.run_dir)
             assert pipeline.deps.student_factory is not None  # noqa: S101
+            assert pipeline.deps.base_factory is not None  # noqa: S101
             server = pipeline.deps.student_factory(trained)
             try:
+                base_server = pipeline.deps.base_factory()
+            except BaseException:
+                server.close()
+                raise
+            try:
                 gens: dict[str, evaluator_mod.Generator] = {
-                    "base": LLMGenerator(pipeline.runner, "student", "eval_base", "final_eval"),
+                    "base": base_server,
                     "student": server,
                     "teacher": LLMGenerator(
                         pipeline.runner, "teacher", "eval_teacher", "final_eval"
@@ -1452,6 +1521,7 @@ class Pipeline:
                 )  # fmt: skip
             finally:
                 server.close()
+                base_server.close()
             return {
                 "report": rep.to_json(),
                 "candidate_round": r,

@@ -4,9 +4,10 @@ Everything here is FAKE. Outputs derived from these classes are NOT results and 
 presented as such; the orchestrator labels dry-run reports accordingly.
 
 * ``GoldOracle``      question -> gold SQL registry (fakes need to know the right answer).
-* ``FakeTransport``   duck-typed ``AsyncOpenAI``: serves planner/teacher/triage/base through the
+* ``FakeTransport``   duck-typed ``AsyncOpenAI``: serves planner/teacher/triage through the
                       real ``LLMClient`` code path (usage, schema validation, retries).
 * ``FakeFineTune``    implements the ``FineTuner`` surface with real temp checkpoint files.
+* ``FakeBaseFactory``     base-model servers (same StudentServer abstraction as the student).
 * ``FakeStudentFactory``  student servers whose error rate falls with each fine-tune round.
 """
 
@@ -305,6 +306,28 @@ class FakeStudentFactory:
         return server
 
 
+class FakeBaseFactory:
+    """Serves a fake un-tuned base model (constant error rate, FAKE) as a ``StudentServer``."""
+
+    def __init__(self, oracle: GoldOracle, error_rate: float, *, salt: str = "base") -> None:
+        self.oracle = oracle
+        self.error_rate = error_rate
+        self.salt = salt
+        self.servers: list[FakeStudent] = []
+
+    def __call__(self) -> StudentServer:
+        def respond(messages: Sequence[dict[str, Any]]) -> str:
+            q = question_of(messages)
+            if q is None:
+                raise AssertionError("FakeBase: unrecognised prompt")
+            bad = _unit(self.salt, q) < self.error_rate
+            return f"```sql\n{_WRONG_SQL if bad else self.oracle.gold(q)}\n```"
+
+        server = FakeStudent(respond)
+        self.servers.append(server)
+        return server
+
+
 @dataclass
 class DryRun:
     """Everything needed to run the pipeline offline. All models are FAKE."""
@@ -317,6 +340,7 @@ class DryRun:
     finetune: FakeFineTune
     students: FakeStudentFactory
     sandbox: FakeSandbox
+    base: FakeBaseFactory
 
 
 def dry_run_id(scale: str) -> str:
@@ -339,6 +363,10 @@ def build_dry_run(
     oracle = GoldOracle()
     transport = FakeTransport(oracle, error_rates)
     ft = FakeFineTune(fail_rounds=fail_rounds)
+    base = FakeBaseFactory(
+        oracle,
+        (error_rates or {}).get("fake-student-base", DEFAULT_ERROR_RATES["fake-student-base"]),
+    )
     students = FakeStudentFactory(oracle, student_error_rates, garbage=garbage_student)
     sandbox = FakeSandbox()
     config = Config(
@@ -355,18 +383,20 @@ def build_dry_run(
         executor=LocalExecutor(),
         bridge=bridge,
         student_factory=students,
+        base_factory=base,
         sandbox=sandbox,
         sandbox_image="fake-base-image",
         on_stage=on_stage,
         task_observer=oracle.observe,
     )
-    return DryRun(config, pcfg, deps, oracle, transport, ft, students, sandbox)
+    return DryRun(config, pcfg, deps, oracle, transport, ft, students, sandbox, base)
 
 
 __all__ = [
     "DEFAULT_ERROR_RATES",
     "FAKE_MODELS",
     "DryRun",
+    "FakeBaseFactory",
     "FakeFineTune",
     "FakeStudentFactory",
     "FakeTransport",

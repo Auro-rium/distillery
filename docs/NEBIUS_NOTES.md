@@ -80,3 +80,23 @@ _Not yet verified._
 - Doc JSON sample code is syntactically broken (missing commas) and inconsistent about the `json_schema` wrapper.
 - Sandbox concurrency: spec says cap 40 with docs cap 50; consistent, but the 50 counts all simultaneous operations, so `ContreeSandbox` also holds a global 50-slot semaphore.
 - Spec says `create_job` uses the paid-resource pattern; we deliberately do NOT auto-retry `create_job` on 5xx (a retry could create a second billable job), only reads/uploads/cancel.
+
+## LIVE-VERIFIED 2026-09-30 (spikes S1, S2a; these override "from docs" statements above)
+Scripts: `spikes/s1_models.py`, `spikes/s1_chat.py`, `spikes/s1_llmclient.py`, `spikes/s2_connect.py`. Raw outputs in `spikes/out/` (gitignored).
+
+**Inference (S1) — works with the Token Factory key alone.**
+- `GET /v1/models` returns 25 serverless models (fields: id, object, created, owned_by, shutdown_date; **no prices**).
+  Nemotron IDs: `nvidia/Nemotron-3-Ultra-550b-a55b`, `nvidia/nemotron-3-super-120b-a12b`, `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B` (also `nvidia/Nemotron-3_5-Lightning`, untested).
+- **Qwen3-1.7B / 0.6B are NOT in the serverless list** (only Qwen3-235B/30B-A3B/3.5/3.8-27B/Embedding). So the *base* model cannot be evaluated through the inference API: base must be scored on the same serving path as the student (S4). The orchestrator currently assumes an inference-API base model; this must change.
+- `response_format={"type":"json_schema","json_schema":{"name","schema","strict":true}}` works on Nano, Super and Ultra (all returned valid JSON).
+- Reasoning text: Nano -> `message.reasoning`; Super -> `reasoning` and `reasoning_content`; Ultra -> `reasoning_content`. `content` is the final answer only. Ultra's plain (non-JSON) answer came back in a ```sql fence.
+- `usage` present: `prompt_tokens`, `completion_tokens` (includes reasoning), `completion_tokens_details.reasoning_tokens` (Super/Ultra, null on Nano), cached-token fields.
+- Latency for tiny prompts: 0.85-3.8 s. Nano used 224 completion tokens for a one-line answer (heavy reasoning): "cheap" Nano is not cheap in tokens.
+- `distillery.llm.LLMClient` verified live on all three roles (structured output parsed, reasoning split, usage logged).
+- Prices are not exposed by the API and the public pricing page is a JS shell: **prices must be copied by hand from the console into `DISTILLERY_PRICES_FILE`**.
+
+**Sandboxes (S2a) — blocked on project id.**
+- `pip` packages: `contree-sdk` 0.3.6 and `contree-client` 0.4.0 exist on PyPI and install/import fine.
+- Default base URL: `https://api.tokenfactory.nebius.com/sandboxes` (CLI docs). `contree auth` accepts `NEBIUS_API_KEY` as the token.
+- **Docs vs published SDK mismatch:** docs show `Contree(api_client)`; `contree-sdk` 0.3.6 does NOT accept a client (`AttributeError: ... no attribute 'auth'`); it takes `Contree(token=..., base_url=...)` or a `ContreeConfig`. `sandbox.py`'s `ContreeSandbox` follows the docs and needs fixing.
+- Raw `GET /v1/whoami` and `/v1/images` with the key return **400 `Missing "Project" header`**; the SDK call without a project returned 403 Forbidden. IAM auth needs a project id (`NEBIUS_AI_PROJECT` / `CONTREE_PROJECT` / `project=` on the client). The key is a JWT whose payload is not plain JSON, so the project id can't be read from it.

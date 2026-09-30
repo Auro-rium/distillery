@@ -114,7 +114,8 @@ def test_dry_run_report_has_all_required_fields(reference: dict[str, Any]) -> No
     assert cfg["gate_thresholds"]["ratio_lower_bound_min"] == 0.85
     assert rep["evaluation"]["gate"]["decision"] == rep["decision"]
     cost = rep["cost"]
-    assert set(cost["llm_by_model"]) >= {"fake-planner", "fake-teacher", "fake-student-base"}
+    assert set(cost["llm_by_model"]) >= {"fake-planner", "fake-teacher"}
+    assert "fake-student-base" not in cost["llm_by_model"]  # base goes through base_factory
     assert cost["cost_per_1k_tasks"]["student"] == STUDENT_COST_UNAVAILABLE
     t = cost["cost_per_1k_tasks"]["teacher"]
     assert t["input_tokens"] > 0 and t["usd_per_1k_tasks"] > 0
@@ -374,6 +375,28 @@ def test_serving_path_missing_refuses_before_spending(tmp_path: Path, bridge: As
     assert dr.transport.calls == []
 
 
+def test_base_serving_missing_refuses_before_spending(tmp_path: Path, bridge: AsyncBridge) -> None:
+    from distillery.orchestrator import ServingUnavailableError
+
+    pipe, dr, _s = make(tmp_path, bridge)
+    dr.deps.base_factory = None
+    with pytest.raises(ServingUnavailableError):
+        pipe.run()
+    assert dr.transport.calls == []
+
+
+def test_base_never_goes_through_llm_client_and_is_closed(reference: dict[str, Any]) -> None:
+    dr = reference["dr"]
+    assert dr.base.servers and all(s.closed and s.calls >= 1 for s in dr.base.servers)
+    assert all(c["model"] != "fake-student-base" for c in dr.transport.calls)
+
+
+def test_report_carries_capped_examples_after_scoring(reference: dict[str, Any]) -> None:
+    ex = reference["report"]["evaluation"]["examples"]
+    assert 0 < len(ex) <= 60
+    assert {"task_id", "gold_sql", "base_sql", "student_sql", "teacher_sql"} <= set(ex[0])
+
+
 def test_ultra_verifier_hook_is_documented_not_silent(tmp_path: Path, bridge: AsyncBridge) -> None:
     pipe, _dr, _s = make(tmp_path, bridge, ultra_verifier_authoring=True)
     with pytest.raises(NotImplementedError, match="hook"):
@@ -438,3 +461,44 @@ def test_orchestrator_never_mentions_the_sealed_reader() -> None:
     src = (Path(__file__).parents[1] / "src/distillery/orchestrator.py").read_text()
     assert "load_" + "heldout" not in src
     _: Callable[[], None] = lambda: None  # noqa: E731
+
+
+# ---- student_serving option (wiring only; real serving is UNVERIFIED) ----------------------------
+
+
+def test_serving_default_is_injected_and_untouched(tmp_path: Path, bridge: AsyncBridge) -> None:
+    pipe, dr, _s = make(tmp_path, bridge)
+    assert pipe.cfg.student_serving == "injected"
+    pipe._resolve_serving()
+    assert pipe.deps is dr.deps and pipe.deps.student_factory is dr.students
+
+
+def test_serving_sandbox_cpu_builds_factories_without_mutating_deps(
+    tmp_path: Path, bridge: AsyncBridge
+) -> None:
+    from distillery.sandbox_student import SandboxCpuStudent
+
+    dry = build_dry_run(NANO, bridge, student_serving="sandbox_cpu")
+    dry.deps.student_factory = dry.deps.base_factory = None
+    pipe, dr, _s = make(tmp_path, bridge, dry=dry)
+    pipe._resolve_serving()
+    assert dr.deps.student_factory is None  # caller's Deps untouched (resumable)
+    assert pipe.deps.student_factory is not None and pipe.deps.base_factory is not None
+    base = pipe.deps.base_factory()
+    assert isinstance(base, SandboxCpuStudent) and base._adapter_files == ()
+    assert base._image is None  # nothing built until first generate
+
+
+def test_serving_modes_refuse_ambiguity_or_missing_config(
+    tmp_path: Path, bridge: AsyncBridge
+) -> None:
+    dry = build_dry_run(NANO, bridge, student_serving="sandbox_cpu")
+    pipe, _dr, _s = make(tmp_path, bridge, dry=dry)  # fake factories still set
+    with pytest.raises(ConfigRefusal, match="already has serving factories"):
+        pipe._resolve_serving()
+    dry = build_dry_run(NANO, bridge, student_serving="endpoint")
+    dry.deps.student_factory = dry.deps.base_factory = None
+    pipe, dr, _s = make(tmp_path, bridge, dry=dry)
+    with pytest.raises(ConfigRefusal, match="hourly price"):
+        pipe.run()
+    assert dr.transport.calls == []

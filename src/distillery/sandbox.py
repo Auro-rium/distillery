@@ -16,6 +16,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import importlib
+import os
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -23,6 +24,7 @@ from typing import Any, Protocol
 
 MAX_CONCURRENCY = 40  # our ceiling; the documented beta cap is 50 in-flight operations
 BETA_INFLIGHT_CAP = 50
+DEFAULT_BASE_URL = "https://api.tokenfactory.nebius.com/sandboxes"
 _TIMEOUT_GRACE_S = 5.0
 
 FileSource = bytes | str | Path
@@ -347,40 +349,57 @@ class FakeSandbox(_SandboxBase):
 
 
 class ContreeSandbox(_SandboxBase):
-    """Real sandbox via the Nebius ConTree SDK. Imports are lazy so tests never need it.
+    """Real sandbox via the Nebius ConTree SDK (``contree-sdk`` 0.3.6). Imports are lazy.
 
-    # UNVERIFIED: the PyPI distribution names for ``contree_sdk`` / ``contree_client`` are
-    # not stated in the saved docs, so they are not in pyproject.toml.
-    # UNVERIFIED: exception types raised by the SDK on timeout/failure are undocumented;
-    # we enforce our own ``asyncio.wait_for`` (timeout + grace) as a backstop.
+    Auth follows the published SDK, not the saved docs: ``Contree(ContreeConfig(auth=IAMAuth(
+    token=..., project_id=..., base_url=...)))``. The live API needs a Project header, whose id
+    comes from ``project_id`` or the env var ``NEBIUS_AI_PROJECT`` (read at connect time).
+
+    # UNVERIFIED live: only exercised against a stub SDK (project id was not available).
+    # UNVERIFIED: exception types raised on timeout/failure; we enforce our own
+    # ``asyncio.wait_for`` (timeout + grace) as a backstop.
     """
 
     def __init__(
         self,
         api_key_getter: Callable[[], str],
-        base_url: str,
+        base_url: str | None = None,
         *,
+        project_id: str | None = None,
         max_inflight: int = BETA_INFLIGHT_CAP,
         sdk: Any | None = None,
     ) -> None:
         super().__init__()
         self._sdk = sdk
         self._api_key_getter = api_key_getter  # key is fetched only at connect time
-        self._base_url = base_url
+        self._base_url = base_url or DEFAULT_BASE_URL
+        self._project_id = project_id
         self._global_sem = asyncio.Semaphore(max_inflight)
 
-    def __repr__(self) -> str:
+    def __repr__(self) -> str:  # never includes the key or the project id
         return f"ContreeSandbox(base_url={self._base_url!r})"
 
     def _get_sdk(self) -> Any:
         if self._sdk is None:
-            client_mod = importlib.import_module("contree_client.httpx")
+            project = self._project_id or os.environ.get("NEBIUS_AI_PROJECT")
+            if not project:
+                raise SandboxError(
+                    "no Sandboxes project id: set NEBIUS_AI_PROJECT (the API rejects requests "
+                    "without a Project header)"
+                )
             sdk_mod = importlib.import_module("contree_sdk")
-            api_client = client_mod.ContreeAsyncClient(
-                self._api_key_getter(), base_url=self._base_url
+            auth_mod = importlib.import_module("contree_sdk.auth")
+            cfg_mod = importlib.import_module("contree_sdk.config")
+            auth = auth_mod.IAMAuth(
+                token=self._api_key_getter(), project_id=project, base_url=self._base_url
             )
-            self._sdk = sdk_mod.Contree(api_client)
+            self._sdk = sdk_mod.Contree(cfg_mod.ContreeConfig(auth=auth))
         return self._sdk
+
+    async def ensure_image(self, ref: str) -> str:
+        """Import ``ref`` (e.g. ``python:3.12-slim``) if it is not present; returns its uuid."""
+        image = await self._get_sdk().images.oci(ref)
+        return str(image.uuid)
 
     async def run(
         self,
