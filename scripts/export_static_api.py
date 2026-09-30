@@ -56,9 +56,9 @@ def export(home: Path, only: list[str] | None) -> dict[str, object]:
     at = datetime.now(UTC).replace(microsecond=0).isoformat()
     with TestClient(app) as c:
         for path, rel in (
-            ("/api/health", "health"),
-            ("/api/config", "config"),
-            ("/api/replay", "replay"),
+            ("/api/health", "health.json"),
+            ("/api/config", "config.json"),
+            ("/api/replay", "replay.json"),
         ):
             r = c.get(path)
             r.raise_for_status()
@@ -77,17 +77,20 @@ def export(home: Path, only: list[str] | None) -> dict[str, object]:
             base = f"/api/runs/{rid}"
             detail = c.get(base)
             detail.raise_for_status()
-            _write(f"by-run/{rid}/detail", _recorded(detail.content, at))
-            rewrites.append({"source": base, "destination": f"{GENERATED}by-run/{rid}/detail"})
+            _write(f"by-run/{rid}/detail.json", _recorded(detail.content, at))
+            rewrites.append({"source": base, "destination": f"{GENERATED}by-run/{rid}/detail.json"})
             for name in ("report", "tree"):
                 r = c.get(f"{base}/{name}")
                 r.raise_for_status()
                 _write(
-                    f"by-run/{rid}/{name}",
+                    f"by-run/{rid}/{name}.json",
                     _recorded(r.content, at) if name == "report" else r.content,
                 )
                 rewrites.append(
-                    {"source": f"{base}/{name}", "destination": f"{GENERATED}by-run/{rid}/{name}"}
+                    {
+                        "source": f"{base}/{name}",
+                        "destination": f"{GENERATED}by-run/{rid}/{name}.json",
+                    }
                 )
             ev = c.get(f"{base}/events")
             ev.raise_for_status()
@@ -104,17 +107,17 @@ def export(home: Path, only: list[str] | None) -> dict[str, object]:
             for kind in KINDS:
                 r = c.get(f"{base}/examples", params={"kind": kind, "limit": 200})
                 r.raise_for_status()
-                _write(f"by-run/{rid}/examples-{kind}", r.content)
+                _write(f"by-run/{rid}/examples-{kind}.json", r.content)
                 rewrites.append(
                     {
                         "source": f"{base}/examples",
                         "has": [{"type": "query", "key": "kind", "value": kind}],
-                        "destination": f"{GENERATED}by-run/{rid}/examples-{kind}",
+                        "destination": f"{GENERATED}by-run/{rid}/examples-{kind}.json",
                     }
                 )
                 headers.append(
                     {
-                        "source": f"{GENERATED}by-run/{rid}/examples-{kind}",
+                        "source": f"{GENERATED}by-run/{rid}/examples-{kind}.json",
                         "headers": [
                             {"key": k, "value": v}
                             for k, v in r.headers.items()
@@ -123,8 +126,8 @@ def export(home: Path, only: list[str] | None) -> dict[str, object]:
                     }
                 )
             exported.append(rid)
-        _write("runs-index", _recorded(json.dumps(keep).encode(), at))
-        rewrites.append({"source": "/api/runs", "destination": f"{GENERATED}runs-index"})
+        _write("runs-index.json", _recorded(json.dumps(keep).encode(), at))
+        rewrites.append({"source": "/api/runs", "destination": f"{GENERATED}runs-index.json"})
     json_types = [
         {"key": "Content-Type", "value": "application/json"},
         {"key": "Cache-Control", "value": "no-cache"},
