@@ -30,6 +30,13 @@
 - (a) console prices: NOT done, needs the user. (b) student on its own training rows, (c) base-vs-student identical-string rate, (e) train-vs-eval prompt render: pending (batched sandbox job, approved; scripts being built).
 - Pre-registration committed in DECISIONS.md (7b39bee) before any new data.
 
+## PAUSED (user stepped away): parallel build of the pre-registered plan
+Plan: `/home/lenovo/.claude/plans/eager-percolating-snowglobe.md`. Four builders were stopped mid-work; nothing is merged, nothing spent.
+- WP-A (explicit hyperparameters, min-steps guard, `finetune` report section, diagnostic scripts): uncommitted edits in `.claude/worktrees/agent-a1ac65091e248630a` (finetune.py, orchestrator.py, pipeline_fakes.py, tests/test_finetune.py).
+- WP-C (real price model, cost estimate script): 1 commit plus edits in `.claude/worktrees/agent-a4326907543148acc`.
+- WP-B (template gold, in-distribution gate set, stress set) and WP-D (backend bundles, playground student, banners, snapshot removal): little or no work survived (no worktree changes found); restart from the briefs in the plan.
+- Resume: merge A, then C, then B, then D; run the full gates after each. No live run may start before the step-5 estimate is approved.
+
 ## Config
 - Student: `Qwen/Qwen3-0.6B` (LoRA), served on Nebius Sandbox CPU. Budget: $19.50 project cap, $10 of it reserved for the demo.
 - Live home (holds the spend ledger, keep using it so the project cap accounting stays correct): `.distillery/live` (gitignored).
