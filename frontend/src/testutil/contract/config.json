@@ -1,0 +1,20 @@
+{
+  "models": {
+    "planner": "fake-p",
+    "student": "fake-s",
+    "teacher": "fake-t",
+    "triage": "fake-n"
+  },
+  "playground": {
+    "daily_cap_usd": 1.0,
+    "enabled": false,
+    "per_ip_per_hour": 10,
+    "spent_today_usd": 0.0
+  },
+  "run_cap_usd": 10.0,
+  "thresholds": {
+    "bootstrap_resamples": 10000,
+    "mcnemar_alpha": 0.05,
+    "ratio_lower_bound_min": 0.85
+  }
+}

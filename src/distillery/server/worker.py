@@ -20,6 +20,10 @@ class RunConflictError(RuntimeError):
     pass
 
 
+class QueueFullError(RuntimeError):
+    pass
+
+
 @dataclass
 class Job:
     run_id: str
@@ -44,9 +48,57 @@ def redact(text: str, secrets: Sequence[str]) -> str:
     return text
 
 
-def subprocess_executor(root: str, admin_token: str | None, secrets: Sequence[str]) -> Executor:
+def run_child(
+    argv: Sequence[str],
+    env: dict[str, str],
+    job: Job,
+    log: Callable[[str], None],
+    kill_after_s: float,
+) -> int:
+    """Run ``argv`` in its OWN process group; ``job.interrupt`` sends SIGINT to the whole group
+    and SIGKILLs it after ``kill_after_s`` if it is still alive."""
+    proc = subprocess.Popen(  # noqa: S603
+        argv, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+        start_new_session=True,
+    )  # fmt: skip
+    timers: list[threading.Timer] = []
+
+    def _signal(sig: int) -> None:
+        try:
+            os.killpg(proc.pid, sig)
+        except (ProcessLookupError, PermissionError):
+            pass
+
+    def interrupt() -> None:
+        if proc.poll() is None:
+            _signal(signal.SIGINT)
+            t = threading.Timer(kill_after_s, lambda: _signal(signal.SIGKILL))
+            t.daemon = True
+            timers.append(t)
+            t.start()
+
+    job.interrupt = interrupt
+    if job.cancel_requested:
+        interrupt()
+    try:
+        for line in proc.stdout or ():
+            log(line.rstrip("\n"))
+        return proc.wait()
+    finally:
+        for t in timers:
+            t.cancel()
+        _signal(signal.SIGKILL)  # reap stragglers of the group (no-op if all exited)
+
+
+def subprocess_executor(
+    root: str,
+    admin_token: str | None,
+    secrets: Sequence[str],
+    kill_after_s: float = KILL_AFTER_INTERRUPT_S,
+) -> Executor:
     """Run ``python -m distillery run`` as a child so cancel can send SIGINT: the pipeline's
-    paid-resource context managers then cancel provider jobs on the way out."""
+    paid-resource context managers then cancel provider jobs on the way out. Dry runs use the
+    CLI's own dry-run defaults (no --seed / --max-rounds overrides)."""
 
     def run(job: Job, log: Callable[[str], None]) -> int:
         argv = [
@@ -67,21 +119,7 @@ def subprocess_executor(root: str, admin_token: str | None, secrets: Sequence[st
                 argv += ["--budget-usd", str(job.budget_usd)]
             if job.finetune_estimate_usd is not None:
                 argv += ["--finetune-estimate-usd", str(job.finetune_estimate_usd)]
-        proc = subprocess.Popen(  # noqa: S603
-            argv, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
-        )
-
-        def interrupt() -> None:
-            if proc.poll() is None:
-                proc.send_signal(signal.SIGINT)
-                threading.Timer(KILL_AFTER_INTERRUPT_S, proc.kill).start()
-
-        job.interrupt = interrupt
-        if job.cancel_requested:
-            interrupt()
-        for line in proc.stdout or ():
-            log(line.rstrip("\n"))
-        return proc.wait()
+        return run_child(argv, env, job, log, kill_after_s)
 
     return run
 
@@ -93,11 +131,28 @@ class Worker:
         self._queue: queue.Queue[Job | None] = queue.Queue()
         self._jobs: dict[str, Job] = {}
         self._lock = threading.Lock()
+        self._stopping = False
         self._thread = threading.Thread(target=self._loop, name="distillery-worker", daemon=True)
         self._thread.start()
 
-    def stop(self) -> None:
+    def stop(self, join_timeout_s: float = KILL_AFTER_INTERRUPT_S + 10.0) -> None:
+        """Shut down: drop queued jobs, interrupt the running one (SIGINT, then SIGKILL after the
+        executor's grace period) and join the worker thread."""
+        with self._lock:
+            self._stopping = True
+            running = []
+            for job in self._jobs.values():
+                if job.state == "queued":
+                    job.state = "finished"
+                    job.error = "server shutting down"
+                elif job.state == "running":
+                    job.cancel_requested = True
+                    running.append(job)
         self._queue.put(None)
+        for job in running:
+            if job.interrupt is not None:
+                job.interrupt()
+        self._thread.join(join_timeout_s)
 
     def jobs(self) -> list[Job]:
         with self._lock:
@@ -107,8 +162,14 @@ class Worker:
         with self._lock:
             return self._jobs.get(run_id)
 
-    def submit(self, job: Job) -> None:
+    def submit(self, job: Job, max_pending: int | None = None) -> None:
         with self._lock:
+            if self._stopping:
+                raise RunConflictError("server is shutting down")
+            if max_pending is not None and (
+                sum(1 for j in self._jobs.values() if j.state != "finished") >= max_pending
+            ):
+                raise QueueFullError(f"{max_pending} runs already queued or running")
             existing = self._jobs.get(job.run_id)
             if existing is not None and existing.state != "finished":
                 raise RunConflictError(f"run {job.run_id} is already queued or running")
@@ -150,6 +211,8 @@ class Worker:
                 if job.state != "queued":  # cancelled while waiting
                     continue
                 job.state = "running"
+                if self._stopping:
+                    job.cancel_requested = True
             try:
                 code = self._executor(job, functools.partial(self._log, job))
                 if job.cancel_requested:

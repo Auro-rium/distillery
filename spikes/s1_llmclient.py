@@ -1,4 +1,5 @@
 """S1c: exercise OUR LLMClient (routing, structured output, reasoning split, usage) live."""
+
 import asyncio
 import os
 
@@ -35,12 +36,28 @@ async def main() -> None:
     for role in ROLES:
         r = await client.chat(
             role,  # type: ignore[arg-type]
-            [{"role": "user", "content": "Write SQL that counts rows in table accounts. JSON {\"sql\": \"...\"}."}],
-            purpose="spike", json_schema=Out, temperature=0,
+            [
+                {
+                    "role": "user",
+                    "content": 'Write SQL that counts rows in table accounts. JSON {"sql": "..."}.',
+                }
+            ],
+            purpose="spike",
+            json_schema=Out,
+            temperature=0,
         )
         print(role, "parsed=", r.parsed, "| has_reasoning=", bool(getattr(r, "reasoning", None)))
     for rec in sink.records:
-        print(rec.role, rec.model.split("/")[-1], "in", rec.input_tokens, "out", rec.output_tokens,
-              f"{rec.latency_s:.2f}s", "ok" if rec.ok else rec.error)
+        print(
+            rec.role,
+            rec.model.split("/")[-1],
+            "in",
+            rec.input_tokens,
+            "out",
+            rec.output_tokens,
+            f"{rec.latency_s:.2f}s",
+            "ok" if rec.ok else rec.error,
+        )
+
 
 asyncio.run(main())

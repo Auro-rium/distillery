@@ -32,7 +32,9 @@ def test_live_run_auth(tmp_path: Path) -> None:
         assert r.status_code == 401 and r.json()["error"] == "admin_token_required"
         r = c.post("/api/runs", json=LIVE, headers={"X-Admin-Token": "wrong"})
         assert r.status_code == 403 and r.json()["error"] == "forbidden"
-        r = c.post("/api/runs", json={**LIVE, "approve_spend": False}, headers={"X-Admin-Token": ADMIN})
+        r = c.post(
+            "/api/runs", json={**LIVE, "approve_spend": False}, headers={"X-Admin-Token": ADMIN}
+        )
         assert r.status_code == 400 and r.json()["error"] == "spend_not_approved"
         r = c.post("/api/runs", json={**LIVE, "budget_usd": 1e9}, headers={"X-Admin-Token": ADMIN})
         assert r.status_code == 422
@@ -50,7 +52,19 @@ def test_no_admin_token_configured_means_no_live_runs(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize(
-    "rid", ["../etc/passwd", "..", "a/b", "a b", "-x", ".hidden", "x" * 65, "playground", "a;rm", "%2e%2e"]
+    "rid",
+    [
+        "../etc/passwd",
+        "..",
+        "a/b",
+        "a b",
+        "-x",
+        ".hidden",
+        "x" * 65,
+        "playground",
+        "a;rm",
+        "%2e%2e",
+    ],
 )
 def test_run_id_validation(tmp_path: Path, rid: str) -> None:
     with _app(tmp_path) as c:
@@ -124,7 +138,9 @@ def test_no_secret_in_any_response_or_log(tmp_path: Path, caplog: pytest.LogCapt
     llm, _ = fake_llm()
     with _app(tmp_path, playground_llm=llm) as c:
         h = {"X-Admin-Token": ADMIN}
-        rid = c.post("/api/runs", json={**LIVE, "run_id": "sql-tiny-sec"}, headers=h).json()["run_id"]
+        rid = c.post("/api/runs", json={**LIVE, "run_id": "sql-tiny-sec"}, headers=h).json()[
+            "run_id"
+        ]
         for _ in range(200):
             if c.get(f"/api/runs/{rid}").json()["status"] == "complete":
                 break

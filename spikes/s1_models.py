@@ -1,4 +1,5 @@
 """S1a: list models (no inference cost). Prints ids only; never prints the key."""
+
 import json
 import os
 import sys

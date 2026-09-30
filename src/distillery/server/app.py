@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import threading
 import uuid
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -14,8 +15,11 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from starlette.background import BackgroundTask
+from starlette.concurrency import run_in_threadpool
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from distillery.evaluator import EXAMPLES_PER_KIND
 from distillery.orchestrator import DRY_PREFIX, SCALES
 from distillery.server import sse
 from distillery.server.limits import SlidingWindow
@@ -29,10 +33,17 @@ from distillery.server.replay import Bundle, load_bundles
 from distillery.server.settings import ServerSettings
 from distillery.server.views import (
     EXAMPLE_KINDS,
+    example_totals,
     filter_examples,
     tree_from_report,
 )
-from distillery.server.worker import Job, RunConflictError, Worker, subprocess_executor
+from distillery.server.worker import (
+    Job,
+    QueueFullError,
+    RunConflictError,
+    Worker,
+    subprocess_executor,
+)
 
 
 class ApiError(Exception):
@@ -66,8 +77,18 @@ class PlaygroundRequest(BaseModel):
     question: str = Field(min_length=1, max_length=MAX_QUESTION_CHARS)
 
 
-def _ip(request: Request) -> str:
-    return request.client.host if request.client else "unknown"
+def client_ip(request: Request, trusted_proxies: tuple[str, ...]) -> str:
+    """The peer address, unless the peer is a configured trusted proxy: then the right-most
+    X-Forwarded-For hop that is not itself a trusted proxy. With no trusted proxies configured
+    (the default) the header is ignored, so it cannot be used to dodge per-IP limits."""
+    peer = request.client.host if request.client else "unknown"
+    if peer not in trusted_proxies:
+        return peer
+    hops = [h.strip() for h in request.headers.get("x-forwarded-for", "").split(",") if h.strip()]
+    for hop in reversed(hops):
+        if hop not in trusted_proxies:
+            return hop
+    return peer
 
 
 async def _read_body(request: Request, cap: int) -> Any:
@@ -106,8 +127,15 @@ def create_app(settings: ServerSettings) -> FastAPI:
     cfg = settings.config
     secrets = [s.get_secret_value() for s in (cfg.nebius_api_key, cfg.admin_token) if s is not None]
     admin = cfg.admin_token.get_secret_value() if cfg.admin_token else None
-    executor = settings.executor or subprocess_executor(str(settings.root), admin, secrets)
+    executor = settings.executor or subprocess_executor(
+        str(settings.root), admin, secrets, settings.shutdown_grace_s
+    )
     worker = Worker(executor, secrets)
+    limiter = sse.StreamLimiter(settings.sse_max_streams, settings.sse_max_streams_per_ip)
+
+    def _ip(request: Request) -> str:
+        return client_ip(request, settings.trusted_proxies)
+
     reader = RunReader(settings, worker)
     playground = Playground(settings, reader)
     dry_limit = SlidingWindow(settings.dry_run_per_ip_per_hour, 3600.0, settings.clock)
@@ -115,12 +143,13 @@ def create_app(settings: ServerSettings) -> FastAPI:
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         yield
-        worker.stop()
+        await run_in_threadpool(worker.stop, settings.shutdown_grace_s + 10.0)
         reader.close()
 
     app = FastAPI(title="Distillery API", lifespan=lifespan, docs_url=None, redoc_url=None,
                   openapi_url=None)  # fmt: skip
     app.state.worker, app.state.reader, app.state.playground = worker, reader, playground
+    app.state.stream_limiter = limiter
 
     if settings.dev_origin:
         app.add_middleware(
@@ -223,10 +252,15 @@ def create_app(settings: ServerSettings) -> FastAPI:
         return d
 
     @app.get("/api/runs/{run_id}/events")
-    def run_events(run_id: str, request: Request) -> StreamingResponse:
+    def run_events(
+        run_id: str, request: Request, last_event_id: str | None = None
+    ) -> StreamingResponse:
         check_id(run_id)
+        # ``?last_event_id=`` (for EventSource reconnects that cannot set headers) wins over the
+        # Last-Event-ID header.
+        raw = last_event_id if last_event_id is not None else request.headers.get("last-event-id")
         try:
-            last = max(0, int(request.headers.get("last-event-id", "0")))
+            last = max(0, int(raw or "0"))
         except ValueError:
             last = 0
         b = None if local(run_id) else bundle(run_id)
@@ -251,12 +285,26 @@ def create_app(settings: ServerSettings) -> FastAPI:
                     run_id, after, d, rep.get("decision") if rep else None, worker.get(run_id)
                 )
 
-        gen = sse.stream(refresh, last, heartbeat_s=settings.heartbeat_s, poll_s=settings.poll_s,
-                         clock=settings.clock)  # fmt: skip
+        ip = _ip(request)
+        if not limiter.acquire(ip):
+            raise ApiError(429, "too_many_streams", "too many open event streams",
+                           {"Retry-After": "5"})  # fmt: skip
+        released = threading.Event()
+
+        def release() -> None:
+            if not released.is_set():
+                released.set()
+                limiter.release(ip)
+
+        gen = sse.astream(
+            refresh, last, heartbeat_s=settings.heartbeat_s, poll_s=settings.poll_s,
+            is_disconnected=request.is_disconnected, on_close=release, clock=settings.clock,
+        )  # fmt: skip
         return StreamingResponse(
             gen,
             media_type="text/event-stream",
             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+            background=BackgroundTask(release),
         )
 
     @app.get("/api/runs/{run_id}/report")
@@ -284,7 +332,12 @@ def create_app(settings: ServerSettings) -> FastAPI:
             raise ApiError(422, "invalid_request", f"kind must be one of {list(EXAMPLE_KINDS)}")
         rep, _, _ = report_of(run_id)
         items, available = filter_examples(rep, kind, max(1, min(limit, 200)))
-        return JSONResponse(items, headers={"X-Examples-Available": str(available).lower()})
+        headers = {
+            "X-Examples-Available": str(available).lower(),
+            "X-Examples-Cap-Per-Kind": str(EXAMPLES_PER_KIND),
+            "X-Examples-Totals": json.dumps(example_totals(rep), separators=(",", ":")),
+        }
+        return JSONResponse(items, headers=headers)
 
     @app.get("/api/replay")
     def replay() -> list[dict[str, Any]]:
@@ -297,7 +350,16 @@ def create_app(settings: ServerSettings) -> FastAPI:
     async def start_run(request: Request) -> dict[str, str]:
         body = _parse(RunRequest, await _read_body(request, settings.max_body_bytes))
         run_id = body.run_id
+        is_admin = False
         if body.dry_run:
+            # Anonymous callers: scale 'tiny' only and a bounded queue. A supplied admin token
+            # lifts both (an invalid one is rejected, never silently downgraded).
+            is_admin = request.headers.get("x-admin-token") is not None
+            if is_admin:
+                require_admin(request)
+            elif body.scale != "tiny":
+                raise ApiError(403, "admin_token_required",
+                               "anonymous dry runs are limited to scale 'tiny'")  # fmt: skip
             retry = dry_limit.hit(_ip(request))
             if retry is not None:
                 raise ApiError(429, "rate_limited", "too many dry runs from this address",
@@ -327,8 +389,11 @@ def create_app(settings: ServerSettings) -> FastAPI:
         if reader.read_report(run_id) is not None:
             raise ApiError(409, "run_exists", "that run already completed")
         job = Job(run_id, body.scale, body.dry_run, body.budget_usd, body.finetune_estimate_usd)
+        cap = settings.max_pending_jobs if body.dry_run and not is_admin else None
         try:
-            worker.submit(job)
+            worker.submit(job, max_pending=cap)
+        except QueueFullError as exc:
+            raise ApiError(429, "queue_full", str(exc), {"Retry-After": "30"}) from None
         except RunConflictError as exc:
             raise ApiError(409, "run_conflict", str(exc)) from None
         reader.reset_events(run_id)

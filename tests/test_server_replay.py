@@ -12,7 +12,10 @@ from distillery.server import create_app
 
 
 def _env(tmp_path: Path) -> dict[str, str]:
-    return {"DISTILLERY_HOME": str(tmp_path / "data"), "DISTILLERY_REPLAY_DIR": str(tmp_path / "replay")}
+    return {
+        "DISTILLERY_HOME": str(tmp_path / "data"),
+        "DISTILLERY_REPLAY_DIR": str(tmp_path / "replay"),
+    }
 
 
 def test_export_refuses_dry_run_without_flag(tmp_path: Path) -> None:
@@ -70,8 +73,12 @@ def test_export_real_run_then_served_from_bundle_alone(tmp_path: Path) -> None:
 
 def test_export_errors(tmp_path: Path) -> None:
     out: list[str] = []
-    assert cli.main(["export-replay", "nope"], env=_env(tmp_path), out=out.append) == cli.EXIT_REFUSED
-    assert cli.main(["export-replay", "../x"], env=_env(tmp_path), out=out.append) == cli.EXIT_REFUSED
+    assert (
+        cli.main(["export-replay", "nope"], env=_env(tmp_path), out=out.append) == cli.EXIT_REFUSED
+    )
+    assert (
+        cli.main(["export-replay", "../x"], env=_env(tmp_path), out=out.append) == cli.EXIT_REFUSED
+    )
     assert not (tmp_path / "replay").exists()
 
 

@@ -49,7 +49,12 @@ def test_health_and_config_have_no_secrets(client: TestClient) -> None:
     assert set(c) == {"models", "thresholds", "run_cap_usd", "playground"}
     assert set(c["models"]) == {"planner", "teacher", "triage", "student"}
     assert set(c["thresholds"]) == {"ratio_lower_bound_min", "mcnemar_alpha", "bootstrap_resamples"}
-    assert set(c["playground"]) == {"enabled", "per_ip_per_hour", "daily_cap_usd", "spent_today_usd"}
+    assert set(c["playground"]) == {
+        "enabled",
+        "per_ip_per_hour",
+        "daily_cap_usd",
+        "spent_today_usd",
+    }
     assert c["playground"]["enabled"] is False  # no LLM injected: honest
 
 
@@ -99,7 +104,11 @@ def test_dry_run_lifecycle_and_derived_progress(tmp_path: Path) -> None:
         assert rid.startswith("dry-")
         d = wait_for(c, rid, "complete")
         assert d["dry_run"] is True and d["error"] is None
-        assert [s["name"] for s in d["stages"]] == ["schema", "gold_crosscheck", "verifier_selftest"]
+        assert [s["name"] for s in d["stages"]] == [
+            "schema",
+            "gold_crosscheck",
+            "verifier_selftest",
+        ]
         assert d["spend"]["by_model"]["fake-t"]["calls"] == 1
         assert d["spend"]["finetune_usd_estimate"] == 2.0
         assert d["spend"]["total_usd"] == 2.5
@@ -184,7 +193,7 @@ def test_examples_absent_then_present(client: TestClient, tmp_path: Path) -> Non
         return [e["task_id"] for e in r.json()]
 
     assert ids("fixed") == ["t1"]
-    assert ids("still_wrong") == ["t2", "t3"]
+    assert ids("still_wrong") == ["t3"]  # core: base wrong AND student wrong
     assert ids("regressed") == ["t2"]
     assert ids("all") == ["t1", "t2", "t3", "t4"]
     assert ids("all", 2) == ["t1", "t2"]
@@ -224,9 +233,14 @@ def test_sse_full_stream_and_resume(client: TestClient, tmp_path: Path) -> None:
     assert kinds[-1] == "done" and kinds.count("done") == 1
     assert {"stage", "spend", "log"} <= set(kinds)
     done = json.loads(ev[-1]["data"])
-    assert done["status"] == "complete" and done["decision"] == "REJECT" and "ts" in done
+    assert (
+        done["status"] == "complete"
+        and done["decision"] == "REJECT"
+        and "observed_at" in done
+        and "ts" not in done
+    )
     stage = json.loads(next(e for e in ev if e["event"] == "stage")["data"])
-    assert set(stage) == {"ts", "name", "status"}
+    assert set(stage) == {"observed_at", "at", "name", "status"}
     # resume: only events after the given id
     r2 = client.get(f"/api/runs/{rid}/events", headers={"Last-Event-ID": str(ids[-2])})
     assert [int(e["id"]) for e in _parse(r2.text)] == [ids[-1]]

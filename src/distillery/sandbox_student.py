@@ -1,6 +1,6 @@
 """Student serving path 1: generate on CPU inside a Nebius Sandbox (ConTree).
 
-UNVERIFIED against the real platform (spike ``spikes/s4_student_cpu.py`` has not been run):
+UNVERIFIED against the real platform (no spike for this path exists yet):
 * whether the sandbox has network egress for ``pip install`` and the Hugging Face download,
 * whether the CPU/RAM limits fit Qwen3-1.7B in float32 (~7 GB) and how many seconds per sample,
 * the adapter file names (we upload whatever files training downloaded, by basename),

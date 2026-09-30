@@ -2,10 +2,15 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
+import threading
 import time
-from collections.abc import Callable, Iterator
+from collections import Counter
+from collections.abc import AsyncIterator, Awaitable, Callable, Iterator
 from typing import Any
+
+from starlette.concurrency import run_in_threadpool
 
 Refresh = Callable[[int], tuple[list[tuple[int, str, dict[str, Any]]], bool]]
 
@@ -37,3 +42,62 @@ def stream(
             yield ": heartbeat\n\n"
             last_sent = clock()
         sleep(poll_s)
+
+
+class StreamLimiter:
+    """Caps concurrent SSE streams globally and per client address."""
+
+    def __init__(self, max_total: int, max_per_ip: int) -> None:
+        self.max_total, self.max_per_ip = max_total, max_per_ip
+        self._per_ip: Counter[str] = Counter()
+        self._lock = threading.Lock()
+
+    def acquire(self, ip: str) -> bool:
+        with self._lock:
+            if sum(self._per_ip.values()) >= self.max_total or self._per_ip[ip] >= self.max_per_ip:
+                return False
+            self._per_ip[ip] += 1
+            return True
+
+    def release(self, ip: str) -> None:
+        with self._lock:
+            if self._per_ip[ip] > 0:
+                self._per_ip[ip] -= 1
+            if self._per_ip[ip] == 0:
+                del self._per_ip[ip]
+
+    def active(self) -> int:
+        with self._lock:
+            return sum(self._per_ip.values())
+
+
+async def astream(
+    refresh: Refresh,
+    last_id: int,
+    *,
+    heartbeat_s: float,
+    poll_s: float,
+    is_disconnected: Callable[[], Awaitable[bool]],
+    on_close: Callable[[], None] = lambda: None,
+    clock: Callable[[], float] = time.monotonic,
+) -> AsyncIterator[str]:
+    """Async twin of :func:`stream`: no thread is held while idle (``refresh`` runs in the
+    threadpool only for the instant of a poll) and it stops when the client goes away."""
+    last_sent = clock()
+    try:
+        while True:
+            events, finished = await run_in_threadpool(refresh, last_id)
+            for event_id, event, data in events:
+                yield frame(event_id, event, data)
+                last_id = event_id
+                last_sent = clock()
+            if finished:
+                return
+            if await is_disconnected():
+                return
+            if clock() - last_sent >= heartbeat_s:
+                yield ": heartbeat\n\n"
+                last_sent = clock()
+            await asyncio.sleep(poll_s)
+    finally:
+        on_close()

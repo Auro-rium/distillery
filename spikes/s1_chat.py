@@ -1,4 +1,5 @@
 """S1b: tiny chat + json_schema calls on the three Nemotron models. Saves raw responses."""
+
 import json
 import os
 import time
@@ -30,12 +31,23 @@ for m in MODELS:
             msgs[0]["content"] += ' Answer as JSON {"sql": "..."}.'
         t = time.time()
         try:
-            r = c.chat.completions.create(model=m, messages=msgs, max_tokens=400, temperature=0, **kw)
+            r = c.chat.completions.create(
+                model=m, messages=msgs, max_tokens=400, temperature=0, **kw
+            )
             d = r.model_dump()
             rec = {"model": m, "kind": kind, "latency_s": round(time.time() - t, 2), "resp": d}
             msg = d["choices"][0]["message"]
-            print(m.split("/")[-1], kind, f"{rec['latency_s']}s", "msg_keys=", sorted(k for k, v in msg.items() if v),
-                  "usage=", d.get("usage"), "finish=", d["choices"][0]["finish_reason"])
+            print(
+                m.split("/")[-1],
+                kind,
+                f"{rec['latency_s']}s",
+                "msg_keys=",
+                sorted(k for k, v in msg.items() if v),
+                "usage=",
+                d.get("usage"),
+                "finish=",
+                d["choices"][0]["finish_reason"],
+            )
             print("   content:", (msg.get("content") or "")[:160].replace("\n", " "))
         except Exception as e:  # spike script: report and continue
             rec = {"model": m, "kind": kind, "error": f"{type(e).__name__}: {str(e)[:400]}"}

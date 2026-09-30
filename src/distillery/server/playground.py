@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import threading
+from datetime import UTC, datetime
 from typing import Any
+
+from starlette.concurrency import run_in_threadpool
 
 from distillery.budget import PLAYGROUND, BudgetExceeded, Ledger, UnknownPriceError
 from distillery.llm import LLMError
@@ -22,6 +25,10 @@ _UNAVAILABLE = {
     "base": "base model is not served by this demo (serving path unverified, spike S4)",
     "student": "student serving path not deployed (spike S4)",
 }
+
+
+def _today() -> str:
+    return datetime.now(UTC).date().isoformat()
 
 
 class DemoBudgetExhaustedError(RuntimeError):
@@ -46,6 +53,8 @@ class Playground:
         self._db_lock = threading.Lock()
         self._gold: dict[str, tuple[str, bool]] = {}
         self._gold_runs: set[str] = set()
+        self._reserve_lock = threading.Lock()
+        self._reserved = 0.0  # estimates of in-flight calls, not yet settled
 
     # ---- availability -----------------------------------------------------
     def teacher_unavailable_reason(self) -> str | None:
@@ -111,6 +120,27 @@ class Playground:
         )
         return {"results": order, "cost_usd": cost, "note": note}
 
+    def _reserve(self, estimate: float) -> None:
+        """Atomically check (store spend + in-flight reservations + this estimate) against the
+        daily cap and reserve the estimate. Spend is re-read from the store every time, so other
+        processes' spend and our own settled calls are both counted."""
+        with self._reserve_lock:
+            spent = self.reader.real.spend_on_day(_today(), PLAYGROUND)
+            spent = max(spent, self.ledger.playground_spent())
+            pending = self._reserved + estimate
+            cap = self.s.config.playground_daily_cap_usd
+            if spent + pending > cap:
+                raise BudgetExceeded(
+                    f"playground daily cap ${cap:.2f}: spent ${spent:.4f} "
+                    f"+ in-flight/est ${pending:.4f}"
+                )
+            self.ledger.preflight_playground(pending)  # project-wide cap too
+            self._reserved += estimate
+
+    def _release(self, estimate: float) -> None:
+        with self._reserve_lock:
+            self._reserved = max(0.0, self._reserved - estimate)
+
     async def _teacher(self, question: str) -> tuple[dict[str, Any], float]:
         llm = self.s.playground_llm
         if llm is None:  # guarded by teacher_unavailable_reason; explicit, not an assert
@@ -122,21 +152,25 @@ class Playground:
         in_est = sum(len(m["content"]) for m in messages) // 3
         try:
             estimate = self.ledger.estimate_llm_cost(model, in_est, EST_OUTPUT_TOKENS)
-            self.ledger.preflight_playground(estimate)
+            self._reserve(estimate)
         except BudgetExceeded as exc:
             raise DemoBudgetExhaustedError(str(exc)) from exc
         except UnknownPriceError as exc:
             return _result(False, str(exc)), 0.0
         try:
-            res = await llm.chat("teacher", messages, purpose="playground")
-        except LLMError as exc:
-            return _result(True, None, error=f"teacher call failed: {type(exc).__name__}"), 0.0
-        usd = self.ledger.estimate_llm_cost(model, res.input_tokens, res.output_tokens)
-        self.ledger.record(PLAYGROUND, model, usd, res.input_tokens, res.output_tokens)
+            try:
+                res = await llm.chat("teacher", messages, purpose="playground")
+            except LLMError as exc:
+                return _result(True, None, error=f"teacher call failed: {type(exc).__name__}"), 0.0
+            usd = self.ledger.estimate_llm_cost(model, res.input_tokens, res.output_tokens)
+            # Record BEFORE releasing the reservation so the spend is never invisible.
+            self.ledger.record(PLAYGROUND, model, usd, res.input_tokens, res.output_tokens)
+        finally:
+            self._release(estimate)
         sql = extract_sql(res.text)
         if sql is None:
             return _result(True, None, error="no SQL found in the model output"), usd
-        verified, outcome = self._verify(question, sql)
+        verified, outcome = await run_in_threadpool(self._verify, question, sql)
         preview = None
         if outcome.ok:
             preview = {

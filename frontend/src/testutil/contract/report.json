@@ -1,0 +1,477 @@
+{
+  "candidate_round": 2,
+  "candidate_selection": "best DEV accuracy across rounds (ties: earliest); held-out is scored once, for that candidate only",
+  "config": {
+    "gate_thresholds": {
+      "bootstrap_resamples": 10000,
+      "mcnemar_alpha": 0.05,
+      "ratio_lower_bound_min": 0.85,
+      "seed": 1234
+    },
+    "model_ids": {
+      "planner": "fake-planner",
+      "student": "fake-student-base",
+      "teacher": "fake-teacher",
+      "triage": "fake-triage"
+    },
+    "pipeline": {
+      "candidates_per_task": 1,
+      "chars_per_token": 3,
+      "chunk": 50,
+      "concurrency": 16,
+      "db_seed": 0,
+      "dev_target_acc": 0.9,
+      "dry_run": true,
+      "est_output_tokens": 256,
+      "finetune_estimate_usd": 0.0,
+      "headroom_max_base_acc": 0.8,
+      "hyperparameters": {
+        "batch_size": null,
+        "context_length": null,
+        "learning_rate": null,
+        "lora": true,
+        "lora_alpha": null,
+        "lora_dropout": null,
+        "lora_r": null,
+        "max_grad_norm": null,
+        "n_epochs": 3,
+        "packing": null,
+        "warmup_ratio": null,
+        "weight_decay": null
+      },
+      "max_rounds": 3,
+      "oversample": 1.6,
+      "pack": "sql",
+      "poll_interval_s": 15.0,
+      "poll_timeout_s": 21600.0,
+      "round_extra_tasks": null,
+      "scale": {
+        "dev": 10,
+        "heldout": 20,
+        "name": "tiny",
+        "train": 40
+      },
+      "seed": 1234,
+      "selftest_corruptions": 4,
+      "selftest_sample": 50,
+      "spot_check_n": 30,
+      "triage_sample": 50,
+      "ultra_verifier_authoring": false,
+      "use_triage": true
+    },
+    "prices": {
+      "fake-planner": {
+        "date": "2026-09-29",
+        "input_per_mtok": 1.0,
+        "output_per_mtok": 2.0,
+        "source": "FAKE dry-run price, not a real price"
+      },
+      "fake-student-base": {
+        "date": "2026-09-29",
+        "input_per_mtok": 1.0,
+        "output_per_mtok": 2.0,
+        "source": "FAKE dry-run price, not a real price"
+      },
+      "fake-teacher": {
+        "date": "2026-09-29",
+        "input_per_mtok": 1.0,
+        "output_per_mtok": 2.0,
+        "source": "FAKE dry-run price, not a real price"
+      },
+      "fake-triage": {
+        "date": "2026-09-29",
+        "input_per_mtok": 1.0,
+        "output_per_mtok": 2.0,
+        "source": "FAKE dry-run price, not a real price"
+      }
+    },
+    "seeds": {
+      "bootstrap_seed": 1234,
+      "db_seed": 0,
+      "task_seed": 1234
+    }
+  },
+  "cost": {
+    "cost_per_1k_tasks": {
+      "student": "unavailable: serving path undecided (spike S4)",
+      "teacher": {
+        "basis": "measured tokens x configured prices, from the held-out teacher pass",
+        "held_out_tasks": 20,
+        "input_tokens": 20325,
+        "output_tokens": 957,
+        "usd": 0.022239,
+        "usd_per_1k_tasks": 1.11195
+      }
+    },
+    "finetune_usd": "ESTIMATE from --finetune-estimate-usd (no fine-tune price known); rounds run: 2",
+    "llm_by_model": {
+      "fake-planner": {
+        "calls": 119,
+        "input_tokens": 126142,
+        "output_tokens": 5332,
+        "usd": 0.136806
+      },
+      "fake-student-base": {
+        "calls": 30,
+        "input_tokens": 30490,
+        "output_tokens": 458,
+        "usd": 0.031406
+      },
+      "fake-teacher": {
+        "calls": 181,
+        "input_tokens": 189187,
+        "output_tokens": 8369,
+        "usd": 0.205925
+      },
+      "fake-triage": {
+        "calls": 46,
+        "input_tokens": 5425,
+        "output_tokens": 184,
+        "usd": 0.005793
+      }
+    },
+    "run_cap_usd": 10.0,
+    "run_total_usd": 0.3799300000000002
+  },
+  "counters": {
+    "analysis_r1": {
+      "analysis_failed": 0,
+      "heldout_families_dropped": 0,
+      "unknown_families_dropped": 0
+    },
+    "dev_eval_r1": {
+      "dev_failures": 4,
+      "dev_n": 10,
+      "dev_unparseable": 0
+    },
+    "dev_eval_r2": {
+      "dev_failures": 1,
+      "dev_n": 10,
+      "dev_unparseable": 0
+    },
+    "final_eval": {
+      "heldout_n": 20,
+      "unparseable_base": 0,
+      "unparseable_student": 0,
+      "unparseable_teacher": 0
+    },
+    "finetune_r1": {
+      "orphan_cancel_errors": 0,
+      "orphan_jobs_cancelled": 0,
+      "train_rows": 40
+    },
+    "finetune_r2": {
+      "orphan_cancel_errors": 0,
+      "orphan_jobs_cancelled": 0,
+      "train_rows": 46
+    },
+    "gold_crosscheck": {
+      "accepted": 102,
+      "accepted_with_identical_sql_text": 102,
+      "checked": 112,
+      "discard_planner_mismatch_only": 3,
+      "discard_teacher_mismatch_only": 7,
+      "discarded": 10,
+      "suspect_gold": 0
+    },
+    "headroom": {
+      "base_unparseable": 0,
+      "dev_n": 10
+    },
+    "questions": {
+      "attempts": 125,
+      "dropped_duplicate": 5,
+      "dropped_empty": 8,
+      "dropped_error": 0,
+      "generated": 112,
+      "requested": 112,
+      "shortfall": 0
+    },
+    "sandbox_branch_r1": {
+      "branch_skipped": 0
+    },
+    "schema": {},
+    "split": {
+      "dev": 10,
+      "heldout": 20,
+      "heldout_seen_returned_to_train": 0,
+      "heldout_unseen_family_tasks_discarded": 6,
+      "input_tasks": 102,
+      "spot_check_items": 20,
+      "train": 40,
+      "train_pool_trimmed": 26
+    },
+    "targeted_r1": {
+      "candidates": 7,
+      "dropped": 1,
+      "dropped_already_known": 3,
+      "generated": 10,
+      "gold_error": 0,
+      "new_tasks": 7,
+      "result_mismatch": 1,
+      "tasks": 7,
+      "triage_calls": 6,
+      "triage_errors": 0,
+      "triage_flagged_dirty_format": 0,
+      "verified": 6
+    },
+    "teacher_data": {
+      "candidates": 40,
+      "dropped": 0,
+      "gold_error": 0,
+      "tasks": 40,
+      "triage_calls": 40,
+      "triage_errors": 0,
+      "triage_flagged_dirty_format": 0,
+      "verified": 40
+    },
+    "verifier_selftest": {
+      "corruptions_tested": 198,
+      "tasks_sampled": 50,
+      "tasks_without_corruptions": 0
+    }
+  },
+  "data": {
+    "dev_tasks": 10,
+    "heldout_class_counts": {
+      "seen": 6,
+      "unseen_family": 12,
+      "unseen_table_combo": 2
+    },
+    "heldout_families": [
+      "conditional",
+      "date_math"
+    ],
+    "heldout_sealed_sha256": "c27e0cffe883c4e68f4cd34128bce82620edc235d534536a59848cc74f60bdf8",
+    "heldout_tasks": 20,
+    "spot_check_file": "/tmp/ddverify/dry-runs/runs/dry-sql-tiny/spot_check.json",
+    "teacher_verified_rows_round1": 40,
+    "train_tasks": 40
+  },
+  "decision": "REJECT",
+  "decision_reasons": [
+    "ratio lower bound 0.500 < 0.85 (point 0.700)",
+    "McNemar exact p=0.0386 < 0.05 (student-only 10, base-only 2)"
+  ],
+  "dry_run": true,
+  "evaluation": {
+    "accuracy": {
+      "base": 0.3,
+      "student": 0.7,
+      "teacher": 1.0
+    },
+    "accuracy_by_class": {
+      "seen": {
+        "base": 0.16666666666666666,
+        "student": 0.8333333333333334,
+        "teacher": 1.0
+      },
+      "unseen_family": {
+        "base": 0.25,
+        "student": 0.6666666666666666,
+        "teacher": 1.0
+      },
+      "unseen_table_combo": {
+        "base": 1.0,
+        "student": 0.5,
+        "teacher": 1.0
+      }
+    },
+    "artifact": {
+      "adapter_sha256": "558d42d5e0a19b519a26d9af25630b6f0a515f07c59a0a1329f74a493f6c2ae1",
+      "checkpoint_id": "ckpt-ftjob-862efb5a41c8",
+      "job_id": "ftjob-862efb5a41c8"
+    },
+    "class_counts": {
+      "seen": 6,
+      "unseen_family": 12,
+      "unseen_table_combo": 2
+    },
+    "gate": {
+      "base_acc": 0.3,
+      "base_only_vs_student": 2,
+      "bootstrap_resamples_used": 10000,
+      "bootstrap_skipped": 0,
+      "decision": "REJECT",
+      "mcnemar_p": 0.03857421875,
+      "n": 20,
+      "ratio_hi": 0.9,
+      "ratio_lo": 0.5,
+      "ratio_point": 0.7,
+      "reasons": [
+        "ratio lower bound 0.500 < 0.85 (point 0.700)",
+        "McNemar exact p=0.0386 < 0.05 (student-only 10, base-only 2)"
+      ],
+      "student_acc": 0.7,
+      "student_ci": [
+        0.4810271816464765,
+        0.8545227551323956
+      ],
+      "student_only_vs_base": 10,
+      "teacher_acc": 1.0,
+      "thresholds": {
+        "bootstrap_resamples": 10000,
+        "mcnemar_alpha": 0.05,
+        "ratio_lower_bound_min": 0.85,
+        "seed": 1234
+      }
+    },
+    "heldout_sha256": "c27e0cffe883c4e68f4cd34128bce82620edc235d534536a59848cc74f60bdf8",
+    "n": 20,
+    "unparseable": {
+      "base": 0,
+      "student": 0,
+      "teacher": 0
+    }
+  },
+  "headroom": {
+    "base_dev_acc": 0.1,
+    "max_allowed": 0.8
+  },
+  "label": "DRY RUN \u2014 fake models, numbers are NOT results",
+  "llm_attempt_counters": {
+    "crosscheck_planner:failed_attempts": 0,
+    "crosscheck_planner:schema_retries": 6,
+    "crosscheck_teacher:failed_attempts": 0,
+    "crosscheck_teacher:schema_retries": 2,
+    "eval_base:failed_attempts": 0,
+    "eval_base:schema_retries": 0,
+    "eval_teacher:failed_attempts": 0,
+    "eval_teacher:schema_retries": 0,
+    "failure_analysis:failed_attempts": 0,
+    "failure_analysis:schema_retries": 0,
+    "headroom_base:failed_attempts": 0,
+    "headroom_base:schema_retries": 0,
+    "teacher_targeted:failed_attempts": 0,
+    "teacher_targeted:schema_retries": 0,
+    "teacher_train:failed_attempts": 0,
+    "teacher_train:schema_retries": 0,
+    "triage_format:failed_attempts": 0,
+    "triage_format:schema_retries": 0
+  },
+  "llm_errors_by_purpose": {},
+  "pack": "sql",
+  "recorded": false,
+  "recorded_at": null,
+  "rounds": [
+    {
+      "adapter_sha256": "0f2c53bb21afbece4d59c0409f17ae36349749ad1dcf7b5527c671365be694c4",
+      "clusters": [
+        {
+          "description": "student fails 2 dev items in family null_handling (fake analysis)",
+          "name": "null_handling mistakes",
+          "target_families": [
+            "null_handling"
+          ]
+        },
+        {
+          "description": "student fails 1 dev items in family join (fake analysis)",
+          "name": "join mistakes",
+          "target_families": [
+            "join"
+          ]
+        },
+        {
+          "description": "student fails 1 dev items in family subquery_cte (fake analysis)",
+          "name": "subquery_cte mistakes",
+          "target_families": [
+            "subquery_cte"
+          ]
+        }
+      ],
+      "dev_acc": 0.6,
+      "dev_failures": 4,
+      "finetune_stage": "finetune_r1",
+      "job_id": "ftjob-5a3996f57416",
+      "round": 1,
+      "sandbox_branch": {
+        "label": "round-1",
+        "parent": "fake-base-image",
+        "uuid": "84bde47238651375322ab30b0e3042ad"
+      },
+      "targeted_new_rows": 6,
+      "train_rows": 40
+    },
+    {
+      "adapter_sha256": "558d42d5e0a19b519a26d9af25630b6f0a515f07c59a0a1329f74a493f6c2ae1",
+      "clusters": [],
+      "dev_acc": 0.9,
+      "dev_failures": 1,
+      "finetune_stage": "finetune_r2",
+      "job_id": "ftjob-862efb5a41c8",
+      "round": 2,
+      "train_rows": 46
+    }
+  ],
+  "rounds_stop_reason": "dev accuracy >= dev_target_acc=0.9",
+  "run_id": "dry-sql-tiny-098e64e7",
+  "sandbox_lineage": [
+    {
+      "label": "round-1",
+      "parent": "fake-base-image",
+      "uuid": "84bde47238651375322ab30b0e3042ad"
+    }
+  ],
+  "stages": [
+    {
+      "output_sha256": "e646180d497ad7edd10c30ded3f17320bd0edf952990697c7b1780c8af448edd",
+      "stage": "schema"
+    },
+    {
+      "output_sha256": "920b1ce87e51731e83f84c92569c8885b9701adc9a0f9ab5037ebb283fba48b8",
+      "stage": "questions"
+    },
+    {
+      "output_sha256": "7b462050c0e8924c6a9d5cbc4a17127ca12a33de0246ca34245e6e603505f021",
+      "stage": "gold_crosscheck"
+    },
+    {
+      "output_sha256": "1dec6c5124a6c31604a059f5a5998550b9e7cd3d0ec97d92653c8c05f1b3ff4a",
+      "stage": "verifier_selftest"
+    },
+    {
+      "output_sha256": "3cd37e05a549d9151425852a0fd2437e0b97e4c69ae997f75481bb44d98848ff",
+      "stage": "split"
+    },
+    {
+      "output_sha256": "814c135f827354fc90949298f91a98be6341bab9361dacdb0cb67875fdb25308",
+      "stage": "headroom"
+    },
+    {
+      "output_sha256": "3970c6bc00b6e40a2ecd335e43d76e08fd9df7ea214b1c3c2bc445f46f24b43a",
+      "stage": "teacher_data"
+    },
+    {
+      "output_sha256": "803272e929aba60751046cda29420e803dc750f254f34e2dae6f850052f24440",
+      "stage": "finetune_r1"
+    },
+    {
+      "output_sha256": "5e0045965f14a10ffdad729a8af31ccc84a26af94e8026dfc87c06a6a1133ca7",
+      "stage": "dev_eval_r1"
+    },
+    {
+      "output_sha256": "12ccd06dbbf8b8a9da91af0659fa14ff517841fc3731a2e09a4642e890c3613f",
+      "stage": "analysis_r1"
+    },
+    {
+      "output_sha256": "a962be764918c6c4c446d2af6c0d32c63a61909e2b3e34d81daf3b29950f4667",
+      "stage": "targeted_r1"
+    },
+    {
+      "output_sha256": "a5d5fdfeb053216d2eaedd6a579a2f2536be3612f17a3ebdf95d53fe50eadb29",
+      "stage": "sandbox_branch_r1"
+    },
+    {
+      "output_sha256": "57face7b41c38431bf6cb5baf99b183e9215ba75cb39bfb143a2e66102815466",
+      "stage": "finetune_r2"
+    },
+    {
+      "output_sha256": "908fd218ea53b796d1aed7c526feba16eeb702e8cbcaec252c7d901d10b56b7e",
+      "stage": "dev_eval_r2"
+    },
+    {
+      "output_sha256": "c298021cf669f7f49c62719cd4ef3e4d0ed9f393a047302c8fe9bccff6a70ab0",
+      "stage": "final_eval"
+    }
+  ]
+}

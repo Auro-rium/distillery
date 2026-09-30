@@ -102,7 +102,9 @@ def test_daily_cap_returns_503_and_stops_calls(tmp_path: Path) -> None:
     cfg = make_config(playground_daily_cap_usd=0.01)
     c, transport = _client(tmp_path, config=cfg, playground_per_ip_per_hour=100)
     with c:
-        codes = [c.post("/api/playground", json={"question": QUESTION}).status_code for _ in range(40)]
+        codes = [
+            c.post("/api/playground", json={"question": QUESTION}).status_code for _ in range(40)
+        ]
         assert codes[0] == 200 and 503 in codes
         r = c.post("/api/playground", json={"question": QUESTION})
         assert r.status_code == 503 and r.json()["error"] == "demo_budget_exhausted"
@@ -112,7 +114,9 @@ def test_daily_cap_returns_503_and_stops_calls(tmp_path: Path) -> None:
 
 
 def test_unpriced_teacher_is_unavailable_not_free(tmp_path: Path) -> None:
-    cfg = make_config(prices={m: p for m, p in make_config().prices.items() if m != MODELS["teacher"]})
+    cfg = make_config(
+        prices={m: p for m, p in make_config().prices.items() if m != MODELS["teacher"]}
+    )
     c, transport = _client(tmp_path, config=cfg)
     with c:
         t = c.post("/api/playground", json={"question": QUESTION}).json()["results"]["teacher"]

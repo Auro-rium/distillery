@@ -104,10 +104,9 @@ def seed_finished_run(
     report["run_id"] = run_id
     report["dry_run"] = dry
     if examples is not None:
-        report["examples"] = examples
-    atomic_write_bytes(
-        store.run_dir(run_id) / "report.json", json.dumps(report).encode("utf-8")
-    )
+        # where the core really writes them (EvalReport.to_json -> report["evaluation"])
+        report["evaluation"]["examples"] = examples
+    atomic_write_bytes(store.run_dir(run_id) / "report.json", json.dumps(report).encode("utf-8"))
     return store
 
 
@@ -123,6 +122,8 @@ def scripted_executor(
         store.get_or_run(job.run_id, "schema", {}, lambda: {"ok": 1})
         if gate is not None:
             job.interrupt = gate.set
+            if job.cancel_requested:  # cancel may have landed before the interrupt was registered
+                gate.set()
             gate.wait(10)
             if job.cancel_requested:
                 store.close()

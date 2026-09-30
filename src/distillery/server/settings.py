@@ -34,6 +34,12 @@ class ServerSettings:
     playground_per_ip_per_hour: int = 10
     dry_run_per_ip_per_hour: int = 6
     max_body_bytes: int = 16_384
+    sse_max_streams: int = 32
+    sse_max_streams_per_ip: int = 4
+    max_pending_jobs: int = 5  # queued + running, enforced for anonymous dry runs
+    shutdown_grace_s: float = 30.0  # SIGINT -> SIGKILL grace for a live child (cancel + shutdown)
+    # Peer addresses whose X-Forwarded-For is believed. Default: none, the header is ignored.
+    trusted_proxies: tuple[str, ...] = ()
     heartbeat_s: float = 15.0
     poll_s: float = 1.0
     demo_db_seed: int = 0
@@ -65,4 +71,7 @@ def settings_from_env(
         frontend_dist=dist if (dist / "index.html").exists() else None,
         dev_origin=e.get("DISTILLERY_DEV_ORIGIN") or None,
         playground_llm=default_playground_llm(config),
+        trusted_proxies=tuple(
+            p.strip() for p in (e.get("DISTILLERY_TRUSTED_PROXIES") or "").split(",") if p.strip()
+        ),
     )

@@ -234,3 +234,10 @@ def test_data_plane_url_default_and_override(tmp_path: Path) -> None:
     assert SPEC.data_plane_url() == "https://api.tokenfactory.eu-north1.nebius.com/v1"
     o = SPEC.model_copy(update={"data_plane_base_url": "https://x/v1"})
     assert o.data_plane_url() == "https://x/v1"
+
+
+def test_endpoint_student_reports_served_model() -> None:
+    clock, control = Clock(), FakeControl(["ready"])
+    s = build(control, FakeChat(), clock)
+    assert s.served_model == "ft-model"  # type: ignore[attr-defined]
+    s.close()

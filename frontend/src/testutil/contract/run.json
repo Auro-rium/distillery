@@ -1,0 +1,54 @@
+{
+  "dry_run": true,
+  "error": null,
+  "recorded": false,
+  "recorded_at": null,
+  "run_id": "dry-sql-tiny-098e64e7",
+  "sandbox": {
+    "concurrency_peak": null,
+    "operations": null
+  },
+  "spend": {
+    "by_model": {
+      "fake-t": {
+        "calls": 1,
+        "input_tokens": 100,
+        "output_tokens": 10,
+        "usd": 0.5
+      }
+    },
+    "cap_usd": 10.0,
+    "finetune_usd_estimate": 2.0,
+    "total_usd": 2.5
+  },
+  "stages": [
+    {
+      "ended_at": "2026-09-30T06:47:09.145236+00:00",
+      "name": "schema",
+      "started_at": null,
+      "status": "done"
+    },
+    {
+      "ended_at": "2026-09-30T06:47:09.150029+00:00",
+      "name": "gold_crosscheck",
+      "started_at": null,
+      "status": "done"
+    },
+    {
+      "ended_at": "2026-09-30T06:47:09.154979+00:00",
+      "name": "verifier_selftest",
+      "started_at": null,
+      "status": "done"
+    }
+  ],
+  "status": "complete",
+  "verifier": {
+    "code": null,
+    "language": "sql",
+    "selftest": {
+      "accepted_gold": 5,
+      "failures": 0,
+      "rejected_corruptions": 17
+    }
+  }
+}

@@ -1,0 +1,47 @@
+{
+  "nodes": [
+    {
+      "cost_usd": null,
+      "data_delta": null,
+      "dev_score": 0.1,
+      "hypothesis": null,
+      "id": "fake-base-image",
+      "label": "base model",
+      "parent_id": null,
+      "round": null,
+      "sandbox_image": null,
+      "selected": false
+    },
+    {
+      "cost_usd": null,
+      "data_delta": {
+        "added_rows": 6,
+        "families": [
+          "join",
+          "null_handling",
+          "subquery_cte"
+        ]
+      },
+      "dev_score": 0.6,
+      "hypothesis": "student fails 2 dev items in family null_handling (fake analysis); student fails 1 dev items in family join (fake analysis); student fails 1 dev items in family subquery_cte (fake analysis)",
+      "id": "84bde47238651375322ab30b0e3042ad",
+      "label": "round 1",
+      "parent_id": "fake-base-image",
+      "round": 1,
+      "sandbox_image": "84bde47238651375322ab30b0e3042ad",
+      "selected": false
+    },
+    {
+      "cost_usd": null,
+      "data_delta": null,
+      "dev_score": 0.9,
+      "hypothesis": null,
+      "id": "round-2",
+      "label": "round 2",
+      "parent_id": "84bde47238651375322ab30b0e3042ad",
+      "round": 2,
+      "sandbox_image": null,
+      "selected": true
+    }
+  ]
+}

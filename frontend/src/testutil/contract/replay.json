@@ -1,0 +1,11 @@
+[
+  {
+    "created_at": null,
+    "decision": "REJECT",
+    "dry_run": true,
+    "recorded": false,
+    "recorded_at": null,
+    "run_id": "sample-dry-run",
+    "status": "complete"
+  }
+]

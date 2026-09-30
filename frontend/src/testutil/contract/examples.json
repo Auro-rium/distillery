@@ -1,0 +1,44 @@
+[
+  {
+    "base_ok": false,
+    "base_sql": "SELECT 2",
+    "family": "join",
+    "gold_sql": "SELECT 1",
+    "heldout_class": "seen",
+    "kind": "fixed",
+    "question": "Question 1?",
+    "student_ok": true,
+    "student_sql": "SELECT 1",
+    "task_id": "t1",
+    "teacher_ok": true,
+    "teacher_sql": "SELECT 1"
+  },
+  {
+    "base_ok": false,
+    "base_sql": "SELECT 2",
+    "family": "join",
+    "gold_sql": "SELECT 1",
+    "heldout_class": "seen",
+    "kind": "still_wrong",
+    "question": "Question 2?",
+    "student_ok": false,
+    "student_sql": "SELECT 1",
+    "task_id": "t2",
+    "teacher_ok": true,
+    "teacher_sql": "SELECT 1"
+  },
+  {
+    "base_ok": true,
+    "base_sql": "SELECT 2",
+    "family": "join",
+    "gold_sql": "SELECT 1",
+    "heldout_class": "seen",
+    "kind": "regressed",
+    "question": "Question 3?",
+    "student_ok": false,
+    "student_sql": "SELECT 1",
+    "task_id": "t3",
+    "teacher_ok": true,
+    "teacher_sql": "SELECT 1"
+  }
+]

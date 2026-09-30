@@ -502,3 +502,176 @@ def test_serving_modes_refuse_ambiguity_or_missing_config(
     with pytest.raises(ConfigRefusal, match="hourly price"):
         pipe.run()
     assert dr.transport.calls == []
+
+
+# ---- final-eval server cleanup: every (paid) server is closed even when a close raises ---------
+
+
+class _Srv:
+    def __init__(self, name: str, log: list[str], close_error: bool = False) -> None:
+        self.name, self.log, self.close_error = name, log, close_error
+
+    def generate(self, batch: Any) -> list[str]:
+        raise AssertionError("not reached")
+
+    def close(self) -> None:
+        self.log.append(f"close:{self.name}")
+        if self.close_error:
+            raise RuntimeError(f"{self.name} delete failed")
+
+
+def _run_final_eval_with(
+    tmp_path: Path, bridge: AsyncBridge, *, student: Any, base: Any
+) -> tuple[list[str], BaseException | None]:
+    state = {"final": False}
+    pipe, dr, _s = make(
+        tmp_path, bridge, on_stage=lambda st: state.update(final=st == "final_eval")
+    )
+    log: list[str] = []
+    real_student, real_base = dr.deps.student_factory, dr.deps.base_factory
+    assert real_student is not None and real_base is not None
+    dr.deps.student_factory = lambda t: student(log) if state["final"] else real_student(t)
+    dr.deps.base_factory = lambda: base(log) if state["final"] else real_base()
+    err: BaseException | None = None
+    try:
+        pipe.run()
+    except BaseException as e:  # noqa: BLE001
+        err = e
+    return log, err
+
+
+def test_student_close_error_does_not_leak_base_server(tmp_path: Path, bridge: AsyncBridge) -> None:
+    log, err = _run_final_eval_with(
+        tmp_path, bridge,
+        student=lambda lg: _Srv("student", lg, close_error=True),
+        base=lambda lg: _Srv("base", lg),
+    )  # fmt: skip
+    # generation fails first (stub raises); both closes must still run, in either case
+    assert "close:student" in log and "close:base" in log
+    assert err is not None
+
+
+def test_close_error_is_raised_after_all_servers_closed(
+    tmp_path: Path, bridge: AsyncBridge
+) -> None:
+    from distillery.orchestrator import _close_all
+
+    log: list[str] = []
+    servers = [_Srv("a", log, True), _Srv("b", log), _Srv("c", log, True)]
+    with pytest.raises(RuntimeError, match="a delete failed"):
+        _close_all(servers)
+    assert log == ["close:a", "close:b", "close:c"]  # first error raised, none skipped
+
+
+def test_base_factory_failure_closes_the_student_server(
+    tmp_path: Path, bridge: AsyncBridge
+) -> None:
+    def boom(_lg: list[str]) -> Any:
+        raise RuntimeError("base create failed")
+
+    log, err = _run_final_eval_with(
+        tmp_path, bridge, student=lambda lg: _Srv("student", lg), base=boom
+    )
+    assert log == ["close:student"] and isinstance(err, RuntimeError)
+    assert "base create failed" in str(err)
+
+
+def test_base_factory_failure_and_student_close_failure_both_surface(
+    tmp_path: Path, bridge: AsyncBridge
+) -> None:
+    def boom(_lg: list[str]) -> Any:
+        raise RuntimeError("base create failed")
+
+    log, err = _run_final_eval_with(
+        tmp_path, bridge, student=lambda lg: _Srv("student", lg, True), base=boom
+    )
+    assert log == ["close:student"]
+    assert isinstance(err, RuntimeError) and "base create failed" in str(err)
+
+
+# ---- endpoint identity: the served model must match the configured / trained one ---------------
+
+
+class _NoCreateControl:
+    def __init__(self) -> None:
+        self.created: list[Any] = []
+
+    def templates(self) -> Any:
+        return []
+
+    def create(self, payload: Any) -> Any:
+        self.created.append(payload)
+        raise AssertionError("must not create an endpoint")
+
+    def status(self, endpoint_id: str) -> str:
+        return "ready"
+
+    def delete(self, endpoint_id: str) -> None:
+        return None
+
+
+def _endpoint_pipe(
+    tmp_path: Path, bridge: AsyncBridge, **spec_kw: Any
+) -> tuple[Pipeline, _NoCreateControl]:
+    from distillery.endpoint_student import EndpointBackend, EndpointSpec
+
+    control = _NoCreateControl()
+    spec = EndpointSpec(
+        flavor_name="f", gpu_type="g", gpu_count=1, region="r", hourly_cost_usd=1.0, **spec_kw
+    )  # type: ignore[arg-type]
+    dry = build_dry_run(NANO, bridge, student_serving="endpoint", student_endpoint=spec)
+    dry.deps.student_factory = dry.deps.base_factory = None
+    dry.deps.endpoint = EndpointBackend(control, lambda url: None)  # type: ignore[arg-type,return-value]
+    pipe, _dr, _s = make(tmp_path, bridge, dry=dry)
+    return pipe, control
+
+
+def _trained_art(base: str | None, ckpt: str | None) -> Any:
+    from distillery.finetune import TrainedArtifact
+
+    return TrainedArtifact(
+        job_id="j", checkpoint_id="c", base_model=base, fine_tuned_model_checkpoint=ckpt, files=()
+    )
+
+
+def test_endpoint_refuses_spec_base_model_not_matching_student_id(
+    tmp_path: Path, bridge: AsyncBridge
+) -> None:
+    pipe, control = _endpoint_pipe(tmp_path, bridge, base_model_name="some/other-base")
+    with pytest.raises(ConfigRefusal, match="base_model_name"):
+        pipe._resolve_serving()
+    pipe, control = _endpoint_pipe(tmp_path, bridge, model_name="ft")  # base_model_name unset
+    with pytest.raises(ConfigRefusal, match="base_model_name"):
+        pipe._resolve_serving()
+    assert control.created == []
+
+
+def test_endpoint_refuses_trained_base_or_checkpoint_mismatch(
+    tmp_path: Path, bridge: AsyncBridge
+) -> None:
+    probe, _c = _endpoint_pipe(tmp_path, bridge, base_model_name="x")
+    student_id = probe.config.require_model("student")
+    pipe, control = _endpoint_pipe(
+        tmp_path, bridge, base_model_name=student_id, model_name="ft-served"
+    )
+    pipe._resolve_serving()
+    assert pipe.deps.student_factory is not None
+    with pytest.raises(ConfigRefusal, match="trained base_model"):
+        pipe.deps.student_factory(_trained_art("another/base", "ft-served"))
+    with pytest.raises(ConfigRefusal, match="checkpoint"):
+        pipe.deps.student_factory(_trained_art(student_id, "other-ckpt"))
+    assert control.created == []
+
+
+def test_report_artifact_records_served_model_names() -> None:
+    from distillery.orchestrator import _with_serving
+
+    class S:
+        served_model = "ft-served"
+
+    class B:
+        served_model = "base-served"
+
+    out = _with_serving({"job_id": "j"}, _trained_art("base/x", "ft-served"), S(), B())
+    assert out["served_model"] == "ft-served" and out["served_base_model"] == "base-served"
+    assert out["trained_base_model"] == "base/x" and out["trained_checkpoint_name"] == "ft-served"

@@ -196,6 +196,11 @@ class EndpointStudent:
             self._teardown()  # never leave a created endpoint behind
             raise
 
+    @property
+    def served_model(self) -> str:
+        """The model name this endpoint was created with (recorded in the report)."""
+        return self._model_name
+
     def __repr__(self) -> str:
         return f"EndpointStudent(endpoint_id={self.endpoint_id!r}, model={self._model_name!r})"
 

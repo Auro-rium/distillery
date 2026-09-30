@@ -204,15 +204,29 @@ def test_examples_are_capped_deterministic_and_complete(env) -> None:  # type: i
 
     def go():  # type: ignore[no-untyped-def]
         return evaluate(
-            store, "r1", _gens(answers), LocalExecutor(), db_ref=db, schema_ddl=ddl,
+            store,
+            "r1",
+            _gens(answers),
+            LocalExecutor(),
+            db_ref=db,
+            schema_ddl=ddl,
             gate_cfg=GateThresholds(),
         ).to_json()["examples"]
 
     ex = go()
     assert ex == go() and 0 < len(ex) <= 60
     fields = {
-        "task_id", "family", "heldout_class", "question", "gold_sql", "base_sql", "student_sql",
-        "teacher_sql", "base_ok", "student_ok", "teacher_ok",
+        "task_id",
+        "family",
+        "heldout_class",
+        "question",
+        "gold_sql",
+        "base_sql",
+        "student_sql",
+        "teacher_sql",
+        "base_ok",
+        "student_ok",
+        "teacher_ok",
     }
     by_id = {it["task_id"]: it for it in items}
     kinds = {e["kind"] for e in ex}

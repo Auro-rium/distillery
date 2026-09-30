@@ -69,6 +69,63 @@ from distillery.taskpacks.sql.verifier import compare_outcomes, corrupt_sql
 
 log = logging.getLogger(__name__)
 
+
+def _close_all(servers: Sequence[StudentServer], *, raise_first: bool = True) -> None:
+    """Close every server (paid endpoints!) even if an earlier close raises.
+
+    The first error is re-raised after all closes ran (later ones are logged). With
+    ``raise_first=False`` (the body already failed, so its exception must win) every close error
+    is only logged.
+    """
+    first: BaseException | None = None
+    for srv in servers:
+        try:
+            srv.close()
+        except Exception as e:  # noqa: BLE001 - keep closing the remaining servers
+            if first is None and raise_first:
+                first = e
+            else:
+                log.error("server close failure: %s", e)
+    if first is not None:
+        raise first
+
+
+def _check_endpoint_identity(
+    spec: EndpointSpec, trained: TrainedArtifact, student_model: str
+) -> None:
+    """File hashes prove the adapter on disk, not what the endpoint serves; pin what we can."""
+    if trained.base_model is not None and trained.base_model != student_model:
+        raise ConfigRefusal(
+            f"trained base_model {trained.base_model!r} != configured student {student_model!r}"
+        )
+    ckpt = trained.fine_tuned_model_checkpoint
+    if spec.model_name and ckpt and spec.model_name != ckpt:
+        raise ConfigRefusal(
+            f"EndpointSpec.model_name {spec.model_name!r} != trained checkpoint {ckpt!r}: "
+            "the served model would not be the trained artifact"
+        )
+
+
+def _with_serving(
+    artifact: Mapping[str, str], trained: TrainedArtifact, student: Any, base: Any
+) -> dict[str, str]:
+    """Record what was actually served next to the file-hash identity (which only covers disk)."""
+    out = dict(artifact)
+    served = getattr(student, "served_model", None)
+    base_served = getattr(base, "served_model", None)
+    if served is not None:
+        out["served_model"] = str(served)
+        if trained.fine_tuned_model_checkpoint and served != trained.fine_tuned_model_checkpoint:
+            out["served_model_note"] = "served name is an explicit override, not the trained ckpt"
+    if base_served is not None:
+        out["served_base_model"] = str(base_served)
+    if trained.base_model:
+        out["trained_base_model"] = trained.base_model
+    if trained.fine_tuned_model_checkpoint:
+        out["trained_checkpoint_name"] = trained.fine_tuned_model_checkpoint
+    return out
+
+
 PIPELINE_VERSION = "1"
 DRY_RUN_LABEL = "DRY RUN — fake models, numbers are NOT results"
 STUDENT_COST_UNAVAILABLE = "unavailable: serving path undecided (spike S4)"
@@ -747,11 +804,21 @@ class Pipeline:
                     "student_endpoint (with an explicit hourly price)"
                 )
             spec = self.cfg.student_endpoint
+            if spec.base_model_name != base_model:
+                raise ConfigRefusal(
+                    f"EndpointSpec.base_model_name={spec.base_model_name!r} must equal the "
+                    f"configured student model {base_model!r}: the endpoint must serve the model "
+                    "that was fine-tuned"
+                )
+            inner_student = endpoint_student.make_student_factory(deps.endpoint, spec, self.ledger)
+
+            def endpoint_student_factory(trained: TrainedArtifact) -> StudentServer:
+                _check_endpoint_identity(spec, trained, base_model)  # before anything is billed
+                return inner_student(trained)
+
             self.deps = replace(
                 deps,
-                student_factory=endpoint_student.make_student_factory(
-                    deps.endpoint, spec, self.ledger
-                ),
+                student_factory=endpoint_student_factory,
                 base_factory=endpoint_student.make_base_factory(deps.endpoint, spec, self.ledger),
             )
 
@@ -1500,13 +1567,12 @@ class Pipeline:
             trained = artifact_from_json(ft_res["artifact"], pipeline.run_dir)
             assert pipeline.deps.student_factory is not None  # noqa: S101
             assert pipeline.deps.base_factory is not None  # noqa: S101
-            server = pipeline.deps.student_factory(trained)
+            opened: list[StudentServer] = []
             try:
+                server = pipeline.deps.student_factory(trained)
+                opened.append(server)
                 base_server = pipeline.deps.base_factory()
-            except BaseException:
-                server.close()
-                raise
-            try:
+                opened.append(base_server)
                 gens: dict[str, evaluator_mod.Generator] = {
                     "base": base_server,
                     "student": server,
@@ -1519,9 +1585,13 @@ class Pipeline:
                     db_ref=pipeline.db_ref, schema_ddl=pipeline.ddl, gate_cfg=pipeline.config.gate,
                     trained=trained, expected=pipeline._expected(r),
                 )  # fmt: skip
-            finally:
-                server.close()
-                base_server.close()
+                rep = replace(
+                    rep, artifact=_with_serving(rep.artifact, trained, server, base_server)
+                )
+            except BaseException:
+                _close_all(opened, raise_first=False)
+                raise
+            _close_all(opened)
             return {
                 "report": rep.to_json(),
                 "candidate_round": r,

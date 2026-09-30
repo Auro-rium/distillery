@@ -211,23 +211,32 @@ class RunReader:
         """Refresh the run's event log from ``detail`` and return (new events, finished)."""
         with self._lock:
             ev = self._events.setdefault(run_id, Events())
-            ts = self.s.now().isoformat()
+            # NOT event time: the moment this server first observed the change while polling.
+            seen = self.s.now().isoformat()
             for st in detail["stages"]:
                 if ev.stages.get(st["name"]) != st["status"]:
                     ev.stages[st["name"]] = st["status"]
-                    ev.add("stage", {"ts": ts, "name": st["name"], "status": st["status"]})
+                    # ``at`` is the stored store timestamp of that transition (start time while
+                    # running, end time when done/failed); null if the store has none.
+                    at = st["started_at"] or st["ended_at"]
+                    ev.add(
+                        "stage",
+                        {"observed_at": seen, "at": at, "name": st["name"], "status": st["status"]},
+                    )
             sp = detail["spend"]
             key = (sp["total_usd"], sum(int(m["calls"]) for m in sp["by_model"].values()))
             if key != ev.spend_key:
                 ev.spend_key = key
-                ev.add("spend", {"ts": ts, **sp})
+                ev.add("spend", {"observed_at": seen, **sp})
             if job is not None:
                 for line in job.logs[ev.log_cursor :]:
-                    ev.add("log", {"ts": ts, "level": "info", "message": line})
+                    ev.add("log", {"observed_at": seen, "level": "info", "message": line})
                 ev.log_cursor = len(job.logs)
             if detail["status"] in ("complete", "failed") and not ev.done:
                 ev.done = True
-                ev.add("done", {"ts": ts, "status": detail["status"], "decision": decision})
+                ev.add(
+                    "done", {"observed_at": seen, "status": detail["status"], "decision": decision}
+                )
             return [e for e in ev.items if e[0] > last_id], ev.done
 
     def replay_detail(

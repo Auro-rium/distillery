@@ -1,0 +1,27 @@
+.rp { --c-base: #6b7770; --c-student: #b4551d; --c-teacher: #2b5a86; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .rp { --c-base: #9ba79f; --c-student: #e08a4e; --c-teacher: #8fbbe6; } }
+:root[data-theme="dark"] .rp { --c-base: #9ba79f; --c-student: #e08a4e; --c-teacher: #8fbbe6; }
+.verdict { padding: 22px 20px; border-radius: var(--radius); border: 1px solid; }
+.verdict.PROMOTE { background: var(--ok-bg); color: var(--ok); border-color: var(--ok); }
+.verdict.REJECT { background: var(--bad-bg); color: var(--bad); border-color: var(--bad); }
+.verdict .big { font: 500 clamp(2rem, 8vw, 3.2rem)/1 var(--font-display); letter-spacing: .02em; }
+.verdict ul { margin: 10px 0 0; padding-left: 1.2em; color: var(--ink); }
+.acc { margin: 0; }
+.acc-row { display: grid; grid-template-columns: 5.5rem minmax(120px, 1fr) minmax(0, 15rem); gap: 6px 12px; align-items: center; padding: 5px 0; }
+.acc-label { font-weight: 500; }
+.acc-val { font-variant-numeric: tabular-nums; font-size: .86rem; }
+.acc-svg { width: 100%; height: 18px; display: block; }
+.acc-svg .track { fill: var(--surface-2); }
+.acc-svg .grid { stroke: var(--line); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.acc-svg .bar { fill: var(--c-base); }
+.acc-svg.student .bar { fill: var(--c-student); }
+.acc-svg.teacher .bar { fill: var(--c-teacher); }
+.acc-svg .ci line { stroke: var(--ink); stroke-width: 2; vector-effect: non-scaling-stroke; }
+.acc-axis { display: flex; justify-content: space-between; font-size: .72rem; margin-left: calc(5.5rem + 12px); margin-right: 15rem; }
+@media (max-width: 560px) { .acc-row { grid-template-columns: 1fr; } .acc-axis { margin: 0; } }
+.tbl { width: 100%; border-collapse: collapse; font-size: .88rem; }
+.tbl th, .tbl td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.tbl-wrap { overflow-x: auto; }
+.cmp { display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); margin-top: 8px; }
+.cmp .code { font-size: .8rem; }
+.ex { border-top: 1px solid var(--line); padding-top: 12px; margin-top: 12px; }
