@@ -1,0 +1,70 @@
+{
+  "dry_run": false,
+  "heldout_sha256": "7d1ed0392a8ce23ff7489c4b635b2b73574be31b6f400e3adb92cf9229e7c68f",
+  "label": null,
+  "recorded_at": "2026-09-30T14:58:05.244415+00:00",
+  "run_id": "sql-tiny-live1",
+  "source_run_id": "sql-tiny-live1",
+  "stages": [
+    {
+      "input_hash": "62fda6b75b0b9aca8a385d044967c7d1f8c9c8be3ba8b8c267d9b679f761c411",
+      "output_sha256": "28960cd5b300c84d8949e294f71a8fd1e3b8820c6f92be9188b1e3a8ed5fab98",
+      "stage": "dev_eval_r1",
+      "updated_at": "2026-09-30T08:58:33.334775+00:00"
+    },
+    {
+      "input_hash": "e9d56eadfb8d5b7a8ec905760eb7240ea4e2cea87dce7b2a0ae80980f972c789",
+      "output_sha256": "15914a4b7824ecb83d9afa8c92b286f013f72fb6d5bc7f7f1414d6ece3f1771f",
+      "stage": "final_eval",
+      "updated_at": "2026-09-30T08:59:58.187817+00:00"
+    },
+    {
+      "input_hash": "4578d0fe2175a839fae4cac3fda3335e184e6bee962e1edccf92f8b8b6caa544",
+      "output_sha256": "e34135c8c96a3ad33dd7881fd500dcc066ea63fe2bdea30fe2a394e01df990a1",
+      "stage": "finetune_r1",
+      "updated_at": "2026-09-30T08:56:28.217495+00:00"
+    },
+    {
+      "input_hash": "7c4a29de871b32aea04c6a2cb89b7cab9beb1333533612394a2c1ea5cbf402a2",
+      "output_sha256": "1baa6385b26ea0aa7fa786067f424760b51ab812d7703c7f087f707ecf57c634",
+      "stage": "gold_crosscheck",
+      "updated_at": "2026-09-30T08:25:21.088792+00:00"
+    },
+    {
+      "input_hash": "bbe3626127fd01088c7a040f28d5d35495b26d1e9f8a4bc2541a5be489474449",
+      "output_sha256": "b7cd2b3edd2b3bf0ccdc221f7cfc997ab0d9a34e1b7cda20af16f5c9c2f46ae7",
+      "stage": "headroom",
+      "updated_at": "2026-09-30T08:28:31.776194+00:00"
+    },
+    {
+      "input_hash": "aa0c9e16e969ebc69e66f7bd2978e3227af20b2af6fc5f4dad83713077b50481",
+      "output_sha256": "920b1ce87e51731e83f84c92569c8885b9701adc9a0f9ab5037ebb283fba48b8",
+      "stage": "questions",
+      "updated_at": "2026-09-30T08:23:23.298246+00:00"
+    },
+    {
+      "input_hash": "b0a7bc7eaf57bfcaa94adad53897f3882b782ade11408994f253c713f5a691ea",
+      "output_sha256": "e646180d497ad7edd10c30ded3f17320bd0edf952990697c7b1780c8af448edd",
+      "stage": "schema",
+      "updated_at": "2026-09-30T08:23:23.069445+00:00"
+    },
+    {
+      "input_hash": "b27dcc3867e4b13d095fa75217d7a7b194e7b91346186fb486eb8db93c827f4d",
+      "output_sha256": "18fcea18fe61cc634a180983c8ef964922a1de1f3b622698960d0a6a0f5ec0ee",
+      "stage": "split",
+      "updated_at": "2026-09-30T08:26:42.552375+00:00"
+    },
+    {
+      "input_hash": "f418303583c5ad32e0c2eda73c849e16cdec030b8983626d646c15c900f3b257",
+      "output_sha256": "06212b6efa61622745ecec09b762105cf751fcf84fe4e6694053c79e0f360ff0",
+      "stage": "teacher_data",
+      "updated_at": "2026-09-30T08:28:56.000908+00:00"
+    },
+    {
+      "input_hash": "f5b36bf2038b114fdb9b9f5f252b4817ac37b7e23771b1020362ef74a9efca43",
+      "output_sha256": "0fe245330d15b20558bc3098ce2b83eb538823a3c2376bffa95178e07d9a3050",
+      "stage": "verifier_selftest",
+      "updated_at": "2026-09-30T08:26:42.523445+00:00"
+    }
+  ]
+}
