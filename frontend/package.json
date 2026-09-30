@@ -12,6 +12,9 @@
     "contract:update": "cd .. && UPDATE_CONTRACT=1 .venv/bin/python -m pytest -q tests/test_frontend_truth.py"
   },
   "dependencies": {
+    "@radix-ui/react-dialog": "^1.1.23",
+    "@radix-ui/react-tabs": "^1.1.21",
+    "@radix-ui/react-tooltip": "^1.2.16",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-router-dom": "^6.28.0"

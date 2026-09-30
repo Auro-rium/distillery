@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
-import { Link, NavLink, Route, Routes, useLocation, useNavigate } from "react-router-dom";
+import { Link, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { currentTheme, setTheme, type Theme } from "./theme";
 import { EmptyState } from "./components";
+import { ShortcutHelp, SiteFooter, SiteHeader, SkipLink, SITE_NAME, pageTitle } from "./components/Shell";
 import { useReducedMotion } from "./motion/useReducedMotion";
 import { useShortcuts } from "./motion/useShortcuts";
 import Replay from "./screens/replay";
@@ -11,51 +12,6 @@ import Tree from "./screens/tree";
 import ReportScreen from "./screens/report";
 import NewRun from "./screens/new";
 import Playground from "./screens/playground";
-
-function ThemeToggle({ theme, onToggle }: { theme: Theme; onToggle: () => void }) {
-  const next: Theme = theme === "dark" ? "light" : "dark";
-  return (
-    <button className="btn theme-btn" aria-label={`Switch to ${next} theme`} onClick={onToggle}>
-      <span className="theme-ico" data-t={theme} aria-hidden="true" />
-      {theme === "dark" ? "Light" : "Dark"}
-    </button>
-  );
-}
-
-const HELP: [string, string][] = [
-  ["?", "Show or hide this list"],
-  ["t", "Switch theme"],
-  ["g then r", "Go to Replay"],
-  ["g then n", "Go to New run"],
-  ["g then p", "Go to Playground"],
-  ["+ and −", "Zoom the experiment tree"],
-  ["Arrow keys", "Move between tree nodes, or pan the tree"],
-  ["Esc", "Close"],
-];
-
-function ShortcutHelp({ onClose }: { onClose: () => void }) {
-  const close = useRef<HTMLButtonElement>(null);
-  useEffect(() => {
-    const prev = document.activeElement as HTMLElement | null;
-    close.current?.focus();
-    const esc = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
-    window.addEventListener("keydown", esc);
-    return () => { window.removeEventListener("keydown", esc); prev?.focus?.(); };
-  }, [onClose]);
-  return (
-    <div className="kbd-scrim" onClick={onClose}>
-      <div className="kbd-panel" role="dialog" aria-modal="true" aria-label="Keyboard shortcuts" onClick={(e) => e.stopPropagation()}>
-        <div className="row" style={{ justifyContent: "space-between" }}>
-          <h3 style={{ margin: 0 }}>Keyboard shortcuts</h3>
-          <button ref={close} className="btn" onClick={onClose}>Close</button>
-        </div>
-        <dl className="kbd-list">
-          {HELP.map(([k, d]) => (<div key={k}><dt><kbd>{k}</kbd></dt><dd>{d}</dd></div>))}
-        </dl>
-      </div>
-    </div>
-  );
-}
 
 type Doc = Document & { startViewTransition?: (cb: () => void) => unknown };
 
@@ -97,7 +53,11 @@ function RouteStage() {
 export function App() {
   const [theme, setT] = useState<Theme>(currentTheme);
   const [help, setHelp] = useState(false);
+  const [announce, setAnnounce] = useState("");
   const nav = useNavigate();
+  const { pathname } = useLocation();
+  const main = useRef<HTMLElement>(null);
+  const firstPath = useRef(true);
   const closeHelp = useCallback(() => setHelp(false), []);
   const toggle = () => { const next: Theme = theme === "dark" ? "light" : "dark"; setTheme(next); setT(next); };
   useShortcuts({
@@ -105,26 +65,28 @@ export function App() {
     theme: toggle,
     go: (t) => nav(t === "replay" ? "/" : t === "new" ? "/new" : "/playground"),
   });
+  // Every route gets its own document title. After a client-side navigation focus moves to <main> and
+  // the new page is announced, because there is no page load to tell keyboard and screen reader users.
+  useEffect(() => {
+    const title = pageTitle(pathname);
+    document.title = `${title} · ${SITE_NAME}`;
+    if (firstPath.current) { firstPath.current = false; return; }
+    setAnnounce(title);
+    main.current?.focus({ preventScroll: true });
+    document.scrollingElement?.scrollTo?.({ top: 0 });
+  }, [pathname]);
   return (
     <>
+      <SkipLink onSkip={() => main.current?.focus()} />
       <div className="aurora" aria-hidden="true"><i /><i /><i /></div>
-      <header className="site-header">
-        <div className="container">
-          <Link to="/" className="brand">Distillery</Link>
-          <nav aria-label="Main">
-            <NavLink to="/" end>Replay</NavLink>
-            <NavLink to="/new">New run</NavLink>
-            <NavLink to="/playground">Playground</NavLink>
-          </nav>
-          <button className="btn icon-btn" aria-label="Keyboard shortcuts" aria-haspopup="dialog" onClick={() => setHelp(true)}>?</button>
-          <ThemeToggle theme={theme} onToggle={toggle} />
-        </div>
-      </header>
+      <SiteHeader theme={theme} onToggleTheme={toggle} onShowHelp={() => setHelp(true)} />
       {/* Screens render their own <LabelBanner> once they know the run's dry_run/recorded flags. */}
-      <main className="container">
+      <main id="main" ref={main} tabIndex={-1} className="container">
         <RouteStage />
       </main>
-      {help && <ShortcutHelp onClose={closeHelp} />}
+      <SiteFooter />
+      <div className="sr-only" aria-live="polite" data-route-announcer>{announce}</div>
+      <ShortcutHelp open={help} onClose={closeHelp} />
     </>
   );
 }

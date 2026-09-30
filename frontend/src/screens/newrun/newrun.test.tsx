@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ApiError, setAdminToken } from "../../api/client";
@@ -64,5 +64,89 @@ describe("NewRun form", () => {
     fireEvent.click(screen.getByRole("button", { name: /start dry run/i }));
     await screen.findByRole("alert");
     expect(JSON.stringify([...Object.entries(localStorage), ...Object.entries(sessionStorage)])).not.toContain("sekrit");
+  });
+});
+
+describe("NewRun form structure", () => {
+  const form = () => document.querySelector("form")!;
+  const named = (el: Element) => Array.from((el as HTMLInputElement).labels ?? []).map((l) => l.textContent?.trim());
+
+  it("every control has a real <label>, and ids are unique", async () => {
+    setup(() => json({}, 202));
+    await waitFor(() => expect((screen.getByLabelText("Budget cap (USD)") as HTMLInputElement).value).toBe("5"));
+    const controls = Array.from(form().querySelectorAll("input, select, textarea"));
+    expect(controls.length).toBeGreaterThanOrEqual(6);
+    for (const c of controls) expect(named(c).length, `${c.outerHTML}`).toBeGreaterThan(0);
+    // radios are named by the <label> that wraps them; every other control is named through for/id
+    const others = controls.filter((c) => (c as HTMLInputElement).type !== "radio");
+    const ids = others.map((c) => c.id);
+    expect(ids.every(Boolean)).toBe(true);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it("Scale is a fieldset with a legend and three radios; only one is checked", () => {
+    setup(() => json({}, 202));
+    const group = screen.getByRole("group", { name: "Scale" });
+    const radios = within(group).getAllByRole("radio") as HTMLInputElement[];
+    expect(radios.map((r) => r.value)).toEqual(["tiny", "small", "full"]);
+    expect(radios.filter((r) => r.checked).map((r) => r.value)).toEqual(["tiny"]);
+    fireEvent.click(radios[1]);
+    expect(radios.filter((r) => r.checked).map((r) => r.value)).toEqual(["small"]);
+  });
+
+  it("Dry run is a switch (on by default) with helper text wired by aria-describedby", () => {
+    setup(() => json({}, 202));
+    const sw = screen.getByRole("switch", { name: /^Dry run \(fake/ }) as HTMLInputElement;
+    expect(sw.checked).toBe(true);
+    const help = document.getElementById(sw.getAttribute("aria-describedby")!);
+    expect(help?.textContent ?? "").not.toBe("");
+    fireEvent.click(sw);
+    expect(sw.checked).toBe(false);
+  });
+
+  it("Budget shows its unit and the server default exactly as the payload gives it", async () => {
+    setup(() => json({}, 202));
+    const budget = screen.getByLabelText("Budget cap (USD)");
+    await waitFor(() => expect(document.getElementById(budget.getAttribute("aria-describedby")!.split(" ")[0])?.textContent).toMatch(/server default of \$5\.00/));
+    expect(within(budget.closest(".field")!).getByText("USD")).toBeTruthy();
+  });
+
+  it("Admin token is a password field with memory-only help text, and says when it is needed", () => {
+    setup(() => json({}, 202));
+    const tok = screen.getByLabelText("Admin token") as HTMLInputElement;
+    expect(tok.type).toBe("password");
+    expect(tok.getAttribute("autocomplete")).toBe("off");
+    const help = tok.getAttribute("aria-describedby")!.split(" ").map((i) => document.getElementById(i)?.textContent ?? "").join(" ");
+    expect(help).toMatch(/memory only/i);
+    expect(help).toMatch(/optional for dry runs/i);
+    fireEvent.click(screen.getByRole("switch"));
+    const live = tok.getAttribute("aria-describedby")!.split(" ").map((i) => document.getElementById(i)?.textContent ?? "").join(" ");
+    expect(live).toMatch(/required for live runs/i);
+  });
+
+  it("marks the budget invalid (aria-invalid) when it is not a positive number, without calling the API", async () => {
+    const f = setup(() => json({}, 202));
+    await waitFor(() => expect((screen.getByLabelText("Budget cap (USD)") as HTMLInputElement).value).toBe("5"));
+    fireEvent.change(screen.getByLabelText("Budget cap (USD)"), { target: { value: "abc" } });
+    fireEvent.click(screen.getByRole("button", { name: /start dry run/i }));
+    expect((await screen.findByRole("alert")).textContent).toMatch(/positive number/i);
+    expect(screen.getByLabelText("Budget cap (USD)").getAttribute("aria-invalid")).toBe("true");
+    expect(f.mock.calls.some((c) => c[1]?.method === "POST")).toBe(false);
+  });
+
+  it("submit is clickable while the config is still loading, and shows Starting… while busy", async () => {
+    vi.stubGlobal("fetch", vi.fn((_u: string, init?: RequestInit) => (init?.method === "POST" ? new Promise(() => undefined) : new Promise(() => undefined))));
+    render(<MemoryRouter initialEntries={["/new"]}><Routes><Route path="/new" element={<NewRun />} /></Routes></MemoryRouter>);
+    const btn = screen.getByRole("button", { name: /start dry run/i }) as HTMLButtonElement;
+    expect(btn.disabled).toBe(false);
+    fireEvent.click(btn);
+    await waitFor(() => expect((screen.getByRole("button", { name: /starting/i }) as HTMLButtonElement).disabled).toBe(true));
+  });
+
+  it("live mode shows the spend warning and the approval checkbox as a labelled checkbox", () => {
+    setup(() => json({}, 202));
+    fireEvent.click(screen.getByRole("switch"));
+    expect(screen.getByRole("checkbox", { name: /I approve spending up to the budget cap/ })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /start live run/i })).toBeTruthy();
   });
 });

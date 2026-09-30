@@ -44,15 +44,15 @@ describe("route transitions", () => {
 });
 
 describe("keyboard shortcuts", () => {
-  it("? opens and Escape closes the shortcut list; the header button opens it too", () => {
+  it("? opens and Escape closes the shortcut list; the header button opens it too", async () => {
     renderApp("/");
     expect(screen.queryByRole("dialog")).toBeNull();
     fireEvent.keyDown(window, { key: "?" });
-    expect(screen.getByRole("dialog", { name: "Keyboard shortcuts" })).toBeTruthy();
+    expect(await screen.findByRole("dialog", { name: "Keyboard shortcuts" })).toBeTruthy(); // lazy-loaded
     fireEvent.keyDown(window, { key: "Escape" });
-    expect(screen.queryByRole("dialog")).toBeNull();
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     fireEvent.click(screen.getByRole("button", { name: "Keyboard shortcuts" }));
-    expect(screen.getByRole("dialog")).toBeTruthy();
+    expect(await screen.findByRole("dialog")).toBeTruthy();
   });
   it("t switches the theme, g then n navigates, and typing in a field is ignored", async () => {
     renderApp("/new");
