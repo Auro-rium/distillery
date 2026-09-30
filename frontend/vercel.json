@@ -19,19 +19,19 @@
     },
     {
       "source": "/api/runs/sql-tiny-live1",
-      "destination": "/static-api/runs/sql-tiny-live1/detail"
+      "destination": "/static-api/by-run/sql-tiny-live1/detail"
     },
     {
       "source": "/api/runs/sql-tiny-live1/report",
-      "destination": "/static-api/runs/sql-tiny-live1/report"
+      "destination": "/static-api/by-run/sql-tiny-live1/report"
     },
     {
       "source": "/api/runs/sql-tiny-live1/tree",
-      "destination": "/static-api/runs/sql-tiny-live1/tree"
+      "destination": "/static-api/by-run/sql-tiny-live1/tree"
     },
     {
       "source": "/api/runs/sql-tiny-live1/events",
-      "destination": "/static-api/runs/sql-tiny-live1/events"
+      "destination": "/static-api/by-run/sql-tiny-live1/events"
     },
     {
       "source": "/api/runs/sql-tiny-live1/examples",
@@ -42,7 +42,7 @@
           "value": "all"
         }
       ],
-      "destination": "/static-api/runs/sql-tiny-live1/examples-all"
+      "destination": "/static-api/by-run/sql-tiny-live1/examples-all"
     },
     {
       "source": "/api/runs/sql-tiny-live1/examples",
@@ -53,7 +53,7 @@
           "value": "fixed"
         }
       ],
-      "destination": "/static-api/runs/sql-tiny-live1/examples-fixed"
+      "destination": "/static-api/by-run/sql-tiny-live1/examples-fixed"
     },
     {
       "source": "/api/runs/sql-tiny-live1/examples",
@@ -64,7 +64,7 @@
           "value": "still_wrong"
         }
       ],
-      "destination": "/static-api/runs/sql-tiny-live1/examples-still_wrong"
+      "destination": "/static-api/by-run/sql-tiny-live1/examples-still_wrong"
     },
     {
       "source": "/api/runs/sql-tiny-live1/examples",
@@ -75,7 +75,7 @@
           "value": "regressed"
         }
       ],
-      "destination": "/static-api/runs/sql-tiny-live1/examples-regressed"
+      "destination": "/static-api/by-run/sql-tiny-live1/examples-regressed"
     },
     {
       "source": "/api/runs",
@@ -153,7 +153,7 @@
       ]
     },
     {
-      "source": "/static-api/runs/sql-tiny-live1/events",
+      "source": "/static-api/by-run/sql-tiny-live1/events",
       "headers": [
         {
           "key": "Content-Type",
@@ -162,7 +162,7 @@
       ]
     },
     {
-      "source": "/static-api/runs/sql-tiny-live1/examples-all",
+      "source": "/static-api/by-run/sql-tiny-live1/examples-all",
       "headers": [
         {
           "key": "x-examples-available",
@@ -179,7 +179,7 @@
       ]
     },
     {
-      "source": "/static-api/runs/sql-tiny-live1/examples-fixed",
+      "source": "/static-api/by-run/sql-tiny-live1/examples-fixed",
       "headers": [
         {
           "key": "x-examples-available",
@@ -196,7 +196,7 @@
       ]
     },
     {
-      "source": "/static-api/runs/sql-tiny-live1/examples-still_wrong",
+      "source": "/static-api/by-run/sql-tiny-live1/examples-still_wrong",
       "headers": [
         {
           "key": "x-examples-available",
@@ -213,7 +213,7 @@
       ]
     },
     {
-      "source": "/static-api/runs/sql-tiny-live1/examples-regressed",
+      "source": "/static-api/by-run/sql-tiny-live1/examples-regressed",
       "headers": [
         {
           "key": "x-examples-available",

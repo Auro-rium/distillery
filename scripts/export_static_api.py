@@ -25,6 +25,10 @@ OUT = ROOT / "frontend" / "public" / "static-api"
 VERCEL = ROOT / "frontend" / "vercel.json"
 KINDS = ("all", "fixed", "still_wrong", "regressed")
 GENERATED = "/static-api/"
+JSON_TYPE = [
+    {"key": "Content-Type", "value": "application/json"},
+    {"key": "Cache-Control", "value": "no-cache"},
+]
 _ID = re.compile(r"^[A-Za-z0-9._-]+$")
 
 
@@ -73,44 +77,44 @@ def export(home: Path, only: list[str] | None) -> dict[str, object]:
             base = f"/api/runs/{rid}"
             detail = c.get(base)
             detail.raise_for_status()
-            _write(f"runs/{rid}/detail", _recorded(detail.content, at))
-            rewrites.append({"source": base, "destination": f"{GENERATED}runs/{rid}/detail"})
+            _write(f"by-run/{rid}/detail", _recorded(detail.content, at))
+            rewrites.append({"source": base, "destination": f"{GENERATED}by-run/{rid}/detail"})
             for name in ("report", "tree"):
                 r = c.get(f"{base}/{name}")
                 r.raise_for_status()
                 _write(
-                    f"runs/{rid}/{name}",
+                    f"by-run/{rid}/{name}",
                     _recorded(r.content, at) if name == "report" else r.content,
                 )
                 rewrites.append(
-                    {"source": f"{base}/{name}", "destination": f"{GENERATED}runs/{rid}/{name}"}
+                    {"source": f"{base}/{name}", "destination": f"{GENERATED}by-run/{rid}/{name}"}
                 )
             ev = c.get(f"{base}/events")
             ev.raise_for_status()
-            _write(f"runs/{rid}/events", ev.content)
+            _write(f"by-run/{rid}/events", ev.content)
             rewrites.append(
-                {"source": f"{base}/events", "destination": f"{GENERATED}runs/{rid}/events"}
+                {"source": f"{base}/events", "destination": f"{GENERATED}by-run/{rid}/events"}
             )
             headers.append(
                 {
-                    "source": f"{GENERATED}runs/{rid}/events",
+                    "source": f"{GENERATED}by-run/{rid}/events",
                     "headers": [{"key": "Content-Type", "value": ev.headers["content-type"]}],
                 }
             )
             for kind in KINDS:
                 r = c.get(f"{base}/examples", params={"kind": kind, "limit": 200})
                 r.raise_for_status()
-                _write(f"runs/{rid}/examples-{kind}", r.content)
+                _write(f"by-run/{rid}/examples-{kind}", r.content)
                 rewrites.append(
                     {
                         "source": f"{base}/examples",
                         "has": [{"type": "query", "key": "kind", "value": kind}],
-                        "destination": f"{GENERATED}runs/{rid}/examples-{kind}",
+                        "destination": f"{GENERATED}by-run/{rid}/examples-{kind}",
                     }
                 )
                 headers.append(
                     {
-                        "source": f"{GENERATED}runs/{rid}/examples-{kind}",
+                        "source": f"{GENERATED}by-run/{rid}/examples-{kind}",
                         "headers": [
                             {"key": k, "value": v}
                             for k, v in r.headers.items()
@@ -136,7 +140,7 @@ def patch_vercel(gen: dict[str, object]) -> None:
     keep_rw = [
         r for r in cfg["rewrites"] if not str(r.get("destination", "")).startswith(GENERATED)
     ]
-    keep_h = [h for h in cfg["headers"] if not str(h["source"]).startswith(GENERATED)]
+    keep_h = [h for h in cfg["headers"] if not str(h["source"]).startswith(("/api/", GENERATED))]
     # generated rewrites first (most specific), then the SPA fallback
     cfg["rewrites"] = [*gen["rewrites"], *keep_rw]  # type: ignore[misc]
     # generic header first, per-file headers after it so they override
