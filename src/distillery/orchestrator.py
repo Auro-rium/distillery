@@ -183,6 +183,7 @@ class Scale(BaseModel):
 
 SCALES: dict[str, Scale] = {
     "tiny": Scale(name="tiny", train=40, dev=10, heldout=20),
+    "mini": Scale(name="mini", train=120, dev=30, heldout=60),  # CLI-only: cheaper 2-round live run
     "small": Scale(name="small", train=300, dev=50, heldout=100),
     "full": Scale(name="full", train=2000, dev=150, heldout=300),
 }

@@ -12,7 +12,7 @@ from typing import Any
 import pytest
 
 from distillery.cli import EXIT_FAIL, EXIT_OK, EXIT_REFUSED, main
-from distillery.orchestrator import DRY_RUN_LABEL, Deps, PipelineError
+from distillery.orchestrator import DRY_RUN_LABEL, SCALES, Deps, PipelineError
 from distillery.pipeline_fakes import FAKE_MODELS
 from distillery.sandbox_executor import AsyncBridge
 
@@ -124,6 +124,21 @@ def test_live_run_without_serving_path_refuses_without_spending(
     env = {**live_env, "DISTILLERY_ADMIN_TOKEN_SUPPLIED": TOKEN}
     code, out = run_cli(tmp_path, *LIVE, "--i-approve-spend", env=env)
     assert code == EXIT_REFUSED and "refused" in out[-1]  # missing NEBIUS_* / sandbox config
+
+
+def test_mini_scale_two_round_dry_run_branches_the_sandbox(tmp_path: Path) -> None:
+    """The scale used for the second live run: bigger held-out set, two rounds, so round 2 branches."""
+    code, out = run_cli(
+        tmp_path, "run", "--scale", "mini", "--max-rounds", "2", "--dry-run", "--max-base-acc", "1.0",
+        env={},
+    )  # fmt: skip
+    assert code == EXIT_OK, out
+    root = tmp_path / "home" / "dry-runs" / "runs" / "dry-sql-mini"
+    report = json.loads((root / "report.json").read_text())
+    assert (SCALES["mini"].train, SCALES["mini"].dev, SCALES["mini"].heldout) == (120, 30, 60)
+    assert report["evaluation"]["n"] == 60 and report["dry_run"] is True
+    assert len(report["rounds"]) == 2, report["rounds_stop_reason"]
+    assert [x["label"] for x in report["sandbox_lineage"]] == ["round-1"]
 
 
 def test_dry_run_prefix_and_flag_are_enforced(tmp_path: Path) -> None:
