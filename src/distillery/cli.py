@@ -57,6 +57,10 @@ def _parser() -> argparse.ArgumentParser:
     r.add_argument("--budget-usd", type=float, default=None, help="per-run spend cap")
     r.add_argument("--i-approve-spend", action="store_true")
     r.add_argument("--finetune-estimate-usd", type=float, default=None)
+    r.add_argument(
+        "--min-planned-steps", type=int, default=None,
+        help="refuse a live fine-tune planning fewer optimizer steps than this (default 50)",
+    )  # fmt: skip
     r.add_argument("--max-rounds", type=int, default=3)
     r.add_argument("--max-base-acc", type=float, default=0.80, help="headroom threshold on dev")
     r.add_argument("--seed", type=int, default=1234)
@@ -246,6 +250,7 @@ def _cmd_run(
         max_rounds=args.max_rounds,
         headroom_max_base_acc=args.max_base_acc,
         finetune_estimate_usd=args.finetune_estimate_usd,
+        **({} if args.min_planned_steps is None else {"min_planned_steps": args.min_planned_steps}),
     )
     store = _store_for(root, run_id)
     try:

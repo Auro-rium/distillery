@@ -16,7 +16,7 @@ import pytest
 
 from distillery.budget import BudgetExceeded
 from distillery.evaluator import ArtifactMismatchError
-from distillery.finetune import JobFailedError
+from distillery.finetune import PINNED_HYPERPARAMETERS, HyperParameters, JobFailedError
 from distillery.orchestrator import (
     DRY_RUN_LABEL,
     SCALES,
@@ -308,6 +308,55 @@ def test_budget_exceeded_refuses_before_any_llm_call(tmp_path: Path, bridge: Asy
     with pytest.raises(BudgetExceeded):
         pipe.run()
     assert dr.transport.calls == []
+
+
+def _live_like(tmp_path: Path, bridge: AsyncBridge, **pcfg: Any) -> tuple[Pipeline, DryRun]:
+    """A dry-run rig whose pipeline config is NOT dry, to exercise the live-only preflight."""
+    dr = build_dry_run(NANO, bridge, **pcfg)
+    cfg = dr.pipeline_cfg.model_copy(update={"dry_run": False})
+    store = Store(fast_dir(tmp_path, "store"))
+    return Pipeline(cfg, dr.config, dr.deps, store, "t", say=lambda _s: None), dr
+
+
+def test_min_planned_steps_refuses_before_any_upload(tmp_path: Path, bridge: AsyncBridge) -> None:
+    pipe, dr = _live_like(tmp_path, bridge)  # 16 rows / batch 16 x 3 epochs = 3 < 50
+    with pytest.raises(ConfigRefusal, match="planned optimizer steps"):
+        pipe._finetune_preflight(16)
+    assert dr.finetune.uploads == {} and dr.finetune.created == []
+
+
+def test_min_planned_steps_accepts_enough_rows(tmp_path: Path, bridge: AsyncBridge) -> None:
+    pipe, _dr = _live_like(tmp_path, bridge)
+    pipe._finetune_preflight(16 * 17)  # 17 x 3 = 51 steps
+    with pytest.raises(ConfigRefusal):
+        pipe._finetune_preflight(16 * 16)  # 48
+
+
+def test_packing_refused_unless_allowed(tmp_path: Path, bridge: AsyncBridge) -> None:
+    hp = PINNED_HYPERPARAMETERS.model_copy(update={"packing": True})
+    pipe, _dr = _live_like(tmp_path, bridge, hyperparameters=hp)
+    with pytest.raises(ConfigRefusal, match="packing"):
+        pipe._finetune_preflight(10_000)
+    pipe.cfg = pipe.cfg.model_copy(update={"allow_packing": True})
+    pipe._finetune_preflight(10_000)
+
+
+def test_default_style_hyperparameters_refused_even_in_dry_run(
+    tmp_path: Path, bridge: AsyncBridge
+) -> None:
+    pipe, _dr, _s = make(tmp_path, bridge, hyperparameters=HyperParameters(lora=True, n_epochs=3))
+    with pytest.raises(ConfigRefusal, match="explicit"):
+        pipe.run()
+
+
+def test_report_has_finetune_section(reference: dict[str, Any]) -> None:
+    rep = reference["report"]
+    assert len(rep["finetune"]) == len(rep["rounds"])
+    rec = rep["finetune"][0]
+    assert rec["round"] == 1 and rec["job_id"] == rep["rounds"][0]["job_id"]
+    assert rec["hyperparameters"]["batch_size"] == 16 and rec["hyperparameters"]["packing"] is False
+    assert rec["trained_steps"] and rec["trained_tokens"] and rec["loss_curve"] and rec["events"]
+    assert rep["config"]["pipeline"]["hyperparameters"]["learning_rate"] == 1e-4
 
 
 def test_finetune_estimate_over_cap_refuses_before_upload(

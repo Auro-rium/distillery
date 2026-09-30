@@ -24,6 +24,7 @@ from typing import Any, Protocol
 import openai
 from pydantic import BaseModel, ConfigDict, Field
 
+from distillery.config import ConfigError
 from distillery.llm import is_retryable
 
 TERMINAL_STATUSES = frozenset({"succeeded", "failed", "cancelled"})
@@ -75,6 +76,43 @@ class HyperParameters(BaseModel):
         return data
 
 
+# Every field the pipeline must choose itself: the provider defaults were measured to be
+# unusable (batch 8, lr 1e-5, packing on: 3-9 optimizer steps for 40-138 rows).
+REQUIRED_HYPERPARAMETERS = (
+    "batch_size", "learning_rate", "n_epochs", "lora_r", "lora_alpha", "packing",
+)  # fmt: skip
+
+
+def require_explicit_hyperparameters(hp: HyperParameters | None) -> HyperParameters:
+    """Refuse (before any API call) unless every training-shaping knob is set and lora is True."""
+    if hp is None:
+        raise ConfigError("fine-tune hyperparameters must be set explicitly; got none")
+    missing = [k for k in REQUIRED_HYPERPARAMETERS if getattr(hp, k) is None]
+    if missing:
+        raise ConfigError(
+            f"fine-tune hyperparameters must be explicit (provider defaults are unusable); "
+            f"missing: {', '.join(missing)}"
+        )
+    if hp.lora is not True:
+        raise ConfigError("fine-tune hyperparameters must set lora=True (adapter training only)")
+    return hp
+
+
+# The values the pipeline pins (chosen, not provider defaults).
+PINNED_HYPERPARAMETERS = HyperParameters(
+    lora=True, lora_r=16, lora_alpha=16, learning_rate=1e-4, n_epochs=3, batch_size=16,
+    packing=False, warmup_ratio=0.0, weight_decay=0.0, max_grad_norm=1.0, lora_dropout=0.0,
+    context_length=8192,
+)  # fmt: skip
+
+
+def planned_steps(train_rows: int, hp: HyperParameters) -> int | None:
+    """Optimizer steps a job will take, or None when unknowable (packing merges rows)."""
+    if hp.packing is not False or hp.batch_size is None or hp.n_epochs is None:
+        return None
+    return -(-train_rows // hp.batch_size) * hp.n_epochs
+
+
 @dataclass(frozen=True)
 class JobInfo:
     id: str
@@ -85,6 +123,8 @@ class JobInfo:
     result_files: tuple[str, ...]
     trained_steps: int | None
     total_steps: int | None
+    trained_tokens: int | None = None
+    hyperparameters: dict[str, Any] | None = None  # RESOLVED values the API reports
 
     @property
     def terminal(self) -> bool:
@@ -252,13 +292,24 @@ class FineTuneClient:
         req: dict[str, Any] = {"model": model, "training_file": training_file}
         if validation_file:
             req["validation_file"] = validation_file
-        if hyperparameters is not None:
-            req["hyperparameters"] = hyperparameters.to_request()
+        req["hyperparameters"] = require_explicit_hyperparameters(hyperparameters).to_request()
         if suffix:
             req["suffix"] = suffix
         if seed is not None:
             req["seed"] = seed
         return str(self._c.fine_tuning.jobs.create(**req).id)
+
+    @staticmethod
+    def _resolved_hp(job: Any) -> dict[str, Any] | None:
+        hp = getattr(job, "hyperparameters", None)
+        if hp is None:
+            return None
+        if isinstance(hp, Mapping):
+            return dict(hp)
+        dump = getattr(hp, "model_dump", None)
+        if callable(dump):
+            return dict(dump())
+        return {k: v for k, v in vars(hp).items() if not k.startswith("_")}
 
     @staticmethod
     def _job_info(job: Any) -> JobInfo:
@@ -272,6 +323,8 @@ class FineTuneClient:
             result_files=tuple(getattr(job, "result_files", None) or ()),
             trained_steps=getattr(job, "trained_steps", None),
             total_steps=getattr(job, "total_steps", None),
+            trained_tokens=getattr(job, "trained_tokens", None),
+            hyperparameters=FineTuneClient._resolved_hp(job),
         )
 
     def get(self, job_id: str) -> JobInfo:
@@ -372,6 +425,27 @@ class FineTuneClient:
             )
             for c in page.data
         ]
+
+    def raw_job(self, job_id: str) -> dict[str, Any]:
+        """The job object exactly as the API returns it, as a plain dict (diagnostics)."""
+        job = self._retry(lambda: self._c.fine_tuning.jobs.retrieve(job_id))
+        dump = getattr(job, "model_dump", None)
+        if callable(dump):
+            return dict(dump())
+        return {k: v for k, v in vars(job).items() if not k.startswith("_")}
+
+    def loss_curve(self, job_id: str) -> list[dict[str, Any]]:
+        """Per checkpoint step: ``{"step", "train_loss", "valid_loss"}`` (None when absent),
+        sorted by step."""
+        rows = [
+            {
+                "step": c.step_number,
+                "train_loss": c.metrics.get("train_loss"),
+                "valid_loss": c.metrics.get("valid_loss"),
+            }
+            for c in self.checkpoints(job_id)
+        ]
+        return sorted(rows, key=lambda x: (x["step"] is None, x["step"] or 0))
 
     def download_checkpoint(
         self, checkpoint: CheckpointInfo, directory: Path | str

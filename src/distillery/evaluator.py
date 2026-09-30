@@ -254,3 +254,109 @@ def evaluate(
         artifact=artifact,
         examples=build_examples(items, scores),
     )
+
+
+# ---------------------------------------------------------------- student diagnostics
+
+
+def identical_rate(a: Sequence[str | None], b: Sequence[str | None]) -> float:
+    """Fraction of positions where two output lists are exactly equal (0.0 when empty)."""
+    if len(a) != len(b):
+        raise ValueError("output lists differ in length")
+    return sum(x == y for x, y in zip(a, b, strict=True)) / len(a) if a else 0.0
+
+
+def diagnose_generate(
+    generators: Mapping[str, Generator],
+    sets: Mapping[str, Sequence[Mapping[str, Any]]],
+    executor: Executor,
+    *,
+    db_ref: str,
+    schema_ddl: str,
+    compare_to: str = "base",
+) -> dict[str, Any]:
+    """Generate with every model over every named item set and score it.
+
+    Each item needs ``task_id``, ``gold_sql``, ``requires_order`` and either ``messages`` (the exact
+    prompt to send) or ``question`` (prompt built with the eval prompt builder). All sets go to a
+    model in ONE ``generate`` call, so each model (sandbox image + weights) is loaded once. Returns
+    ``{"models": {model: {set: {n, accuracy, items[{task_id, raw, sql, correct, reason}]}}},
+    "identical_to_<compare_to>": {model: {set: {raw, sql}}}}``.
+    """
+    names = list(sets)
+    flat: list[Mapping[str, Any]] = [it for n in names for it in sets[n]]
+    prompts: list[ChatMessages] = [
+        list(it["messages"])
+        if it.get("messages") is not None
+        else build_messages(str(it["question"]), schema_ddl, role="eval_student")
+        for it in flat
+    ]
+    gold = executor.run_batch(db_ref, [str(it["gold_sql"]) for it in flat]) if flat else []
+    models: dict[str, Any] = {}
+    for model, gen in generators.items():
+        outputs = gen.generate(prompts) if prompts else []
+        if len(outputs) != len(flat):
+            raise RuntimeError(f"{model}: got {len(outputs)} outputs for {len(flat)} items")
+        sqls = [extract_sql(o) for o in outputs]
+        runnable = [i for i, s in enumerate(sqls) if s is not None]
+        outcomes = executor.run_batch(db_ref, [sqls[i] or "" for i in runnable]) if runnable else []
+        by_index = dict(zip(runnable, outcomes, strict=True))
+        per_set: dict[str, Any] = {}
+        pos = 0
+        for n in names:
+            rows: list[dict[str, Any]] = []
+            for it in sets[n]:
+                i = pos
+                pos += 1
+                if sqls[i] is None:
+                    ok, why = False, "no SQL extracted from output"
+                else:
+                    v = compare_outcomes(by_index[i], gold[i], bool(it.get("requires_order")))
+                    ok, why = v.ok, v.reason
+                rows.append(
+                    {"task_id": it.get("task_id"), "raw": outputs[i], "sql": sqls[i],
+                     "correct": ok, "reason": why}
+                )  # fmt: skip
+            per_set[n] = {
+                "n": len(rows),
+                "accuracy": sum(r["correct"] for r in rows) / len(rows) if rows else 0.0,
+                "items": rows,
+            }
+        models[model] = per_set
+    ident: dict[str, Any] = {}
+    if compare_to in models:
+        for model, per_set in models.items():
+            if model == compare_to:
+                continue
+            ident[model] = {
+                n: {
+                    f: identical_rate(
+                        [r[f] for r in models[compare_to][n]["items"]],
+                        [r[f] for r in per_set[n]["items"]],
+                    )
+                    for f in ("raw", "sql")
+                }
+                for n in names
+            }
+    return {"models": models, f"identical_to_{compare_to}": ident}
+
+
+def diagnose_with_heldout(
+    store: Store,
+    run_id: str,
+    generators: Mapping[str, Generator],
+    sets: Mapping[str, Sequence[Mapping[str, Any]]],
+    executor: Executor,
+    *,
+    db_ref: str,
+    schema_ddl: str,
+) -> dict[str, Any]:
+    """``diagnose_generate`` with the sealed held-out added as the set ``"heldout"``. Only task
+    ids, outputs and verdicts are returned for it (no held-out question or gold SQL)."""
+    if "heldout" in sets:
+        raise ValueError("'heldout' is reserved for the sealed set")
+    items = store.load_heldout(run_id)
+    return diagnose_generate(
+        generators, {**sets, "heldout": items}, executor,
+        db_ref=db_ref, schema_ddl=schema_ddl,
+    )  # fmt: skip
