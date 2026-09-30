@@ -25,6 +25,8 @@ WORKDIR /app
 COPY pyproject.toml README.md LICENSE ./
 COPY src ./src
 COPY docs/fixtures ./docs/fixtures
+# Non-secret price table (ASSUMED ceilings until replaced with console prices): see docs/DEPLOY.md.
+COPY deploy ./deploy
 # Editable install so the server finds docs/fixtures and frontend/dist relative to /app.
 # fastapi and uvicorn come from pyproject.toml dependencies.
 RUN pip install -e .

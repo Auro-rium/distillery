@@ -60,7 +60,9 @@ class SandboxPrice(BaseModel):
     @model_validator(mode="after")
     def _exactly_one_rate(self) -> SandboxPrice:
         if (self.usd_per_cpu_second is None) == (self.usd_per_second is None):
-            raise ValueError("sandbox price needs exactly one of usd_per_cpu_second, usd_per_second")
+            raise ValueError(
+                "sandbox price needs exactly one of usd_per_cpu_second, usd_per_second"
+            )
         return self
 
     @property

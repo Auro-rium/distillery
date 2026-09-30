@@ -8,6 +8,7 @@ import threading
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from datetime import UTC, datetime
+from typing import Any
 
 from distillery.config import Config, FinetunePrice, Price, SandboxPrice
 from distillery.store import Store
@@ -27,7 +28,9 @@ KIND_FINETUNE_CEILING = "finetune_ceiling"  # operator ceiling: no price or no m
 KIND_SANDBOX = "sandbox"  # measured seconds x price; input_tokens holds milliseconds
 KIND_SANDBOX_UNPRICED = "sandbox_unpriced"  # usd 0 because unpriced, NOT because free
 # These are not LLM calls: they must not appear in the llm_calls table.
-NON_LLM_KINDS = frozenset({KIND_FINETUNE, KIND_FINETUNE_CEILING, KIND_SANDBOX, KIND_SANDBOX_UNPRICED})
+NON_LLM_KINDS = frozenset(
+    {KIND_FINETUNE, KIND_FINETUNE_CEILING, KIND_SANDBOX, KIND_SANDBOX_UNPRICED}
+)
 _KIND_BASIS = {
     KIND_FINETUNE: BASIS_BILLED,
     KIND_FINETUNE_CEILING: BASIS_CEILING,
@@ -246,7 +249,7 @@ def paid_resource[T](create: Callable[[], T], cancel: Callable[[T], object]) -> 
             log.exception("cancel of paid resource failed; it may still be running and billing")
 
 
-def spend_lines(store: Store, run_id: str) -> list[dict[str, object]]:
+def spend_lines(store: Store, run_id: str) -> list[dict[str, Any]]:
     """Fine-tune and sandbox spend rows of a run (read-only), each with its cost basis.
 
     ``units`` is trained tokens for fine-tune rows and measured seconds for sandbox rows.
@@ -260,12 +263,17 @@ def spend_lines(store: Store, run_id: str) -> list[dict[str, object]]:
         ).fetchall()
     finally:
         con.close()
-    out: list[dict[str, object]] = []
+    out: list[dict[str, Any]] = []
     for kind, model, usd, n in rows:
         units = n / 1000 if kind in (KIND_SANDBOX, KIND_SANDBOX_UNPRICED) else int(n)
         out.append(
-            {"kind": kind, "model": model, "usd": float(usd), "units": units,
-             "basis": _KIND_BASIS[kind]}  # fmt: skip
+            {
+                "kind": kind,
+                "model": model,
+                "usd": float(usd),
+                "units": units,
+                "basis": _KIND_BASIS[kind],
+            }  # fmt: skip
         )
     return out
 

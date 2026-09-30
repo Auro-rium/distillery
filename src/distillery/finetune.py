@@ -85,6 +85,7 @@ class JobInfo:
     result_files: tuple[str, ...]
     trained_steps: int | None
     total_steps: int | None
+    trained_tokens: int | None = None
 
     @property
     def terminal(self) -> bool:
@@ -272,6 +273,7 @@ class FineTuneClient:
             result_files=tuple(getattr(job, "result_files", None) or ()),
             trained_steps=getattr(job, "trained_steps", None),
             total_steps=getattr(job, "total_steps", None),
+            trained_tokens=getattr(job, "trained_tokens", None),
         )
 
     def get(self, job_id: str) -> JobInfo:

@@ -20,6 +20,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from distillery.budget import spend_lines
 from distillery.config import Config, ConfigError, load_config
 from distillery.driver import driving
 from distillery.orchestrator import (
@@ -191,6 +192,7 @@ def _summary(report: Mapping[str, Any], out: Callable[[str], None]) -> None:
     )
     if cost.get("basis"):
         out(f"  {cost['basis']}")
+    out(f"fine-tune cost: {cost['finetune_usd']}")
     out(f"student cost per 1k tasks: {cost['cost_per_1k_tasks']['student']}")
     if report.get("dry_run"):
         out(DRY_RUN_LABEL)
@@ -291,11 +293,13 @@ def _cmd_status(
             out(f"{s['stage']:<22} {s['status']:<9} {s['updated_at']}{err}")
         out(
             f"spend usd (ESTIMATE from the configured price table, see report config.prices for "
-            f"the source; the fine-tune part is the operator's ceiling): "
+            f"the source; each fine-tune/sandbox line below states its basis): "
             f"{store.total_spend(args.run):.6f}"
         )
         for model, c in cost_by_model(store, args.run).items():
             out(f"  {model}: calls={c['calls']} usd={c['usd']:.6f}")
+        for line in spend_lines(store, args.run):
+            out(f"  {line['kind']} {line['model']}: usd={line['usd']:.6f} [{line['basis']}]")
     finally:
         store.close()
     return EXIT_OK

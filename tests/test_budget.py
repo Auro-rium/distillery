@@ -1,10 +1,9 @@
 # ruff: noqa: S101, S105, S106
 import logging
+import sqlite3
 from pathlib import Path
 
 import pytest
-
-import sqlite3
 
 from distillery.budget import (
     BASIS_BILLED,
@@ -179,8 +178,13 @@ def test_record_finetune_uses_actual_trained_tokens(tmp_path: Path) -> None:
     assert lg.spent() == pytest.approx(usd)
     lines = spend_lines(s, "r1")
     assert lines == [
-        {"kind": "finetune", "model": "base", "usd": pytest.approx(usd), "units": 115_611,
-         "basis": BASIS_BILLED}  # fmt: skip
+        {
+            "kind": "finetune",
+            "model": "base",
+            "usd": pytest.approx(usd),
+            "units": 115_611,
+            "basis": BASIS_BILLED,
+        }  # fmt: skip
     ]
     # a fine-tune is not an LLM call
     assert cost_rows(s) == 0
@@ -207,3 +211,31 @@ def test_record_sandbox_priced_and_unpriced(tmp_path: Path) -> None:
                                                        ("sandbox_unpriced", 0.0)]  # fmt: skip
     assert [x["units"] for x in lines] == [10, 5]  # measured seconds are kept either way
     assert sandbox_seconds(s, "r1", "student") == (15.0, 3)
+
+
+def test_planned_trained_tokens_is_chars_over_cpt_times_epochs() -> None:
+    from distillery.orchestrator import _planned_trained_tokens
+
+    assert _planned_trained_tokens(b"x" * 300, 3, 4) == 400
+    assert _planned_trained_tokens(b"x" * 10, 3, None) == 4 * 3  # service default assumed: 3
+
+
+def test_bill_sandbox_on_close_records_measured_seconds_once(tmp_path: Path) -> None:
+    from types import SimpleNamespace
+
+    from distillery.orchestrator import Pipeline
+
+    s = Store(tmp_path)
+    lg = priced(s, sb=False)
+    closed: list[int] = []
+    srv = SimpleNamespace(
+        close=lambda: closed.append(1),
+        timings=[{"load_s": 4.0, "gen_s": 12.0, "n": 2}, {"load_s": 1.0, "gen_s": 3.0, "n": 1}],
+    )
+    fake = SimpleNamespace(ledger=lg)
+    Pipeline._bill_sandbox_on_close(fake, srv, "student")  # type: ignore[arg-type]
+    srv.close()
+    srv.close()
+    assert closed == [1, 1]
+    assert sandbox_seconds(s, "r1", "student") == (20.0, 3)  # billed once, unpriced but kept
+    assert [x["kind"] for x in spend_lines(s, "r1")] == ["sandbox_unpriced"]
