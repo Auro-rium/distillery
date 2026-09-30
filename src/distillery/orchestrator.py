@@ -1749,7 +1749,7 @@ class Pipeline:
                 "heldout_class_counts": split["heldout_class_counts"],
                 "heldout_sealed_sha256": split["sealed_sha256"],
                 "teacher_verified_rows_round1": len(data["rows"]),
-                "spot_check_file": str(self.run_dir / "spot_check.json"),
+                "spot_check_file": "spot_check.json",
             },
             "headroom": {
                 "base_dev_acc": self._results["headroom"]["base_dev_acc"],
