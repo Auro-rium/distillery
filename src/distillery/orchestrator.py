@@ -37,18 +37,22 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from distillery import evaluator as evaluator_mod
 from distillery.budget import Ledger
-from distillery.config import Config
+from distillery.config import Config, ConfigError
 from distillery.endpoint_student import EndpointBackend, EndpointSpec
 from distillery.evaluator import ExpectedArtifact, ModelScores, score_model
 from distillery.finetune import (
     ACTIVE_STATUSES,
     CheckpointInfo,
+    PINNED_HYPERPARAMETERS,
     DownloadedFile,
+    EventInfo,
     FineTuneClient,
     HyperParameters,
     JobInfo,
     TrainedArtifact,
     paid_job,
+    planned_steps,
+    require_explicit_hyperparameters,
 )
 from distillery.llm import CallRecord, ChatResult, LLMClient, LLMError
 from distillery.prompts import build_messages, extract_sql, to_training_row
@@ -215,7 +219,12 @@ class PipelineConfig(BaseModel):
     poll_interval_s: float = 15.0
     poll_timeout_s: float = 6 * 3600.0
     finetune_estimate_usd: float | None = None  # docs give no fine-tune price: caller must say
-    hyperparameters: HyperParameters = HyperParameters(lora=True, n_epochs=3)
+    # Pinned, never provider defaults (measured: defaults gave 3-9 optimizer steps for 40-138 rows).
+    hyperparameters: HyperParameters = PINNED_HYPERPARAMETERS
+    # Refuse before any spend when the planned optimizer steps fall below this (dry runs exempt).
+    min_planned_steps: int = Field(default=50, ge=0)
+    # packing=True makes the step count unknowable; refuse unless the caller says so explicitly.
+    allow_packing: bool = False
     ultra_verifier_authoring: bool = False  # documented hook, intentionally unimplemented
     # How the student and base are served. "injected" (default) = use Deps.student_factory /
     # Deps.base_factory as given. The others build both from Deps (UNVERIFIED against real APIs).
@@ -284,6 +293,10 @@ class FineTuner(Protocol):
     ) -> JobInfo: ...
 
     def checkpoints(self, job_id: str) -> list[CheckpointInfo]: ...
+
+    def loss_curve(self, job_id: str) -> list[dict[str, Any]]: ...
+
+    def events(self, job_id: str, *, limit: int = ..., max_pages: int = ...) -> list[EventInfo]: ...
 
     def trained_artifact(
         self, job: JobInfo, checkpoint: CheckpointInfo, directory: Path | str
@@ -1299,6 +1312,7 @@ class Pipeline:
         def fn() -> dict[str, Any]:
             ft = self.deps.finetune
             base_model = self.config.require_model("student")
+            self._finetune_preflight(len(rows))
             rdir = self.run_dir / f"round{r}"
             train_p, val_p = rdir / "train.jsonl", rdir / "dev.jsonl"
             atomic_write_bytes(
@@ -1351,6 +1365,7 @@ class Pipeline:
                     if not cks:
                         raise PipelineError(f"job {handle.job_id} succeeded with no checkpoints")
                     art = ft.trained_artifact(info, cks[-1], rdir / "checkpoints")
+                    training = self._training_record(ft, r, info, base_model)
                     # Record what was trained BEFORE anything is evaluated.
                     self.store.add_experiment(
                         self.run_id,
@@ -1374,6 +1389,7 @@ class Pipeline:
                     )
             return {
                 "artifact": artifact_to_json(art, self.run_dir),
+                "training": training,
                 "train_rows": len(rows),
                 "dev_validation_rows": len(val_rows),
                 "counters": {
@@ -1390,6 +1406,58 @@ class Pipeline:
             [upstream],
             fn,
         )  # fmt: skip
+
+    def _finetune_preflight(self, train_rows: int) -> None:
+        """Refuse (before any upload or spend) hyperparameters that would under-train the student."""
+        hp = self.cfg.hyperparameters
+        try:
+            require_explicit_hyperparameters(hp)
+        except ConfigError as exc:
+            raise ConfigRefusal(str(exc)) from exc
+        if self.cfg.dry_run:
+            return
+        if hp.packing:
+            if not self.cfg.allow_packing:
+                raise ConfigRefusal(
+                    "packing=True makes the optimizer-step count unknowable; refusing. "
+                    "Set allow_packing to accept that explicitly"
+                )
+            return
+        steps = planned_steps(train_rows, hp)
+        assert steps is not None  # noqa: S101 - packing is False and batch/epochs are set
+        if steps < self.cfg.min_planned_steps:
+            raise ConfigRefusal(
+                f"planned optimizer steps {steps} = ceil({train_rows} rows / batch "
+                f"{hp.batch_size}) x {hp.n_epochs} epochs is below min_planned_steps="
+                f"{self.cfg.min_planned_steps}; the student would be barely trained. Add rows or "
+                "epochs, lower batch_size, or lower min_planned_steps deliberately"
+            )
+
+    def _training_record(
+        self, ft: FineTuner, r: int, info: JobInfo, base_model: str
+    ) -> dict[str, Any]:
+        """What the provider actually trained with (resolved values) and how the loss moved.
+        Diagnostics only: a failure to read them must never fail (and so cancel) a paid job."""
+        rec: dict[str, Any] = {
+            "round": r,
+            "job_id": info.id,
+            "base_model": info.model or base_model,
+            "hyperparameters": info.hyperparameters,
+            "trained_tokens": info.trained_tokens,
+            "trained_steps": info.trained_steps,
+            "total_steps": info.total_steps,
+            "loss_curve": [],
+            "events": [],
+        }
+        try:
+            rec["loss_curve"] = ft.loss_curve(info.id)
+            rec["events"] = [
+                {"created_at": e.created_at, "level": e.level, "message": e.message}
+                for e in ft.events(info.id)
+            ]
+        except Exception as exc:  # noqa: BLE001
+            rec["diagnostics_error"] = f"{type(exc).__name__}: {exc}"
+        return rec
 
     def _adoptable_job(self, r: int) -> str | None:
         """A job of this round that an earlier attempt aborted but may not have managed to cancel
@@ -1756,6 +1824,9 @@ class Pipeline:
                 "max_allowed": self.cfg.headroom_max_base_acc,
             },
             "rounds": rounds["rounds"],
+            "finetune": [
+                self._results[rd["finetune_stage"]]["training"] for rd in rounds["rounds"]
+            ],
             "rounds_stop_reason": rounds["stop_reason"],
             "counters": counters,
             "llm_errors_by_purpose": dict(llm_errors),

@@ -27,9 +27,11 @@ from distillery.config import Config, GateThresholds, Price
 from distillery.finetune import (
     CheckpointInfo,
     DownloadedFile,
+    EventInfo,
     HyperParameters,
     JobInfo,
     TrainedArtifact,
+    require_explicit_hyperparameters,
     sha256_file,
 )
 from distillery.orchestrator import DRY_PREFIX, Deps, PipelineConfig, Scale
@@ -182,6 +184,7 @@ class FakeFineTune:
     suffixes: dict[str, str] = field(default_factory=dict)
     job_status: dict[str, str] = field(default_factory=dict)  # test override for ``get``
     _base_models: dict[str, str] = field(default_factory=dict)
+    _hps: dict[str, dict[str, Any]] = field(default_factory=dict)
 
     def upload(self, path: Path | str) -> str:
         p = Path(path)
@@ -202,6 +205,7 @@ class FakeFineTune:
         self.created.append(jid)
         self.suffixes[jid] = suffix or ""
         self._base_models[jid] = model
+        self._hps[jid] = require_explicit_hyperparameters(hyperparameters).to_request()
         return jid
 
     def _round(self, job_id: str) -> int:
@@ -218,8 +222,10 @@ class FakeFineTune:
             error_code=None,
             error_message=None,
             result_files=(),
-            trained_steps=None,
-            total_steps=None,
+            trained_steps=30,
+            total_steps=30,
+            trained_tokens=12345,
+            hyperparameters=self._hps.get(job_id),
         )
 
     def poll(
@@ -241,8 +247,10 @@ class FakeFineTune:
                 error_code="fake_failure" if status == "failed" else None,
                 error_message="forced by FakeFineTune" if status == "failed" else None,
                 result_files=(),
-                trained_steps=None,
-                total_steps=None,
+                trained_steps=30,
+                total_steps=30,
+                trained_tokens=12345,
+                hyperparameters=self._hps.get(job_id),
             )
             if on_update is not None:
                 on_update(info)
@@ -257,6 +265,12 @@ class FakeFineTune:
                 result_files=(f"{job_id}-cfg", f"{job_id}-weights"),
             )
         ]
+
+    def loss_curve(self, job_id: str) -> list[dict[str, Any]]:
+        return [{"step": 10, "train_loss": 1.0, "valid_loss": 1.1}]
+
+    def events(self, job_id: str, *, limit: int = 50, max_pages: int = 20) -> list[EventInfo]:
+        return [EventInfo("e1", 1, "info", "fake training event")]
 
     def trained_artifact(
         self, job: JobInfo, checkpoint: CheckpointInfo, directory: Path | str

@@ -129,6 +129,19 @@ export interface SandboxBranch {
   uuid: string;
 }
 
+export interface FinetuneRecord {
+  round: number;
+  job_id: string;
+  base_model: string | null;
+  hyperparameters: Record<string, number | boolean | string | null> | null;
+  trained_tokens: number | null;
+  trained_steps: number | null;
+  total_steps: number | null;
+  loss_curve: { step: number | null; train_loss: number | null; valid_loss: number | null }[];
+  events: { created_at: number | null; level: string | null; message: string }[];
+  diagnostics_error?: string;
+}
+
 export interface ReportRound {
   adapter_sha256: string;
   clusters: Cluster[];
@@ -210,6 +223,7 @@ export interface Report {
   run_id: string;
   sandbox_lineage: SandboxBranch[];
   stages: { output_sha256: string; stage: string }[];
+  finetune?: FinetuneRecord[]; // per round; absent in reports recorded before this key existed
   // added by the API
   recorded?: boolean;
   recorded_at?: string | null;
