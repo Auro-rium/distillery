@@ -180,6 +180,7 @@ class FakeFineTune:
     created: list[str] = field(default_factory=list)
     cancelled: list[str] = field(default_factory=list)
     suffixes: dict[str, str] = field(default_factory=dict)
+    job_status: dict[str, str] = field(default_factory=dict)  # test override for ``get``
     _base_models: dict[str, str] = field(default_factory=dict)
 
     def upload(self, path: Path | str) -> str:
@@ -207,6 +208,20 @@ class FakeFineTune:
         m = re.search(r"-r(\d+)$", self.suffixes.get(job_id, ""))
         return int(m.group(1)) if m else 0
 
+    def get(self, job_id: str) -> JobInfo:
+        failed = self._round(job_id) in self.fail_rounds
+        status = self.job_status.get(job_id, "failed" if failed else "succeeded")
+        return JobInfo(
+            id=job_id,
+            status=status,
+            model=self._base_models.get(job_id),
+            error_code=None,
+            error_message=None,
+            result_files=(),
+            trained_steps=None,
+            total_steps=None,
+        )
+
     def poll(
         self,
         job_id: str,
@@ -214,6 +229,8 @@ class FakeFineTune:
         interval_s: float = 15.0,
         timeout_s: float | None = None,
         on_update: Callable[[JobInfo], None] | None = None,
+        on_error: Callable[[BaseException], None] | None = None,
+        transient_error_grace_s: float = 900.0,
     ) -> JobInfo:
         failed = self._round(job_id) in self.fail_rounds
         for status in ("running", "failed" if failed else "succeeded"):

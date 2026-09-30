@@ -284,17 +284,43 @@ class FineTuneClient:
         interval_s: float = MIN_POLL_INTERVAL_S,
         timeout_s: float | None = None,
         on_update: Callable[[JobInfo], None] | None = None,
+        on_error: Callable[[BaseException], None] | None = None,
+        transient_error_grace_s: float = 900.0,
     ) -> JobInfo:
         """Block until the job is terminal (succeeded / failed / cancelled).
 
         (The doc's sample loop ``while job.status in ["succeeded", ...]`` is inverted; this
         loops while the status is NOT terminal.)
+
+        A retryable poll failure (connection error, 429/5xx; already retried a few times by
+        ``get``) does not end the wait: the job runs (and bills) server-side regardless, and giving
+        up here would make the caller cancel it, or leave it unclaimed if that cancel fails too
+        (seen live: a 20 s DNS outage at minute 6 of a job that then succeeded). Polling continues
+        for up to ``transient_error_grace_s`` of uninterrupted failures; terminal errors (4xx other
+        than 429) raise at once.
         """
         if interval_s < MIN_POLL_INTERVAL_S:
             raise ValueError(f"poll interval must be >= {MIN_POLL_INTERVAL_S}s per docs")
         start = self._clock()
+        failing_since: float | None = None
         while True:
-            info = self.get(job_id)
+            try:
+                info = self.get(job_id)
+            except (openai.APIStatusError, openai.APIConnectionError) as exc:
+                now = self._clock()
+                failing_since = now if failing_since is None else failing_since
+                if (
+                    not is_retryable(exc)
+                    or now - failing_since + interval_s > transient_error_grace_s
+                ):
+                    raise
+                if timeout_s is not None and now - start + interval_s > timeout_s:
+                    raise PollTimeoutError(f"job {job_id} unreachable and unfinished") from exc
+                if on_error is not None:
+                    on_error(exc)
+                self._sleep(interval_s)
+                continue
+            failing_since = None
             if on_update is not None:
                 on_update(info)
             if info.terminal:

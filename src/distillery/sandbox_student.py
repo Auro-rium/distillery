@@ -1,22 +1,34 @@
 """Student serving path 1: generate on CPU inside a Nebius Sandbox (ConTree).
 
-UNVERIFIED against the real platform (no spike for this path exists yet):
-* whether the sandbox has network egress for ``pip install`` and the Hugging Face download,
-* whether the CPU/RAM limits fit Qwen3-1.7B in float32 (~7 GB) and how many seconds per sample,
-* the adapter file names (we upload whatever files training downloaded, by basename),
-* whether ``files`` keys without a leading slash land at ``/<key>`` as the docs say.
+Measured live (spikes/s4_student_cpu.py, 2026-09-30) for Qwen3-0.6B in bf16: ``pip install`` of the
+CPU torch wheels + transformers/peft takes ~63 s, the weights download inside the sandbox ~20 s,
+load ~1.3 s, peak RSS ~2.1 GB (a sandbox has 4 CPUs and ~4 GB), ~7.8 s per sample at ~900 prompt
+tokens and ``max_new_tokens=160``. Qwen3-1.7B does NOT fit reliably; do not use it here.
 
-One instance serves one model: ``adapter_files=()`` serves the plain base model (this is the
-``base_factory`` path), otherwise the LoRA adapter is applied with ``peft``. The image is built
-once, lazily, by a non-disposable ``branch`` (pip install + base weights + adapter + script),
-then batches run as disposable jobs with bounded concurrency; the batch travels on stdin.
+Token Factory LoRA checkpoints (verified live 2026-09-30): ``adapter_config.json`` (peft 0.19.1
+format, ``base_model_name_or_path`` = the hub id, ``init_lora_weights: false``),
+``adapter_model.safetensors`` (bf16; tensor keys WITHOUT peft's ``base_model.model.`` prefix), plus
+tokenizer/chat-template files. ``PeftModel.from_pretrained`` silently loads nothing from such keys
+(``strict=False``) and leaves a random adapter, so the generation script loads it explicitly and
+strictly (adds the prefix, fails on any unexpected/missing LoRA key).
+
+Still UNVERIFIED live: many sandboxes running this heavy job at the same time.
+
+One ``SandboxCpuStudent`` serves one model: no adapter = the plain base model (the ``base_factory``
+path), otherwise the LoRA adapter is applied with ``peft``. The heavy image (pip + weights +
+script) is built ONCE per run by a ``ServingImages`` shared by every server of that run, as a
+non-disposable ``branch``; an adapter is a small extra layer on top of it. Generation batches then
+run as disposable jobs with bounded concurrency; the batch travels on stdin.
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
 import shlex
-from collections.abc import Sequence
+import threading
+from collections.abc import Callable, Sequence
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -29,64 +41,120 @@ OUT_MARKER = "DISTILLERY_OUT:"
 BASE_DIR = "/models/base"
 ADAPTER_DIR = "/work/adapter"
 SCRIPT_PATH = "/work/gen.py"
+DEFAULT_MAX_NEW_TOKENS = 160  # what the S4 spike measured
+ADAPTER_CONFIG = "adapter_config.json"
+ADAPTER_WEIGHTS = ("adapter_model.safetensors", "adapter_model.bin")  # the names peft loads
 
 GEN_SCRIPT = """\
 import argparse
 import json
+import os
+import resource
 import sys
 import time
 
 ap = argparse.ArgumentParser()
 ap.add_argument("--base", required=True)
 ap.add_argument("--adapter")
-ap.add_argument("--max-new-tokens", type=int, default=256)
+ap.add_argument("--max-new-tokens", type=int, default=160)
 args = ap.parse_args()
 batch = json.load(sys.stdin)["messages_batch"]
 
 import torch
+import transformers
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
+torch.set_num_threads(os.cpu_count() or 4)
 t0 = time.time()
 tok = AutoTokenizer.from_pretrained(args.base)
-tok.padding_side = "left"
-if tok.pad_token is None:
-    tok.pad_token = tok.eos_token
-model = AutoModelForCausalLM.from_pretrained(args.base, torch_dtype=torch.float32)
-if args.adapter:
-    from peft import PeftModel
+model = AutoModelForCausalLM.from_pretrained(args.base, torch_dtype=torch.bfloat16)
+versions = {"torch": getattr(torch, "__version__", None),
+            "transformers": getattr(transformers, "__version__", None)}
+adapter_info = None
 
-    model = PeftModel.from_pretrained(model, args.adapter)
+
+def load_adapter(model, adapter_dir):
+    # Apply a LoRA adapter STRICTLY. PeftModel.from_pretrained loads with strict=False and only
+    # warns when no key matches: a Token Factory checkpoint has tensor keys WITHOUT the
+    # 'base_model.model.' prefix and 'init_lora_weights': false, so the plain call left a randomly
+    # initialised adapter (garbage text; verified live). Add the prefix, then fail on any mismatch.
+    from peft import PeftConfig, get_peft_model, set_peft_model_state_dict
+
+    pm = get_peft_model(model, PeftConfig.from_pretrained(adapter_dir))
+    safe = os.path.join(adapter_dir, "adapter_model.safetensors")
+    if os.path.exists(safe):
+        from safetensors.torch import load_file
+
+        state = load_file(safe)
+    else:
+        state = torch.load(os.path.join(adapter_dir, "adapter_model.bin"), map_location="cpu")
+    prefix = "base_model.model."
+    state = {(k if k.startswith(prefix) else prefix + k): v for k, v in state.items()}
+    res = set_peft_model_state_dict(pm, state)
+    unexpected = list(res.unexpected_keys)
+    lora_missing = [k for k in res.missing_keys if "lora_" in k]
+    if not state or unexpected or lora_missing:
+        raise RuntimeError(
+            "adapter weights did not load cleanly: %d tensors, %d unexpected keys, %d missing "
+            "lora keys; e.g. %s" % (len(state), len(unexpected), len(lora_missing),
+                                    (unexpected + lora_missing)[:3])
+        )
+    return pm, {"tensors": len(state)}
+
+
+if args.adapter:
+    import peft
+
+    model, adapter_info = load_adapter(model, args.adapter)
+    versions["peft"] = getattr(peft, "__version__", None)
 model.eval()
 load_s = time.time() - t0
 
+results = []
 t1 = time.time()
-prompts = [
-    tok.apply_chat_template(m, tokenize=False, add_generation_prompt=True) for m in batch
-]
-enc = tok(prompts, return_tensors="pt", padding=True)
-with torch.no_grad():
-    out = model.generate(**enc, max_new_tokens=args.max_new_tokens, do_sample=False)
-texts = tok.batch_decode(out[:, enc["input_ids"].shape[1]:], skip_special_tokens=True)
-gen_s = time.time() - t1
-res = {"texts": texts, "load_s": load_s, "gen_s": gen_s, "n": len(batch)}
+for messages in batch:
+    t = time.time()
+    try:
+        text = tok.apply_chat_template(
+            messages, tokenize=False, add_generation_prompt=True, enable_thinking=False
+        )
+        ids = tok(text, return_tensors="pt")
+        with torch.no_grad():
+            out = model.generate(**ids, max_new_tokens=args.max_new_tokens, do_sample=False)
+        new = out[0][ids["input_ids"].shape[1]:]
+        results.append({
+            "text": tok.decode(new, skip_special_tokens=True), "error": None,
+            "prompt_tokens": int(ids["input_ids"].shape[1]), "new_tokens": int(len(new)),
+            "seconds": round(time.time() - t, 2),
+        })
+    except Exception as exc:
+        results.append({
+            "text": "", "error": type(exc).__name__ + ": " + str(exc)[:300],
+            "seconds": round(time.time() - t, 2),
+        })
+peak_mb = round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024)
+res = {"results": results, "load_s": round(load_s, 2), "gen_s": round(time.time() - t1, 2),
+       "n": len(batch), "peak_rss_mb": peak_mb, "versions": versions,
+       "adapter_tensors": adapter_info["tensors"] if adapter_info else None}
 print("DISTILLERY_OUT:" + json.dumps(res))
 """
 
 
 def setup_shell(base_model: str) -> str:
-    """Shell that prepares the image. CPU-only torch wheels; base weights baked into the image."""
+    """Shell that prepares the heavy image: the measured recipe (CPU-only torch wheels, then the
+    HF stack; base weights baked into the image, downloaded inside the sandbox)."""
     dl = (
         "from huggingface_hub import snapshot_download; "
         f"snapshot_download({json.dumps(base_model)}, local_dir={json.dumps(BASE_DIR)})"
     )
     return (
         "pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu"
-        " && pip install --no-cache-dir transformers peft accelerate huggingface_hub"
-        f" && python -c {shlex.quote(dl)}"
+        " && pip install --no-cache-dir transformers accelerate peft safetensors huggingface_hub"
+        f" && HF_HUB_DISABLE_TELEMETRY=1 python -c {shlex.quote(dl)}"
     )
 
 
-def parse_output(stdout: str) -> dict[str, object]:
+def parse_output(stdout: str) -> dict[str, Any]:
     for line in reversed(stdout.splitlines()):
         if line.startswith(OUT_MARKER):
             parsed = json.loads(line[len(OUT_MARKER) :])
@@ -95,8 +163,158 @@ def parse_output(stdout: str) -> dict[str, object]:
     raise StudentServingError(f"no {OUT_MARKER} line in generation output")
 
 
+# ---------------------------------------------------------------- adapter files
+
+
+@dataclass(frozen=True)
+class PreparedAdapter:
+    """The files of a checkpoint we will upload, under the names ``peft`` loads."""
+
+    files: dict[str, Path]  # destination file name (inside ADAPTER_DIR) -> local path
+    sha256: str
+    base_model_name_or_path: str
+
+
+def _sha256_file(path: Path) -> str:
+    h = hashlib.sha256()
+    with path.open("rb") as fh:
+        for chunk in iter(lambda: fh.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def _pick_weights(paths: Sequence[Path], listing: str) -> tuple[str, Path]:
+    by_name = {p.name: p for p in paths}
+    for exact in ADAPTER_WEIGHTS:  # exact peft names win over any guess
+        if exact in by_name:
+            return exact, by_name[exact]
+    safes = [p for p in paths if p.suffix == ".safetensors"]
+    bins = [p for p in paths if p.suffix == ".bin"]
+    if len(safes) == 1:
+        return ADAPTER_WEIGHTS[0], safes[0]
+    if not safes and len(bins) == 1:
+        return ADAPTER_WEIGHTS[1], bins[0]
+    if len(safes) > 1 or len(bins) > 1:
+        raise StudentServingError(
+            f"ambiguous adapter weights (several candidate files); downloaded files: {listing}"
+        )
+    raise StudentServingError(
+        f"no adapter weights among the downloaded files (expected one of {ADAPTER_WEIGHTS} or a "
+        f"single .safetensors/.bin file); downloaded files: {listing}"
+    )
+
+
+def prepare_adapter(files: Sequence[Path], base_model: str) -> PreparedAdapter:
+    """Validate a downloaded checkpoint before anything is uploaded or billed.
+
+    Requires ``adapter_config.json`` whose ``base_model_name_or_path`` equals the configured
+    student, plus one weights file (safetensors or bin), which is renamed to what peft loads.
+    Only these two files are shipped (checkpoints may carry optimizer state or tokenizers).
+    """
+    paths = [Path(p) for p in files]
+    listing = ", ".join(sorted(p.name for p in paths)) or "(none)"
+    cfg_path = next((p for p in paths if p.name == ADAPTER_CONFIG), None)
+    if cfg_path is None:
+        raise StudentServingError(f"no {ADAPTER_CONFIG} among the downloaded files: {listing}")
+    try:
+        cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise StudentServingError(
+            f"{ADAPTER_CONFIG} is not valid JSON ({exc}); downloaded files: {listing}"
+        ) from exc
+    declared = cfg.get("base_model_name_or_path") if isinstance(cfg, dict) else None
+    if declared is None:
+        raise StudentServingError(
+            f"{ADAPTER_CONFIG} has no base_model_name_or_path, cannot confirm the adapter was "
+            f"trained for {base_model!r}; downloaded files: {listing}"
+        )
+    if declared != base_model:
+        raise StudentServingError(
+            f"adapter base_model_name_or_path is {declared!r} but the configured student is "
+            f"{base_model!r}; downloaded files: {listing}"
+        )
+    weights_name, weights_path = _pick_weights([p for p in paths if p is not cfg_path], listing)
+    chosen = {ADAPTER_CONFIG: cfg_path, weights_name: weights_path}
+    h = hashlib.sha256()
+    for name in sorted(chosen):
+        h.update(f"{name}:{_sha256_file(chosen[name])}\n".encode())
+    return PreparedAdapter(chosen, h.hexdigest(), str(declared))
+
+
+# ---------------------------------------------------------------- images
+
+
+class ServingImages:
+    """Builds and caches the sandbox images shared by every ``SandboxCpuStudent`` of one run.
+
+    ``deps_image`` = pip installs + base weights + the generation script (built once, as a
+    non-disposable ``branch``); ``adapter_image`` = that plus one adapter (one small layer per
+    distinct adapter). ``on_image(kind, uuid)`` is told about every image actually built, so the
+    caller can record it. Thread-safe; a failed build is not cached.
+    """
+
+    def __init__(
+        self,
+        sandbox: Sandbox,
+        base_image: str,
+        bridge: AsyncBridge,
+        *,
+        base_model: str,
+        setup_timeout_s: float = 1800.0,
+        on_image: Callable[[str, str], None] | None = None,
+    ) -> None:
+        self._sandbox = sandbox
+        self._base_image = base_image
+        self._bridge = bridge
+        self._base_model = base_model
+        self._timeout_s = setup_timeout_s
+        self._on_image = on_image
+        self._lock = threading.Lock()
+        self._deps: str | None = None
+        self._adapters: dict[str, str] = {}
+
+    def deps_image(self) -> str:
+        with self._lock:
+            if self._deps is None:
+                self._deps = self._bridge.run(
+                    self._sandbox.branch(
+                        self._base_image, setup_shell(self._base_model),
+                        files={SCRIPT_PATH: GEN_SCRIPT.encode()}, timeout=self._timeout_s,
+                    )
+                )  # fmt: skip
+                if self._on_image is not None:
+                    self._on_image("deps", self._deps)
+            return self._deps
+
+    def adapter_image(self, adapter: PreparedAdapter) -> str:
+        deps = self.deps_image()
+        with self._lock:
+            uuid = self._adapters.get(adapter.sha256)
+            if uuid is None:
+                uuid = self._bridge.run(
+                    self._sandbox.branch(
+                        deps, "true",
+                        files={f"{ADAPTER_DIR}/{name}": p for name, p in adapter.files.items()},
+                        timeout=self._timeout_s,
+                    )
+                )  # fmt: skip
+                self._adapters[adapter.sha256] = uuid
+                if self._on_image is not None:
+                    self._on_image("adapter", uuid)
+            return uuid
+
+
+# ---------------------------------------------------------------- the server
+
+
 class SandboxCpuStudent:
-    """``StudentServer`` that runs ``transformers`` (+ ``peft``) on sandbox CPU."""
+    """``StudentServer`` that runs ``transformers`` (+ ``peft``) on sandbox CPU.
+
+    Per-sample failures inside a generation job (the script catches them) yield ``""`` for that
+    sample, are counted in ``generation_errors`` and described in ``error_samples``; more than
+    ``max_sample_failure_fraction`` of a call's samples failing raises. A failed JOB (non-zero exit,
+    timeout, sandbox error) fails all of its samples and raises: infrastructure trouble is loud.
+    """
 
     def __init__(
         self,
@@ -106,25 +324,38 @@ class SandboxCpuStudent:
         *,
         base_model: str,
         adapter_files: Sequence[Path] = (),
-        batch_size: int = 8,
-        concurrency: int = 4,
-        max_new_tokens: int = 256,
+        batch_size: int = 2,
+        concurrency: int = 10,
+        max_new_tokens: int = DEFAULT_MAX_NEW_TOKENS,
         timeout_s: float = 1800.0,
+        job_base_timeout_s: float = 120.0,
+        job_per_sample_timeout_s: float = 45.0,
+        max_sample_failure_fraction: float = 0.25,
+        images: ServingImages | None = None,
     ) -> None:
         if batch_size < 1:
             raise ValueError("batch_size must be >= 1")
         self._sandbox = sandbox
-        self._base_image = base_image
         self._bridge = bridge
         self._base_model = base_model
+        # validated here, before any sandbox call: a wrong adapter must not cost anything
         self._adapter_files = tuple(Path(p) for p in adapter_files)
+        self._adapter = prepare_adapter(adapter_files, base_model) if adapter_files else None
         self._batch_size = batch_size
         self._concurrency = concurrency
         self._max_new_tokens = max_new_tokens
         self._timeout_s = timeout_s
+        self._job_base_s = job_base_timeout_s
+        self._job_per_sample_s = job_per_sample_timeout_s
+        self._max_fail = max_sample_failure_fraction
+        self._images = images or ServingImages(
+            sandbox, base_image, bridge, base_model=base_model, setup_timeout_s=timeout_s
+        )
         self._image: str | None = None
         self._closed = False
-        self.timings: list[dict[str, object]] = []  # per batch: load_s, gen_s, n (measured)
+        self.generation_errors = 0
+        self.error_samples: list[str] = []
+        self.timings: list[dict[str, object]] = []  # per batch: load_s, gen_s, n, failed, ...
 
     @classmethod
     def for_artifact(
@@ -144,20 +375,19 @@ class SandboxCpuStudent:
 
     def _ensure_image(self) -> str:
         if self._image is None:
-            files: dict[str, bytes | Path] = {SCRIPT_PATH.lstrip("/"): GEN_SCRIPT.encode()}
-            for p in self._adapter_files:
-                files[f"{ADAPTER_DIR.lstrip('/')}/{p.name}"] = p
-            self._image = self._bridge.run(
-                self._sandbox.branch(
-                    self._base_image, setup_shell(self._base_model), files=files,
-                    timeout=self._timeout_s,
-                )
-            )  # fmt: skip
+            self._image = (
+                self._images.adapter_image(self._adapter)
+                if self._adapter is not None
+                else self._images.deps_image()
+            )
         return self._image
 
     def _command(self) -> str:
         cmd = f"python {SCRIPT_PATH} --base {BASE_DIR} --max-new-tokens {self._max_new_tokens}"
-        return cmd + (f" --adapter {ADAPTER_DIR}" if self._adapter_files else "")
+        return cmd + (f" --adapter {ADAPTER_DIR}" if self._adapter is not None else "")
+
+    def _job_timeout(self, n: int) -> float:
+        return min(self._timeout_s, self._job_base_s + self._job_per_sample_s * n)
 
     def generate(self, messages_batch: Sequence[ChatMessages]) -> list[str]:
         if self._closed:
@@ -171,7 +401,7 @@ class SandboxCpuStudent:
             Job(
                 shell=self._command(),
                 stdin=json.dumps({"messages_batch": chunk}),
-                timeout=self._timeout_s,
+                timeout=self._job_timeout(len(chunk)),
             )
             for chunk in chunks
         ]
@@ -179,6 +409,7 @@ class SandboxCpuStudent:
             self._sandbox.run_batch(image, jobs, concurrency=self._concurrency)
         )
         outputs: list[str] = []
+        failed = 0
         for chunk, res in zip(chunks, results, strict=True):
             if not res.ok:
                 raise StudentServingError(
@@ -186,11 +417,42 @@ class SandboxCpuStudent:
                     f"error={res.error!r}): {res.stderr[-500:]!r}"
                 )
             parsed = parse_output(res.stdout)
-            texts = parsed.get("texts")
-            if not isinstance(texts, list) or len(texts) != len(chunk):
+            items = parsed.get("results")
+            if not isinstance(items, list) or len(items) != len(chunk):
                 raise StudentServingError("generation batch returned the wrong number of outputs")
-            outputs.extend(str(t) for t in texts)
-            self.timings.append({k: parsed.get(k) for k in ("load_s", "gen_s", "n")})
+            n_failed = 0
+            for item in items:
+                if not isinstance(item, dict):
+                    raise StudentServingError("generation batch returned a malformed result")
+                if item.get("error"):
+                    n_failed += 1
+                    self.error_samples.append(str(item["error"])[:300])
+                    outputs.append("")
+                else:
+                    outputs.append(str(item.get("text", "")))
+            failed += n_failed
+            self.generation_errors += n_failed
+            self.timings.append(
+                {
+                    **{
+                        k: parsed.get(k)
+                        for k in (
+                            "load_s",
+                            "gen_s",
+                            "n",
+                            "peak_rss_mb",
+                            "versions",
+                            "adapter_tensors",
+                        )
+                    },
+                    "failed": n_failed,
+                }
+            )
+        if failed > self._max_fail * len(outputs):
+            raise StudentServingError(
+                f"{failed} of {len(outputs)} samples failed inside the sandbox "
+                f"(cap {self._max_fail:.0%}); first error: {self.error_samples[-failed:][0]!r}"
+            )
         return outputs
 
     def close(self) -> None:

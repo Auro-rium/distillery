@@ -33,7 +33,7 @@ from pathlib import Path
 from typing import Any, Literal, Protocol
 
 import openai
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from distillery import evaluator as evaluator_mod
 from distillery.budget import Ledger
@@ -41,6 +41,7 @@ from distillery.config import Config
 from distillery.endpoint_student import EndpointBackend, EndpointSpec
 from distillery.evaluator import ExpectedArtifact, ModelScores, score_model
 from distillery.finetune import (
+    ACTIVE_STATUSES,
     CheckpointInfo,
     DownloadedFile,
     FineTuneClient,
@@ -106,6 +107,13 @@ def _check_endpoint_identity(
         )
 
 
+def _generation_error_counter(name: str, server: Any) -> dict[str, int]:
+    """Samples the serving backend failed to generate (scored as wrong, never dropped). Only
+    backends that can fail per sample (sandbox CPU) expose ``generation_errors``."""
+    errors = getattr(server, "generation_errors", None)
+    return {} if errors is None else {f"{name}_generation_errors": int(errors)}
+
+
 def _with_serving(
     artifact: Mapping[str, str], trained: TrainedArtifact, student: Any, base: Any
 ) -> dict[str, str]:
@@ -128,7 +136,9 @@ def _with_serving(
 
 PIPELINE_VERSION = "1"
 DRY_RUN_LABEL = "DRY RUN — fake models, numbers are NOT results"
-STUDENT_COST_UNAVAILABLE = "unavailable: serving path undecided (spike S4)"
+STUDENT_COST_UNAVAILABLE = (
+    "unavailable: the student is served in Nebius Sandboxes (CPU) and the sandbox price is unknown"
+)
 DRY_PREFIX = "dry-"
 _SCHEMA_OVERHEAD_TOKENS = 120  # rough prompt overhead of the JSON-schema instruction (estimate)
 
@@ -210,8 +220,10 @@ class PipelineConfig(BaseModel):
     # Deps.base_factory as given. The others build both from Deps (UNVERIFIED against real APIs).
     student_serving: Literal["injected", "sandbox_cpu", "endpoint"] = "injected"
     student_sandbox_image: str | None = None  # sandbox_cpu: image with pip (default: sandbox_image)
-    student_batch_size: int = 8  # sandbox_cpu: prompts per generation job
-    student_concurrency: int = 4  # sandbox_cpu: parallel generation jobs
+    student_batch_size: int = Field(default=2, ge=1)  # sandbox_cpu: prompts per generation job
+    # sandbox_cpu: parallel generation jobs (the beta limit is 50 operations in flight in total)
+    student_concurrency: int = Field(default=10, ge=1, le=20)
+    student_max_new_tokens: int = Field(default=160, ge=16)  # sandbox_cpu: per sample (S4 recipe)
     student_endpoint: EndpointSpec | None = None  # endpoint: explicit spec incl. hourly price
 
     def extra_tasks(self) -> int:
@@ -257,6 +269,8 @@ class FineTuner(Protocol):
         seed: int | None = None,
     ) -> str: ...
 
+    def get(self, job_id: str) -> JobInfo: ...
+
     def poll(
         self,
         job_id: str,
@@ -264,6 +278,8 @@ class FineTuner(Protocol):
         interval_s: float = ...,
         timeout_s: float | None = None,
         on_update: Callable[[JobInfo], None] | None = None,
+        on_error: Callable[[BaseException], None] | None = None,
+        transient_error_grace_s: float = ...,
     ) -> JobInfo: ...
 
     def checkpoints(self, job_id: str) -> list[CheckpointInfo]: ...
@@ -777,22 +793,29 @@ class Pipeline:
             raise ConfigRefusal(f"student_serving={mode!r} but Deps already has serving factories")
         base_model = self.config.require_model("student")
         if mode == "sandbox_cpu":
-            from distillery.sandbox_student import SandboxCpuStudent
+            from distillery.sandbox_student import SandboxCpuStudent, ServingImages
 
             sandbox, bridge = deps.sandbox, deps.bridge
             image = self.cfg.student_sandbox_image or deps.sandbox_image
-            batch, conc = self.cfg.student_batch_size, self.cfg.student_concurrency
             if sandbox is None:
                 raise ConfigRefusal("student_serving='sandbox_cpu' needs Deps.sandbox")
+            # ONE heavy image (pip + weights) for the base and every student of this run
+            images = ServingImages(
+                sandbox, image, bridge, base_model=base_model, on_image=self._record_serving_image
+            )
+            kw: dict[str, Any] = {
+                "batch_size": self.cfg.student_batch_size,
+                "concurrency": self.cfg.student_concurrency,
+                "max_new_tokens": self.cfg.student_max_new_tokens,
+                "images": images,
+            }
             self.deps = replace(
                 deps,
                 student_factory=lambda trained: SandboxCpuStudent.for_artifact(
-                    sandbox, image, bridge, trained, base_model=base_model,
-                    batch_size=batch, concurrency=conc,
+                    sandbox, image, bridge, trained, base_model=base_model, **kw
                 ),
                 base_factory=lambda: SandboxCpuStudent(
-                    sandbox, image, bridge, base_model=base_model,
-                    batch_size=batch, concurrency=conc,
+                    sandbox, image, bridge, base_model=base_model, **kw
                 ),
             )  # fmt: skip
         else:
@@ -821,6 +844,14 @@ class Pipeline:
                 student_factory=endpoint_student_factory,
                 base_factory=endpoint_student.make_base_factory(deps.endpoint, spec, self.ledger),
             )
+
+    def _record_serving_image(self, kind: str, image: str) -> None:
+        """Provenance of every sandbox image built for serving (they are what ran the models)."""
+        self.store.add_experiment(
+            self.run_id,
+            "serving_image",
+            {"kind": kind, "image": image, "student": self.config.require_model("student")},
+        )
 
     def _preconditions(self) -> None:
         self._resolve_serving()
@@ -1140,7 +1171,11 @@ class Pipeline:
                 )
             return {
                 "base_dev_acc": acc,
-                "counters": {"dev_n": len(dev), "base_unparseable": scores.unparseable},
+                "counters": {
+                    "dev_n": len(dev),
+                    "base_unparseable": scores.unparseable,
+                    **_generation_error_counter("base", server),
+                },
             }
 
         return self._stage("headroom", {"max_acc": self.cfg.headroom_max_base_acc}, ["split"], fn)
@@ -1269,19 +1304,27 @@ class Pipeline:
                 val_p, ("\n".join(canonical_json(x) for x in val_rows) + "\n").encode("utf-8")
             )
             orphans = self._cancel_orphans(r)
+            existing = self._adoptable_job(r)  # a paid job an earlier attempt left ambiguous
             self.ledger.preflight(estimate)  # refuse BEFORE any upload/job
-            train_id, val_id = ft.upload(train_p), ft.upload(val_p)
             job_ref: list[str] = []
 
             def create() -> str:
-                jid = ft.create_job(
-                    base_model, train_id, val_id, self.cfg.hyperparameters,
-                    suffix=f"distillery-{self.run_id}-r{r}"[:64], seed=self.cfg.seed,
-                )  # fmt: skip
+                if existing is not None:
+                    jid = existing
+                    self.say(f"[finetune r{r}] adopting job {jid} left by an earlier attempt")
+                    self.store.add_experiment(
+                        self.run_id, "finetune_job_adopted", {"round": r, "job_id": jid}
+                    )
+                else:
+                    train_id, val_id = ft.upload(train_p), ft.upload(val_p)
+                    jid = ft.create_job(
+                        base_model, train_id, val_id, self.cfg.hyperparameters,
+                        suffix=f"distillery-{self.run_id}-r{r}"[:64], seed=self.cfg.seed,
+                    )  # fmt: skip
+                    self.store.add_experiment(
+                        self.run_id, "finetune_job_started", {"round": r, "job_id": jid}
+                    )
                 job_ref.append(jid)
-                self.store.add_experiment(
-                    self.run_id, "finetune_job_started", {"round": r, "job_id": jid}
-                )
                 return jid
 
             outcome = "aborted"
@@ -1293,6 +1336,10 @@ class Pipeline:
                             interval_s=self.cfg.poll_interval_s,
                             timeout_s=self.cfg.poll_timeout_s,
                             on_update=lambda i: self.say(f"[finetune r{r}] {i.status}"),
+                            on_error=lambda e: self.say(
+                                f"[finetune r{r}] status check failed ({type(e).__name__}); "
+                                "the job keeps running, still polling"
+                            ),
                         )
                     )
                     cks = ft.checkpoints(handle.job_id)
@@ -1338,6 +1385,26 @@ class Pipeline:
             [upstream],
             fn,
         )  # fmt: skip
+
+    def _adoptable_job(self, r: int) -> str | None:
+        """A job of this round that an earlier attempt aborted but may not have managed to cancel
+        (e.g. the network died mid-poll and the cancel failed too): if it is still active or
+        succeeded, use it rather than paying for a second one. A failed status check raises: the
+        wrong guess would create a duplicate billable job."""
+        started: list[str] = []
+        outcome: dict[str, str] = {}
+        for name, data in self.store.list_experiments(self.run_id):
+            if name == "finetune_job_started" and data.get("round") == r:
+                started.append(str(data["job_id"]))
+            elif name == "finetune_job_closed":
+                outcome[str(data["job_id"])] = str(data.get("outcome"))
+        for jid in reversed(started):
+            if outcome.get(jid) != "aborted":
+                continue
+            status = self.deps.finetune.get(jid).status
+            if status == "succeeded" or status in ACTIVE_STATUSES:
+                return jid
+        return None
 
     def _cancel_orphans(self, r: int) -> tuple[int, int]:
         """Cancel jobs of this round that were started but never closed (e.g. process killed),
@@ -1407,6 +1474,7 @@ class Pipeline:
                     "dev_n": len(dev),
                     "dev_failures": len(failures),
                     "dev_unparseable": scores.unparseable,
+                    **_generation_error_counter("student", server),
                 },
             }
 
@@ -1596,7 +1664,9 @@ class Pipeline:
                 "report": rep.to_json(),
                 "candidate_round": r,
                 "counters": {"heldout_n": rep.n,
-                             **{f"unparseable_{m}": s.unparseable for m, s in rep.scores.items()}},
+                             **{f"unparseable_{m}": s.unparseable for m, s in rep.scores.items()},
+                             **_generation_error_counter("student", server),
+                             **_generation_error_counter("base", base_server)},
             }  # fmt: skip
 
         return self._stage(
@@ -1607,6 +1677,18 @@ class Pipeline:
         )
 
     # ---- report ------------------------------------------------------------
+    def _cost_basis(self) -> dict[str, Any]:
+        """Every cost figure here is an estimate; say so, with the price source(s) in use."""
+        used = cost_by_model(self.store, self.run_id)
+        sources = {m: self.config.prices[m].source for m in used if m in self.config.prices}
+        names = "; ".join(sorted(set(sources.values()))) or "no priced model was used"
+        return {
+            "basis": "ESTIMATES, not billed amounts: measured token counts x the configured "
+            f"price table (price source: {names}); the fine-tune line is the operator-supplied "
+            "ceiling; sandbox compute is not priced",
+            "price_sources": sources,
+        }
+
     def _build_report(
         self,
         split: Mapping[str, Any],
@@ -1674,6 +1756,7 @@ class Pipeline:
             "llm_errors_by_purpose": dict(llm_errors),
             "llm_attempt_counters": dict(retries),
             "cost": {
+                **self._cost_basis(),
                 "llm_by_model": cost_by_model(self.store, self.run_id),
                 "run_total_usd": self.ledger.spent(),
                 "run_cap_usd": self.ledger.run_cap,

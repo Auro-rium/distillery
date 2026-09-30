@@ -34,6 +34,7 @@ from distillery.orchestrator import (
     stage_rows,
 )
 from distillery.pipeline_fakes import build_dry_run, dry_run_id
+from distillery.sandbox import Sandbox
 from distillery.sandbox_executor import AsyncBridge, SandboxExecutor
 from distillery.store import Store, atomic_write_bytes
 
@@ -82,11 +83,26 @@ def _store_for(root: Path, run_id: str) -> Store:
     return Store(root / "dry-runs" if run_id.startswith(DRY_PREFIX) else root)
 
 
-def make_live_deps(config: Config, pcfg: PipelineConfig, bridge: AsyncBridge) -> Deps:
-    """Real wiring. # UNVERIFIED: none of this has run against live services (no credentials).
+SANDBOX_BASE_IMAGE = "docker://python:3.12-slim"  # the ref the S2/S4 spikes verified (has sqlite)
+EXECUTOR_CONCURRENCY = 10  # SQL-runner jobs in flight (beta limit: 50 operations in total)
 
-    The student serving path is undecided (spike S4), so ``student_factory`` is None and the
-    pipeline refuses to start before spending.
+
+def make_live_deps(
+    config: Config,
+    pcfg: PipelineConfig,
+    bridge: AsyncBridge,
+    *,
+    env: Mapping[str, str] | None = None,
+    sandbox: Sandbox | None = None,
+) -> Deps:
+    """Real wiring: Token Factory for inference and fine-tuning, Nebius Sandboxes for everything
+    that is executed (SQL runner, base and student serving on CPU).
+
+    Refuses before touching any network when the key, base URL or sandbox project id is missing.
+    The student/base factories are left ``None`` on purpose: the live pipeline config asks for
+    ``student_serving="sandbox_cpu"`` and the pipeline builds them (one shared heavy image).
+    ``sandbox`` is injectable for offline tests. UNVERIFIED live until the first real run: this
+    exact function against the real fine-tune API.
     """
     import openai
 
@@ -94,22 +110,32 @@ def make_live_deps(config: Config, pcfg: PipelineConfig, bridge: AsyncBridge) ->
     from distillery.llm import make_openai_client
     from distillery.sandbox import ContreeSandbox
 
-    key = config.nebius_api_key
+    e: Mapping[str, str] = os.environ if env is None else env
+    key, project = config.nebius_api_key, config.nebius_project_id
     if key is None or not config.nebius_base_url:
         raise ConfigRefusal("NEBIUS_API_KEY and NEBIUS_BASE_URL are required for a live run")
-    sandbox_url = os.environ.get("DISTILLERY_SANDBOX_URL")
-    image = os.environ.get("DISTILLERY_SANDBOX_IMAGE")
-    if not sandbox_url or not image:
+    if project is None:
         raise ConfigRefusal(
-            "DISTILLERY_SANDBOX_URL and DISTILLERY_SANDBOX_IMAGE (an image with python3; a "
-            "Phase 0 item) are required for a live run"
+            "NEBIUS_AI_PROJECT (or NEBIUS_PROJECT_ID) is required for a live run: the Sandboxes "
+            "API rejects requests without a Project header"
         )
     secret = key.get_secret_value()
-    sandbox = ContreeSandbox(lambda: secret, sandbox_url)
+    if sandbox is None:
+        sandbox = ContreeSandbox(
+            lambda: secret,
+            e.get("DISTILLERY_SANDBOX_URL") or None,  # None = the SDK default base URL
+            project_id=project.get_secret_value(),
+        )
+    image = bridge.run(
+        sandbox.ensure_image(e.get("DISTILLERY_SANDBOX_IMAGE") or SANDBOX_BASE_IMAGE)
+    )
     return Deps(
         transport=make_openai_client(config.nebius_base_url, secret),
-        finetune=FineTuneClient(openai.OpenAI(base_url=config.nebius_base_url, api_key=secret)),
-        executor=SandboxExecutor(sandbox, image, bridge=bridge),
+        # max_retries=0: FineTuneClient owns the retry policy; create_job must never be retried
+        finetune=FineTuneClient(
+            openai.OpenAI(base_url=config.nebius_base_url, api_key=secret, max_retries=0)
+        ),
+        executor=SandboxExecutor(sandbox, image, bridge=bridge, concurrency=EXECUTOR_CONCURRENCY),
         bridge=bridge,
         student_factory=None,
         sandbox=sandbox,
@@ -158,7 +184,12 @@ def _summary(report: Mapping[str, Any], out: Callable[[str], None]) -> None:
     }
     out("drop/error counters: " + json.dumps({s: c for s, c in drops.items() if c}, sort_keys=True))
     cost = report["cost"]
-    out(f"llm+run spend usd: {cost['run_total_usd']:.6f} (cap {cost['run_cap_usd']})")
+    out(
+        f"llm+run spend usd (ESTIMATE, not a billed amount): {cost['run_total_usd']:.6f} "
+        f"(cap {cost['run_cap_usd']})"
+    )
+    if cost.get("basis"):
+        out(f"  {cost['basis']}")
     out(f"student cost per 1k tasks: {cost['cost_per_1k_tasks']['student']}")
     if report.get("dry_run"):
         out(DRY_RUN_LABEL)
@@ -207,6 +238,9 @@ def _cmd_run(
     pcfg = PipelineConfig(
         scale=SCALES[args.scale],
         dry_run=dry,
+        # the real live path serves base and student on sandbox CPU; a dry run or a caller-supplied
+        # Deps (tests, library use) brings its own serving factories
+        student_serving="injected" if dry or deps_factory is not None else "sandbox_cpu",
         seed=args.seed,
         max_rounds=args.max_rounds,
         headroom_max_base_acc=args.max_base_acc,
@@ -224,7 +258,7 @@ def _cmd_run(
             elif deps_factory is not None:
                 deps = deps_factory(config, pcfg, bridge)
             else:
-                deps = make_live_deps(config, pcfg, bridge)
+                deps = make_live_deps(config, pcfg, bridge, env=env)
             report = Pipeline(pcfg, config, deps, store, run_id, say=out).run()
     except (ConfigRefusal, ConfigError) as exc:
         out(f"refused: {exc}")
@@ -253,7 +287,11 @@ def _cmd_status(
         for s in stage_rows(store, args.run):
             err = f"  error: {s['error']}" if s["error"] else ""
             out(f"{s['stage']:<22} {s['status']:<9} {s['updated_at']}{err}")
-        out(f"spend usd: {store.total_spend(args.run):.6f}")
+        out(
+            f"spend usd (ESTIMATE from the configured price table, see report config.prices for "
+            f"the source; the fine-tune part is the operator's ceiling): "
+            f"{store.total_spend(args.run):.6f}"
+        )
         for model, c in cost_by_model(store, args.run).items():
             out(f"  {model}: calls={c['calls']} usd={c['usd']:.6f}")
     finally:

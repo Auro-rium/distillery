@@ -26,6 +26,9 @@ MAX_CONCURRENCY = 40  # our ceiling; the documented beta cap is 50 in-flight ope
 BETA_INFLIGHT_CAP = 50
 DEFAULT_BASE_URL = "https://api.tokenfactory.nebius.com/sandboxes"
 _TIMEOUT_GRACE_S = 5.0
+# The SDK truncates stdout/stderr at 65535 bytes by default, which would cut a JSON result set
+# mid-way (the S4 spike already needed 400000). Ask for more explicitly on every run.
+TRUNCATE_OUTPUT_AT = 1_000_000
 
 FileSource = bytes | str | Path
 
@@ -98,6 +101,11 @@ class Sandbox(Protocol):
     async def run_batch(
         self, image_ref: str, jobs: Sequence[Job], concurrency: int = MAX_CONCURRENCY
     ) -> list[RunResult]: ...
+
+    async def ensure_image(self, ref: str) -> str:
+        """Import ``ref`` (e.g. ``docker://python:3.12-slim``) if needed; returns the image ref
+        to pass to ``run``/``branch``."""
+        ...
 
     def lineage(self) -> list[tuple[str, str | None, str]]:
         """``(uuid, parent_uuid, label)`` for every image this sandbox produced/used."""
@@ -280,6 +288,9 @@ class FakeSandbox(_SandboxBase):
             self._note_root(ref)
         return ref
 
+    async def ensure_image(self, ref: str) -> str:
+        return self._resolve(ref)
+
     @staticmethod
     def _child_uuid(parent: str, job: Job, disposable_flag: bool) -> str:
         h = hashlib.sha256()
@@ -368,8 +379,10 @@ class ContreeSandbox(_SandboxBase):
         project_id: str | None = None,
         max_inflight: int = BETA_INFLIGHT_CAP,
         sdk: Any | None = None,
+        truncate_output_at: int = TRUNCATE_OUTPUT_AT,
     ) -> None:
         super().__init__()
+        self._truncate_output_at = truncate_output_at
         self._sdk = sdk
         self._api_key_getter = api_key_getter  # key is fetched only at connect time
         self._base_url = base_url or DEFAULT_BASE_URL
@@ -381,11 +394,15 @@ class ContreeSandbox(_SandboxBase):
 
     def _get_sdk(self) -> Any:
         if self._sdk is None:
-            project = self._project_id or os.environ.get("NEBIUS_AI_PROJECT")
+            project = (
+                self._project_id
+                or os.environ.get("NEBIUS_PROJECT_ID")  # name used by the official docs/SDK
+                or os.environ.get("NEBIUS_AI_PROJECT")
+            )
             if not project:
                 raise SandboxError(
-                    "no Sandboxes project id: set NEBIUS_AI_PROJECT (the API rejects requests "
-                    "without a Project header)"
+                    "no Sandboxes project id: set NEBIUS_PROJECT_ID (or NEBIUS_AI_PROJECT); "
+                    "the API rejects requests without a Project header"
                 )
             sdk_mod = importlib.import_module("contree_sdk")
             auth_mod = importlib.import_module("contree_sdk.auth")
@@ -417,7 +434,10 @@ class ContreeSandbox(_SandboxBase):
             raise ValueError("exactly one of shell / command is required")
         sdk = self._get_sdk()
         self._note_root(image_ref)
-        kwargs: dict[str, Any] = {"disposable": disposable}
+        kwargs: dict[str, Any] = {
+            "disposable": disposable,
+            "truncate_output_at": self._truncate_output_at,
+        }
         if shell is not None:
             kwargs["shell"] = shell
         else:
@@ -426,20 +446,46 @@ class ContreeSandbox(_SandboxBase):
         if stdin is not None:
             kwargs["stdin"] = stdin
         if files:
-            kwargs["files"] = dict(files)
+            # absolute destinations, as the docs' "file.sh -> /file.sh" rule describes
+            kwargs["files"] = {"/" + str(dest).lstrip("/"): src for dest, src in files.items()}
         if timeout is not None:
             kwargs["timeout"] = timeout
+        contree_error, timed_out_error = _sdk_error_types()
         async with self._global_sem:
-            image = await sdk.images.use(image_ref)  # no API call per getting-started.md
             backstop = None if timeout is None else timeout + _TIMEOUT_GRACE_S
             try:
+                image = await sdk.images.use(image_ref)  # no API call per getting-started.md
                 res = await asyncio.wait_for(image.run(**kwargs), timeout=backstop)
             except TimeoutError:
                 raise SandboxTimeoutError(f"run exceeded timeout={timeout}s") from None
+            except timed_out_error as exc:
+                raise SandboxTimeoutError(_short(exc)) from exc
+            except contree_error as exc:
+                raise SandboxError(_short(exc)) from exc
         uuid = None if res.uuid is None else str(res.uuid)
         if uuid is not None and not disposable:
             self._note_child(image_ref, uuid, _label(shell, command, args))
         return RunResult(_text(res.stdout), _text(res.stderr), int(res.exit_code), uuid)
+
+
+def _sdk_error_types() -> tuple[type[BaseException], type[BaseException]]:
+    """``(ContreeError, OperationTimedOutError)``; without the SDK nothing is translated.
+
+    ``except ()`` catches nothing, and a class that never gets raised is a safe stand-in.
+    """
+    try:
+        mod = importlib.import_module("contree_sdk.sdk.exceptions")
+        return mod.ContreeError, mod.OperationTimedOutError
+    except (ImportError, AttributeError):  # stub SDK in tests
+        return _Never, _Never
+
+
+class _Never(BaseException):  # sentinel that is never raised
+    pass
+
+
+def _short(exc: BaseException, limit: int = 300) -> str:
+    return f"{type(exc).__name__}: {str(exc)[:limit]}"
 
 
 def _text(value: Any) -> str:

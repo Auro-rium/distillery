@@ -8,6 +8,7 @@ from typing import Any
 import pytest
 
 from distillery.sandbox import (
+    TRUNCATE_OUTPUT_AT,
     ContreeSandbox,
     FakeExecution,
     FakeSandbox,
@@ -142,7 +143,11 @@ def test_contree_sandbox_maps_sdk_calls() -> None:
     assert "secret-key" not in repr(sb)
     uuid = run(sb.branch("alpine:latest", "pip install x"))
     assert uuid == "u-1"
-    assert calls[0] == {"disposable": False, "shell": "pip install x"}
+    assert calls[0] == {
+        "disposable": False,
+        "shell": "pip install x",
+        "truncate_output_at": TRUNCATE_OUTPUT_AT,
+    }
     assert sb.lineage() == [
         ("alpine:latest", None, "root:alpine:latest"),
         ("u-1", "alpine:latest", "pip install x"),
@@ -185,6 +190,7 @@ def _install_stub_sdk(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
 
 def test_contree_sandbox_builds_iam_config_with_project(monkeypatch: pytest.MonkeyPatch) -> None:
     seen = _install_stub_sdk(monkeypatch)
+    monkeypatch.delenv("NEBIUS_PROJECT_ID", raising=False)
     monkeypatch.setenv("NEBIUS_AI_PROJECT", "project-e00abc")
     sb = ContreeSandbox(lambda: "secret-key", None)
     sb._get_sdk()
@@ -200,14 +206,24 @@ def test_contree_sandbox_builds_iam_config_with_project(monkeypatch: pytest.Monk
 def test_contree_sandbox_explicit_project_and_url(monkeypatch: pytest.MonkeyPatch) -> None:
     seen = _install_stub_sdk(monkeypatch)
     monkeypatch.delenv("NEBIUS_AI_PROJECT", raising=False)
+    monkeypatch.delenv("NEBIUS_PROJECT_ID", raising=False)
     ContreeSandbox(lambda: "k", "https://x.invalid", project_id="p1")._get_sdk()
     assert seen["auth"]["project_id"] == "p1" and seen["auth"]["base_url"] == "https://x.invalid"
+
+
+def test_contree_sandbox_reads_official_env_name_first(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen = _install_stub_sdk(monkeypatch)
+    monkeypatch.setenv("NEBIUS_PROJECT_ID", "official")
+    monkeypatch.setenv("NEBIUS_AI_PROJECT", "legacy")
+    ContreeSandbox(lambda: "k", None)._get_sdk()
+    assert seen["auth"]["project_id"] == "official"
 
 
 def test_contree_sandbox_refuses_without_project(monkeypatch: pytest.MonkeyPatch) -> None:
     _install_stub_sdk(monkeypatch)
     monkeypatch.delenv("NEBIUS_AI_PROJECT", raising=False)
-    with pytest.raises(SandboxError, match="NEBIUS_AI_PROJECT"):
+    monkeypatch.delenv("NEBIUS_PROJECT_ID", raising=False)
+    with pytest.raises(SandboxError, match="NEBIUS_PROJECT_ID"):
         ContreeSandbox(lambda: "k", None)._get_sdk()
 
 
@@ -221,3 +237,64 @@ def test_contree_sandbox_ensure_image_imports_via_oci() -> None:
 
     sb = ContreeSandbox(lambda: "k", None, project_id="p", sdk=SimpleNamespace(images=Images()))
     assert run(sb.ensure_image("python:3.12-slim")) == "u-9" and seen == ["python:3.12-slim"]
+
+
+def test_contree_sandbox_maps_files_to_absolute_paths_and_stdin() -> None:
+    calls: list[dict[str, Any]] = []
+
+    class Image:
+        async def run(self, **kw: Any) -> Any:
+            calls.append(kw)
+            return SimpleNamespace(stdout=None, stderr=None, exit_code=0, uuid=None)
+
+    class Images:
+        async def use(self, ref: str) -> Image:
+            return Image()
+
+    sb = ContreeSandbox(lambda: "k", None, project_id="p", sdk=SimpleNamespace(images=Images()))
+    run(sb.run("img", shell="true", files={"work/gen.py": b"x", "/models/a": b"y"}, stdin="{}"))
+    assert calls[0]["files"] == {"/work/gen.py": b"x", "/models/a": b"y"}
+    assert calls[0]["stdin"] == "{}" and calls[0]["truncate_output_at"] >= 400_000
+
+
+def _sdk_raising(exc: BaseException) -> Any:
+    class Image:
+        async def run(self, **kw: Any) -> Any:
+            raise exc
+
+    class Images:
+        async def use(self, ref: str) -> Image:
+            return Image()
+
+    return SimpleNamespace(images=Images())
+
+
+def test_sdk_operation_timeout_becomes_sandbox_timeout_and_is_isolated_in_batches() -> None:
+    from uuid import uuid4
+
+    from contree_sdk.sdk.exceptions.operation import OperationTimedOutError
+
+    sdk = _sdk_raising(OperationTimedOutError(operation_uuid=uuid4()))
+    sb = ContreeSandbox(lambda: "k", None, project_id="p", sdk=sdk)
+    with pytest.raises(SandboxTimeoutError):
+        run(sb.run("img", shell="x"))
+    res = run(sb.run_batch("img", [Job(shell="a"), Job(shell="b")]))
+    assert all(r.timed_out and r.exit_code == -1 and r.error for r in res)
+
+
+def test_sdk_errors_become_sandbox_errors_without_leaking_siblings() -> None:
+    from contree_sdk.sdk.exceptions import ContreeError
+    from contree_sdk.sdk.exceptions.api import ApiStatusCodeError
+
+    sdk = _sdk_raising(ApiStatusCodeError(status=500, error="boom"))
+    sb = ContreeSandbox(lambda: "k", None, project_id="p", sdk=sdk)
+    with pytest.raises(SandboxError, match="ApiStatusCodeError"):
+        run(sb.run("img", shell="x"))
+    res = run(sb.run_batch("img", [Job(shell="a"), Job(shell="b")]))
+    assert [r.ok for r in res] == [False, False] and not any(r.timed_out for r in res)
+    assert issubclass(ApiStatusCodeError, ContreeError)
+
+
+def test_fake_sandbox_ensure_image_is_identity() -> None:
+    sb: Sandbox = FakeSandbox()
+    assert run(sb.ensure_image("docker://python:3.12-slim")) == "docker://python:3.12-slim"

@@ -675,3 +675,187 @@ def test_report_artifact_records_served_model_names() -> None:
     out = _with_serving({"job_id": "j"}, _trained_art("base/x", "ft-served"), S(), B())
     assert out["served_model"] == "ft-served" and out["served_base_model"] == "base-served"
     assert out["trained_base_model"] == "base/x" and out["trained_checkpoint_name"] == "ft-served"
+
+
+# ---- live sandbox-CPU serving wiring (offline; FakeSandbox stands in for Nebius) -----------------
+
+
+def _gen_handler(counts: dict[str, int]) -> Callable[[Job, dict[str, bytes]], FakeExecution]:
+    def handler(job: Job, fs: dict[str, bytes]) -> FakeExecution:
+        shell = job.shell or ""
+        if "pip install" in shell:
+            counts["pip"] = counts.get("pip", 0) + 1
+            return FakeExecution()
+        if "gen.py" in shell:
+            n = len(json.loads(str(job.stdin))["messages_batch"])
+            res = {"results": [{"text": "SELECT 1", "error": None} for _ in range(n)], "n": n}
+            return FakeExecution("DISTILLERY_OUT:" + json.dumps(res) + "\n")
+        counts["layer"] = counts.get("layer", 0) + 1
+        return FakeExecution()
+
+    return handler
+
+
+def _sandbox_cpu_pipe(
+    tmp_path: Path, bridge: AsyncBridge, counts: dict[str, int], **cfg_kw: Any
+) -> tuple[Pipeline, Store]:
+    dry = build_dry_run(NANO, bridge, student_serving="sandbox_cpu", **cfg_kw)
+    dry.deps.student_factory = dry.deps.base_factory = None
+    dry.deps.sandbox = FakeSandbox(_gen_handler(counts))
+    pipe, _dr, store = make(tmp_path, bridge, dry=dry)
+    return pipe, store
+
+
+def test_sandbox_cpu_serving_builds_the_heavy_image_once_for_base_and_student(
+    tmp_path: Path, bridge: AsyncBridge
+) -> None:
+    from distillery.finetune import DownloadedFile, TrainedArtifact
+
+    counts: dict[str, int] = {}
+    pipe, store = _sandbox_cpu_pipe(tmp_path, bridge, counts)
+    pipe._resolve_serving()
+    store.create_run(pipe.run_id)
+    student_model = pipe.config.require_model("student")
+    d = tmp_path / "ckpt"
+    d.mkdir()
+    (d / "adapter_config.json").write_text(json.dumps({"base_model_name_or_path": student_model}))
+    (d / "adapter_model.safetensors").write_bytes(b"w")
+    trained = TrainedArtifact(
+        "j", "c", student_model, None,
+        tuple(DownloadedFile(p.name, p, "0" * 64) for p in sorted(d.iterdir())),
+    )  # fmt: skip
+    assert pipe.deps.base_factory is not None and pipe.deps.student_factory is not None
+    for _ in range(2):  # headroom, then final_eval, each builds its own server objects
+        assert pipe.deps.base_factory().generate([[{"role": "user", "content": "q"}]]) == [
+            "SELECT 1"
+        ]
+        assert pipe.deps.student_factory(trained).generate([[{"role": "user", "content": "q"}]])
+    assert counts == {"pip": 1, "layer": 1}  # one pip+weights build, one adapter layer
+    built = [d for n, d in store.list_experiments(pipe.run_id) if n == "serving_image"]
+    assert [b["kind"] for b in built] == ["deps", "adapter"] and all(b["image"] for b in built)
+
+
+def test_sandbox_cpu_defaults_are_the_measured_recipe() -> None:
+    from distillery.orchestrator import PipelineConfig
+
+    cfg = PipelineConfig()
+    assert cfg.student_max_new_tokens == 160 and cfg.student_batch_size <= 4
+    assert 1 <= cfg.student_concurrency <= 20
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError):
+        PipelineConfig(student_concurrency=21)
+
+
+class _WithErrors:
+    """StudentServer wrapper reporting sandbox generation errors like SandboxCpuStudent does."""
+
+    def __init__(self, inner: Any, errors: int) -> None:
+        self._inner, self.generation_errors = inner, errors
+
+    def generate(self, batch: Any) -> list[str]:
+        return list(self._inner.generate(batch))
+
+    def close(self) -> None:
+        self._inner.close()
+
+
+def test_generation_errors_are_counted_per_stage_in_the_report(
+    tmp_path: Path, bridge: AsyncBridge
+) -> None:
+    pipe, dr, _s = make(tmp_path, bridge)
+    real_student, real_base = dr.deps.student_factory, dr.deps.base_factory
+    assert real_student is not None and real_base is not None
+    dr.deps.student_factory = lambda t: _WithErrors(real_student(t), 2)
+    dr.deps.base_factory = lambda: _WithErrors(real_base(), 1)
+    counters = pipe.run()["counters"]
+    assert counters["headroom"]["base_generation_errors"] == 1
+    assert counters["dev_eval_r1"]["student_generation_errors"] == 2
+    assert counters["final_eval"]["student_generation_errors"] == 2
+    assert counters["final_eval"]["base_generation_errors"] == 1
+
+
+def test_servers_without_generation_errors_add_no_counter_keys(
+    reference: dict[str, Any],
+) -> None:
+    for cs in reference["report"]["counters"].values():
+        assert not [k for k in cs if k.endswith("generation_errors")]
+
+
+def test_report_cost_says_it_is_an_estimate_and_names_the_price_source(
+    reference: dict[str, Any],
+) -> None:
+    cost = reference["report"]["cost"]
+    assert "ESTIMATE" in cost["basis"] and "FAKE dry-run price" in cost["basis"]
+    assert cost["price_sources"]["fake-planner"] == "FAKE dry-run price, not a real price"
+    assert "unavailable" in STUDENT_COST_UNAVAILABLE and "sandbox" in STUDENT_COST_UNAVAILABLE
+
+
+# ---- a job left ambiguous by a failed cancel is adopted on resume, never paid for twice ----------
+
+
+def _outage_first_attempt(tmp_path: Path, bridge: AsyncBridge, **kw: Any) -> tuple[Store, str]:
+    """Run 1: polling dies with a connection error and the cancel fails too (the job lives on)."""
+    import httpx2
+    import openai
+
+    pipe, dr, store = make(tmp_path, bridge, **kw)
+    down = openai.APIConnectionError(request=httpx2.Request("GET", "https://x.invalid"))
+
+    def poll_dies(*_a: Any, **_k: Any) -> Any:
+        raise down
+
+    def cancel_dies(_job_id: str) -> Any:
+        raise down
+
+    dr.finetune.poll = poll_dies  # type: ignore[method-assign]
+    dr.finetune.cancel = cancel_dies  # type: ignore[method-assign]
+    with pytest.raises(openai.APIConnectionError):
+        pipe.run()
+    (jid,) = dr.finetune.created
+    closed = [d for n, d in store.list_experiments("dry-t") if n == "finetune_job_closed"]
+    assert closed[-1]["outcome"] == "aborted"
+    return store, jid
+
+
+def _resume(store: Store, bridge: AsyncBridge, **kw: Any) -> tuple[Pipeline, Any, dict[str, Any]]:
+    dr = build_dry_run(NANO, bridge, **kw)
+    pipe = Pipeline(dr.pipeline_cfg, dr.config, dr.deps, store, "dry-t", say=lambda _s: None)
+    return pipe, dr, pipe.run()
+
+
+@pytest.mark.parametrize("status", ["succeeded", "running"])
+def test_resume_adopts_the_job_instead_of_creating_a_second_one(
+    tmp_path: Path, bridge: AsyncBridge, status: str
+) -> None:
+    from distillery.orchestrator import cost_by_model
+
+    store, jid = _outage_first_attempt(tmp_path, bridge, finetune_estimate_usd=1.5)
+    dr2 = build_dry_run(NANO, bridge, finetune_estimate_usd=1.5)
+    dr2.finetune.job_status[jid] = status
+    pipe2 = Pipeline(dr2.pipeline_cfg, dr2.config, dr2.deps, store, "dry-t", say=lambda _s: None)
+    pipe2.run()
+    assert not [s for s in dr2.finetune.suffixes.values() if s.endswith("-r1")]  # no new r1 job
+    assert not [
+        p for p in dr2.finetune.uploads.values() if "round1" in str(p)
+    ]  # nothing re-uploaded
+    adopted = [
+        d["job_id"] for n, d in store.list_experiments("dry-t") if n == "finetune_job_adopted"
+    ]
+    assert adopted == [jid]
+    expected = [d for n, d in store.list_experiments("dry-t") if n == "expected_artifact"]
+    assert expected[0]["job_id"] == jid
+    llm_usd = sum(m["usd"] for m in cost_by_model(store, "dry-t").values())
+    finetune_usd = store.total_spend("dry-t") - llm_usd
+    assert finetune_usd == pytest.approx(1.5 * len(expected))  # once per completed round
+
+
+@pytest.mark.parametrize("status", ["cancelled", "failed"])
+def test_resume_does_not_adopt_a_dead_job(tmp_path: Path, bridge: AsyncBridge, status: str) -> None:
+    store, jid = _outage_first_attempt(tmp_path, bridge)
+    dr2 = build_dry_run(NANO, bridge)
+    dr2.finetune.job_status[jid] = status
+    pipe2 = Pipeline(dr2.pipeline_cfg, dr2.config, dr2.deps, store, "dry-t", say=lambda _s: None)
+    pipe2.run()
+    assert dr2.finetune.created  # a fresh job was created for round 1
+    assert not [d for n, d in store.list_experiments("dry-t") if n == "finetune_job_adopted"]

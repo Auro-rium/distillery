@@ -76,3 +76,15 @@ def test_verify_admin_token() -> None:
     assert not verify_admin_token("", SecretStr(""))
     c = load_config({"DISTILLERY_ADMIN_TOKEN": "t"})
     assert c.verify_admin_token("t") and not c.verify_admin_token("u")
+
+
+def test_project_id_for_sandboxes_is_a_secret_and_official_name_wins() -> None:
+    assert load_config({}).nebius_project_id is None
+    c = load_config({"NEBIUS_AI_PROJECT": "proj-legacy"})
+    assert (
+        c.nebius_project_id is not None and c.nebius_project_id.get_secret_value() == "proj-legacy"
+    )
+    c = load_config({"NEBIUS_PROJECT_ID": "proj-official", "NEBIUS_AI_PROJECT": "proj-legacy"})
+    assert c.nebius_project_id is not None
+    assert c.nebius_project_id.get_secret_value() == "proj-official"
+    assert "proj-official" not in repr(c) + str(c) + c.model_dump_json()

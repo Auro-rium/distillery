@@ -42,6 +42,7 @@ class GateThresholds(BaseModel):
 class Config(BaseModel):
     nebius_api_key: SecretStr | None = None
     nebius_base_url: str | None = None
+    nebius_project_id: SecretStr | None = None  # Sandboxes need it (the `Project` header)
     admin_token: SecretStr | None = None
     run_cap_usd: float = 10.0
     project_cap_usd: float = 40.0
@@ -106,6 +107,7 @@ def load_config(env: Mapping[str, str] | None = None) -> Config:
         for r in ROLES
         if e.get(f"DISTILLERY_MODEL_{r.upper()}")
     }
+    project = e.get("NEBIUS_PROJECT_ID") or e.get("NEBIUS_AI_PROJECT")  # official name first
     prices_file = e.get("DISTILLERY_PRICES_FILE")
     gate_kwargs: dict[str, float | int] = {}
     if e.get("DISTILLERY_SEED"):
@@ -116,6 +118,7 @@ def load_config(env: Mapping[str, str] | None = None) -> Config:
     return Config(
         nebius_api_key=SecretStr(key) if key else None,
         nebius_base_url=e.get("NEBIUS_BASE_URL") or None,
+        nebius_project_id=SecretStr(project) if project else None,
         admin_token=SecretStr(token) if token else None,
         run_cap_usd=_float_env(e, "DISTILLERY_RUN_CAP_USD", 10.0),
         project_cap_usd=_float_env(e, "DISTILLERY_PROJECT_CAP_USD", 40.0),

@@ -351,3 +351,33 @@ def test_paid_job_create_failure_means_nothing_to_cancel() -> None:
         with paid_job(bad, c.cancel):
             pass
     assert fake.cancelled == []
+
+
+# ---- a network outage while polling must not kill (and cancel) a job that is running fine
+def conn_err() -> openai.APIConnectionError:
+    return openai.APIConnectionError(request=_REQ)
+
+
+def test_poll_keeps_polling_through_an_outage_shorter_than_the_grace() -> None:
+    c, fake, sleeps, _ = make()
+    # each get() burns 4 attempts (client-level retries) before the outage reaches poll()
+    fake.job_script = [job("running"), *[conn_err()] * 12, job("running"), job("succeeded")]
+    seen: list[BaseException] = []
+    info = c.poll("job-1", on_error=seen.append)
+    assert info.status == "succeeded"
+    assert len(seen) == 3 and all(isinstance(e, openai.APIConnectionError) for e in seen)
+
+
+def test_poll_gives_up_when_the_outage_outlasts_the_grace() -> None:
+    c, fake, *_ = make()
+    fake.job_script = [job("running"), *[conn_err()] * 400]
+    with pytest.raises(openai.APIConnectionError):
+        c.poll("job-1", transient_error_grace_s=60.0)
+
+
+def test_poll_does_not_tolerate_terminal_http_errors() -> None:
+    c, fake, sleeps, _ = make()
+    fake.job_script = [err(401)]
+    with pytest.raises(openai.APIStatusError):
+        c.poll("job-1")
+    assert sleeps == []
