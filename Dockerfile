@@ -25,6 +25,10 @@ WORKDIR /app
 COPY pyproject.toml README.md LICENSE ./
 COPY src ./src
 COPY docs/fixtures ./docs/fixtures
+# Recorded runs (replay bundles) and deploy-time data (e.g. deploy/prices.json). Both directories
+# always exist in the repo (each holds at least a .gitkeep), so these COPYs cannot fail the build.
+COPY replay/ ./replay/
+COPY deploy/ ./deploy/
 # Editable install so the server finds docs/fixtures and frontend/dist relative to /app.
 # fastapi and uvicorn come from pyproject.toml dependencies.
 RUN pip install -e .
