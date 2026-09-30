@@ -67,3 +67,45 @@ egress is blocked, fallback is uploading weights to Nebius storage from a Nebius
 S4 measured Qwen3-0.6B bf16 on a 4-CPU/~4 GB sandbox: peak RSS 2.09 GB, 7.8 tok/s, ~7.8 s/sample at ~893-token prompts. The Qwen3-1.7B
 benchmark was started, then stopped on the user's instruction and its sandbox operation cancelled (op 01a0f149, status CANCELLED);
 1.7B fit on this sandbox is therefore UNMEASURED (estimate: ~4 GB+, likely OOM-tight). Student for the live end-to-end run: Qwen3-0.6B.
+
+## 2026-09-30: PRE-REGISTRATION for the next (single, gated) run. Written BEFORE any new data is generated or any result seen.
+Everything below is fixed now. Results are reported whatever they are; nothing here is changed after seeing them.
+
+**Why a new run.** Two live runs (tiny n=20, mini n=60) ended REJECT with student 15%/5% vs teacher 95%/100%. Read-only inspection of the
+three real fine-tune jobs found the training was almost a no-op: the pipeline sent only `lora` and `n_epochs`, so the provider defaults
+applied (batch_size 8, learning_rate 1e-5, lora_r 8, lora_alpha 8, packing TRUE, context 8192) and 40/117/138 rows trained for only
+3/6/9 optimizer steps (trained_tokens 115,611 / 336,855 / 396,885). Loss fell slightly (mini r1 train 0.674 to 0.609). The same 3 of
+30 dev tasks were solved after round 1 and after round 2. So those runs do not show that a 0.6B student cannot learn this task; they
+show it was barely trained. Cause is a pipeline defect (hyperparameters implicit), fixed by making them explicit and guarded.
+
+**Diagnostic thresholds (fixed before the diagnostics ran).** (b) student accuracy on its OWN training rows below 50% is "low";
+(c) base-vs-student identical raw-output rate above 90% on dev+held-out is "high". Either one, or a train/eval prompt-template mismatch
+found in (e), means: find and fix the pipeline defect (with a regression test) before any further run.
+
+**Benchmark.**
+- GATE set: sealed, in-distribution held-out, n >= 300. Every family in it also appears in training. Its (question, gold SQL) pairs never
+  appear in train or dev. Same-skeleton overlap (question with literals masked) is ALLOWED but its rate is measured and reported.
+- STRESS set: n ~ 100 from families reserved for it and excluded from train, dev and the gate set. Sealed separately. Reported separately
+  (base/student/teacher). NEVER an input to the gate decision. Reserved families are chosen by the fixed rule
+  `random.Random(777).sample(sorted(all_families), k=2)` (constants STRESS_SEED=777, STRESS_FAMILY_COUNT=2), not by past failures.
+- DEV: 150 tasks (drives round selection only). TRAIN: 1,500 to 2,000 verified rows (target 1,800).
+- GATE RULE, UNCHANGED from the original spec and never to be changed after results: PROMOTE iff the paired-bootstrap lower bound of
+  (student accuracy / teacher accuracy) >= 0.85 AND exact McNemar p < 0.05 against the base model; 10,000 resamples, bootstrap seed 1234.
+- Gold labels come from parameterized templates executed in code (no LLM produces gold). Questions use the hand-written phrasing variants
+  in the templates (no LLM paraphrase). Teacher SQL (Nemotron Super) is kept as training data only if its execution result equals the
+  template gold. The Ultra/Super agreement filter is removed and Ultra is not used in any bulk loop. Consequence accepted in advance:
+  teacher accuracy on the gate set will be below the previous 95%-100%, because tasks the big models could not solve are no longer filtered.
+- Templates: the template list is frozen after the offline audit (`scripts/audit_templates.py`); ORDER BY ties and under-capacity templates
+  are reported by the audit and any template removed is listed here before generation.
+
+**Student and training (no sweep).** Base model Qwen/Qwen3-0.6B, LoRA, served on Nebius Sandbox CPU for both base and student, evaluated in parallel sandboxes.
+lora_r 16, learning_rate 1e-4, n_epochs 3 (as instructed), plus the values that were previously implicit and are now pinned:
+batch_size 16, packing false, lora_alpha 16, lora_dropout 0.0, warmup_ratio 0.0, weight_decay 0.0, max_grad_norm 1.0, context_length 8192.
+Planned steps = ceil(rows / 16) x 3, about 170 to 375 (the pipeline refuses a live fine-tune below 50 planned steps). max_rounds = 1 for the
+gated run (the sandbox-branch tree already exists from `sql-mini-live1`). Fixed seeds: db_seed 0, task seed 1234, bootstrap seed 1234.
+
+**Cost.** No run starts before a pre-flight estimate at REAL console prices is approved by the user. Until console prices are pasted, all
+money figures are labelled ceiling estimates and are not quoted as costs.
+
+**What a REJECT would mean.** If the correctly trained student still fails the gate, that is the result: report it, with the stress-set numbers,
+and do not alter the gate, the sets, the templates or the hyperparameters to chase a PROMOTE.
