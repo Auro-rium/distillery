@@ -8,6 +8,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from distillery.config import Config, load_config
 from distillery.llm import LLMClient, make_openai_client
@@ -27,7 +28,8 @@ class ServerSettings:
     replay_dir: Path = Path("replay")
     sample_report: Path | None = SAMPLE_REPORT
     frontend_dist: Path | None = None
-    dev_origin: str | None = None
+    # Exact origins allowed to call the API cross-origin (CORS). Empty = same origin only.
+    allowed_origins: tuple[str, ...] = ()
     playground_llm: LLMClient | None = None
     # (job, log) -> exit code. None = run ``python -m distillery run`` in a subprocess.
     executor: Callable[..., int] | None = None
@@ -45,6 +47,34 @@ class ServerSettings:
     demo_db_seed: int = 0
     clock: Callable[[], float] = time.monotonic
     now: Callable[[], datetime] = field(default=_utcnow)
+
+
+_LOCAL_HOSTS = frozenset({"localhost", "127.0.0.1", "::1"})
+
+
+def parse_allowed_origins(raw: str | None) -> tuple[str, ...]:
+    """Comma-separated exact origins. No wildcards, no paths; https unless the host is local.
+    Raises ValueError on a bad entry so a typo fails at startup instead of silently opening CORS."""
+    out: list[str] = []
+    for item in (raw or "").split(","):
+        o = item.strip()
+        if not o:
+            continue
+        try:
+            u = urlsplit(o)
+            host, _ = u.hostname, u.port  # .port raises ValueError on a bad port
+        except ValueError:
+            raise ValueError(f"invalid origin in DISTILLERY_ALLOWED_ORIGINS: {o!r}") from None
+        if "*" in o or u.scheme not in ("http", "https") or not host:
+            raise ValueError(f"origin must be an exact http(s) origin, no wildcard: {o!r}")
+        if u.path or u.query or u.fragment or u.username or u.password:
+            raise ValueError(f"origin must be scheme://host[:port] only: {o!r}")
+        if u.scheme == "http" and host not in _LOCAL_HOSTS:
+            raise ValueError(f"http origin is only allowed for localhost: {o!r}")
+        origin = f"{u.scheme}://{u.netloc}".lower()
+        if origin not in out:
+            out.append(origin)
+    return tuple(out)
 
 
 def default_playground_llm(config: Config) -> LLMClient | None:
@@ -69,7 +99,12 @@ def settings_from_env(
         config=config,
         replay_dir=Path(e.get("DISTILLERY_REPLAY_DIR") or "replay"),
         frontend_dist=dist if (dist / "index.html").exists() else None,
-        dev_origin=e.get("DISTILLERY_DEV_ORIGIN") or None,
+        # DISTILLERY_DEV_ORIGIN is a deprecated alias, read only when the new variable is unset.
+        allowed_origins=parse_allowed_origins(
+            e.get("DISTILLERY_ALLOWED_ORIGINS")
+            if e.get("DISTILLERY_ALLOWED_ORIGINS") is not None
+            else e.get("DISTILLERY_DEV_ORIGIN")
+        ),
         playground_llm=default_playground_llm(config),
         trusted_proxies=tuple(
             p.strip() for p in (e.get("DISTILLERY_TRUSTED_PROXIES") or "").split(",") if p.strip()

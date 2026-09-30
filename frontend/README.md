@@ -35,3 +35,21 @@ from these files; the frontend tests render the screens from them. After an inte
     npm run contract:update     # runs the Python test with UPDATE_CONTRACT=1 (needs ../.venv)
 
 then review and commit the JSON diff.
+
+## Deploy (Vercel, static frontend)
+
+The frontend is a static bundle and can be hosted apart from the API. Full steps, including the backend,
+are in [`../docs/DEPLOY.md`](../docs/DEPLOY.md). Everything below is **UNVERIFIED** against a real Vercel project.
+
+- Project settings: root directory `frontend`, install `npm ci`, build `npm run build`, output `dist`.
+  `vercel.json` (rewrites, cache and security headers) is picked up from that directory.
+- `VITE_API_BASE` (build time, public) = the HTTPS origin of the backend, no trailing slash. Empty means same
+  origin (dev proxy, or the Docker image). Every `fetch` and `EventSource` URL goes through `apiUrl()` in
+  `src/api/client.ts`.
+- The backend must list the exact Vercel production origin in `DISTILLERY_ALLOWED_ORIGINS`, and the
+  `connect-src` in `vercel.json` must name the same API origin (replace the `REPLACE-WITH-API-ORIGIN.example`
+  placeholder).
+- Never put the admin token in a `VITE_*` variable: it would be public. It is typed into the page and kept
+  in memory only.
+- `npm run build` typechecks with `tsconfig.build.json` (tests excluded, so it works when only `frontend/` is
+  present, as in the Docker build stage). `npm run typecheck` checks everything including tests.

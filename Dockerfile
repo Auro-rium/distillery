@@ -1,4 +1,5 @@
-# Distillery: API + built frontend in one image. NOT build-tested (needs network); see README "Deploy".
+# Distillery: API + built frontend in one image (same origin, so VITE_API_BASE stays empty).
+# The frontend alone can be hosted elsewhere (Vercel): see docs/DEPLOY.md.
 
 # ---- stage 1: build the frontend ----
 FROM node:22-slim AS web
@@ -6,6 +7,11 @@ WORKDIR /web
 COPY frontend/package.json frontend/package-lock.json* ./
 RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi
 COPY frontend/ ./
+# Only frontend/ is in this stage: `npm run build` uses tsconfig.build.json, which leaves out the
+# tests (they import ../../docs/fixtures, which is not copied here).
+# Public, build-time only. Empty = same origin. Never put a secret in a VITE_* variable.
+ARG VITE_API_BASE=""
+ENV VITE_API_BASE=$VITE_API_BASE
 RUN npm run build
 
 # ---- stage 2: python runtime ----
@@ -20,8 +26,8 @@ COPY pyproject.toml README.md LICENSE ./
 COPY src ./src
 COPY docs/fixtures ./docs/fixtures
 # Editable install so the server finds docs/fixtures and frontend/dist relative to /app.
-# fastapi and uvicorn are imported by src/distillery/server but are not declared in pyproject.toml yet.
-RUN pip install -e . fastapi uvicorn
+# fastapi and uvicorn come from pyproject.toml dependencies.
+RUN pip install -e .
 COPY --from=web /web/dist ./frontend/dist
 RUN useradd --create-home --uid 10001 app \
     && mkdir -p /data /app/replay \

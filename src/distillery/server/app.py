@@ -151,12 +151,20 @@ def create_app(settings: ServerSettings) -> FastAPI:
     app.state.worker, app.state.reader, app.state.playground = worker, reader, playground
     app.state.stream_limiter = limiter
 
-    if settings.dev_origin:
+    if settings.allowed_origins:
         app.add_middleware(
             CORSMiddleware,
-            allow_origins=[settings.dev_origin],
+            allow_origins=list(settings.allowed_origins),
             allow_methods=["GET", "POST"],
             allow_headers=["X-Admin-Token", "Content-Type", "Last-Event-ID"],
+            # Browsers hide these from cross-origin JS unless listed here.
+            expose_headers=[
+                "X-Examples-Available",
+                "X-Examples-Cap-Per-Kind",
+                "X-Examples-Totals",
+                "Retry-After",
+            ],
+            allow_credentials=False,
         )
 
     @app.exception_handler(ApiError)

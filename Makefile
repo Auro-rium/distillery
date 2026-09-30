@@ -6,7 +6,7 @@ IMAGE ?= distillery:local
 
 # Backend (uvicorn via the CLI, port $(PORT)) and Vite dev server, side by side.
 # The app does not read .env itself, so this target sources it into the environment first.
-# Ctrl-C stops both. Needs `pip install -e ".[dev]" fastapi uvicorn` and `npm install` in frontend/.
+# Ctrl-C stops both. Needs `pip install -e ".[dev]"` and `npm install` in frontend/.
 dev:
 	@set -a; if [ -f .env ]; then . ./.env; fi; set +a; \
 	trap 'kill 0' INT TERM EXIT; \

@@ -1,0 +1,9 @@
+# Extends the default gitleaks rules. The ONLY allowlisted file is a test helper that contains a
+# deliberately secret-shaped FAKE key ("sk-neb...", 20 chars) used to test log/response redaction.
+# Verified not to be a real credential; real keys live only in the gitignored .env.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "fake redaction-test key in tests/server_helpers.py"
+paths = ['''tests/server_helpers\.py''']

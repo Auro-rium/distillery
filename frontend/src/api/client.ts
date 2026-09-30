@@ -15,6 +15,14 @@ export class ApiError extends Error {
   }
 }
 
+// API origin. Empty (default) = same origin. Set VITE_API_BASE at build time when the frontend is
+// hosted apart from the API (Vercel + Nebius). It is public: never put a token in it.
+const API_BASE = ((import.meta.env.VITE_API_BASE as string | undefined) ?? "").trim().replace(/\/+$/, "");
+
+/** Absolute-or-relative URL for an API path that already starts with "/api", e.g. "/api/health".
+ * Use it for every fetch and EventSource so they all follow VITE_API_BASE. */
+export const apiUrl = (path: string): string => `${API_BASE}${path}`;
+
 // Admin token lives in memory only. Never persisted.
 let adminToken: string | null = null;
 export const setAdminToken = (t: string | null): void => {
@@ -50,7 +58,7 @@ async function requestRaw<T>(path: string, init: RequestInit = {}, admin = false
   if (admin && adminToken) headers.set("X-Admin-Token", adminToken);
   let res: Response;
   try {
-    res = await fetch(`/api${path}`, { ...init, headers });
+    res = await fetch(apiUrl(`/api${path}`), { ...init, headers });
   } catch {
     throw new ApiError(0, "network", "Cannot reach the API server.");
   }

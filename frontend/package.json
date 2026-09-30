@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "dev:mock": "VITE_MOCK=1 vite",
-    "build": "tsc --noEmit && vite build",
+    "build": "tsc --noEmit -p tsconfig.build.json && vite build",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "contract:update": "cd .. && UPDATE_CONTRACT=1 .venv/bin/python -m pytest -q tests/test_frontend_truth.py"
