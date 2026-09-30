@@ -21,4 +21,9 @@ describe("client", () => {
     await expect(api.playground("q")).rejects.toMatchObject({ status: 503, code: "demo_budget_exhausted", retryAfter: 7 });
     expect(new ApiError(0, "network", "x")).toBeInstanceOf(Error);
   });
+  it("treats a 200 that is not JSON (static host answering /api with index.html) as an error, not data", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(
+      new Response("<!doctype html><html></html>", { status: 200, headers: { "Content-Type": "text/html" } })));
+    await expect(api.runs()).rejects.toMatchObject({ status: 200, code: "invalid_response" });
+  });
 });

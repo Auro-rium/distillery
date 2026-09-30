@@ -75,7 +75,14 @@ async function requestRaw<T>(path: string, init: RequestInit = {}, admin = false
     const ra = Number(res.headers.get("Retry-After"));
     throw new ApiError(res.status, code, message, Number.isFinite(ra) && ra > 0 ? ra : null);
   }
-  return { data: (await res.json()) as T, headers: res.headers };
+  // A 200 that is not JSON (e.g. a static host answering /api/* with index.html) is an error, never data.
+  let data: T;
+  try {
+    data = (await res.json()) as T;
+  } catch {
+    throw new ApiError(res.status, "invalid_response", "The server answered with something that is not JSON. Is the API URL configured?");
+  }
+  return { data, headers: res.headers };
 }
 
 const post = (body: unknown): RequestInit => ({ method: "POST", body: JSON.stringify(body) });
