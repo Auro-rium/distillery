@@ -18,6 +18,66 @@
       "destination": "/static-api/replay.json"
     },
     {
+      "source": "/api/runs/sql-mini-live1",
+      "destination": "/static-api/by-run/sql-mini-live1/detail.json"
+    },
+    {
+      "source": "/api/runs/sql-mini-live1/report",
+      "destination": "/static-api/by-run/sql-mini-live1/report.json"
+    },
+    {
+      "source": "/api/runs/sql-mini-live1/tree",
+      "destination": "/static-api/by-run/sql-mini-live1/tree.json"
+    },
+    {
+      "source": "/api/runs/sql-mini-live1/events",
+      "destination": "/static-api/by-run/sql-mini-live1/events"
+    },
+    {
+      "source": "/api/runs/sql-mini-live1/examples",
+      "has": [
+        {
+          "type": "query",
+          "key": "kind",
+          "value": "all"
+        }
+      ],
+      "destination": "/static-api/by-run/sql-mini-live1/examples-all.json"
+    },
+    {
+      "source": "/api/runs/sql-mini-live1/examples",
+      "has": [
+        {
+          "type": "query",
+          "key": "kind",
+          "value": "fixed"
+        }
+      ],
+      "destination": "/static-api/by-run/sql-mini-live1/examples-fixed.json"
+    },
+    {
+      "source": "/api/runs/sql-mini-live1/examples",
+      "has": [
+        {
+          "type": "query",
+          "key": "kind",
+          "value": "still_wrong"
+        }
+      ],
+      "destination": "/static-api/by-run/sql-mini-live1/examples-still_wrong.json"
+    },
+    {
+      "source": "/api/runs/sql-mini-live1/examples",
+      "has": [
+        {
+          "type": "query",
+          "key": "kind",
+          "value": "regressed"
+        }
+      ],
+      "destination": "/static-api/by-run/sql-mini-live1/examples-regressed.json"
+    },
+    {
       "source": "/api/runs/sql-tiny-live1",
       "destination": "/static-api/by-run/sql-tiny-live1/detail.json"
     },
@@ -149,6 +209,83 @@
         {
           "key": "Cache-Control",
           "value": "no-cache"
+        }
+      ]
+    },
+    {
+      "source": "/static-api/by-run/sql-mini-live1/events",
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "text/event-stream; charset=utf-8"
+        }
+      ]
+    },
+    {
+      "source": "/static-api/by-run/sql-mini-live1/examples-all.json",
+      "headers": [
+        {
+          "key": "x-examples-available",
+          "value": "true"
+        },
+        {
+          "key": "x-examples-cap-per-kind",
+          "value": "20"
+        },
+        {
+          "key": "x-examples-totals",
+          "value": "{\"fixed\":1,\"still_wrong\":57,\"regressed\":0}"
+        }
+      ]
+    },
+    {
+      "source": "/static-api/by-run/sql-mini-live1/examples-fixed.json",
+      "headers": [
+        {
+          "key": "x-examples-available",
+          "value": "true"
+        },
+        {
+          "key": "x-examples-cap-per-kind",
+          "value": "20"
+        },
+        {
+          "key": "x-examples-totals",
+          "value": "{\"fixed\":1,\"still_wrong\":57,\"regressed\":0}"
+        }
+      ]
+    },
+    {
+      "source": "/static-api/by-run/sql-mini-live1/examples-still_wrong.json",
+      "headers": [
+        {
+          "key": "x-examples-available",
+          "value": "true"
+        },
+        {
+          "key": "x-examples-cap-per-kind",
+          "value": "20"
+        },
+        {
+          "key": "x-examples-totals",
+          "value": "{\"fixed\":1,\"still_wrong\":57,\"regressed\":0}"
+        }
+      ]
+    },
+    {
+      "source": "/static-api/by-run/sql-mini-live1/examples-regressed.json",
+      "headers": [
+        {
+          "key": "x-examples-available",
+          "value": "true"
+        },
+        {
+          "key": "x-examples-cap-per-kind",
+          "value": "20"
+        },
+        {
+          "key": "x-examples-totals",
+          "value": "{\"fixed\":1,\"still_wrong\":57,\"regressed\":0}"
         }
       ]
     },

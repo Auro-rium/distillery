@@ -127,6 +127,13 @@ def export(home: Path, only: list[str] | None) -> dict[str, object]:
                 )
             exported.append(rid)
         _write("runs-index.json", _recorded(json.dumps(keep).encode(), at))
+        # the Replay list: the sample plus every exported real run, newest first (labelled recorded)
+        replay = json.loads((OUT / "replay.json").read_bytes())
+        have = {x["run_id"] for x in replay}
+        extra = json.loads(
+            _recorded(json.dumps([k for k in keep if k["run_id"] not in have]).encode(), at)
+        )
+        _write("replay.json", json.dumps([*extra, *replay]).encode())
         rewrites.append({"source": "/api/runs", "destination": f"{GENERATED}runs-index.json"})
     json_types = [
         {"key": "Content-Type", "value": "application/json"},

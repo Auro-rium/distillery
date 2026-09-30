@@ -1,0 +1,68 @@
+id: 1
+event: stage
+data: {"observed_at":"2026-09-30T13:17:10.124069+00:00","at":"2026-09-30T12:32:36.135902+00:00","name":"schema","status":"done"}
+
+id: 2
+event: stage
+data: {"observed_at":"2026-09-30T13:17:10.124069+00:00","at":"2026-09-30T12:32:36.512182+00:00","name":"questions","status":"done"}
+
+id: 3
+event: stage
+data: {"observed_at":"2026-09-30T13:17:10.124069+00:00","at":"2026-09-30T12:38:18.305151+00:00","name":"gold_crosscheck","status":"done"}
+
+id: 4
+event: stage
+data: {"observed_at":"2026-09-30T13:17:10.124069+00:00","at":"2026-09-30T12:42:42.415555+00:00","name":"verifier_selftest","status":"done"}
+
+id: 5
+event: stage
+data: {"observed_at":"2026-09-30T13:17:10.124069+00:00","at":"2026-09-30T12:42:42.517930+00:00","name":"split","status":"done"}
+
+id: 6
+event: stage
+data: {"observed_at":"2026-09-30T13:17:10.124069+00:00","at":"2026-09-30T12:44:56.915888+00:00","name":"headroom","status":"done"}
+
+id: 7
+event: stage
+data: {"observed_at":"2026-09-30T13:17:10.124069+00:00","at":"2026-09-30T12:45:42.692690+00:00","name":"teacher_data","status":"done"}
+
+id: 8
+event: stage
+data: {"observed_at":"2026-09-30T13:17:10.124069+00:00","at":"2026-09-30T12:53:32.385386+00:00","name":"finetune_r1","status":"done"}
+
+id: 9
+event: stage
+data: {"observed_at":"2026-09-30T13:17:10.124069+00:00","at":"2026-09-30T12:55:29.264002+00:00","name":"dev_eval_r1","status":"done"}
+
+id: 10
+event: stage
+data: {"observed_at":"2026-09-30T13:17:10.124069+00:00","at":"2026-09-30T12:55:42.718512+00:00","name":"analysis_r1","status":"done"}
+
+id: 11
+event: stage
+data: {"observed_at":"2026-09-30T13:17:10.124069+00:00","at":"2026-09-30T12:55:58.825383+00:00","name":"targeted_r1","status":"done"}
+
+id: 12
+event: stage
+data: {"observed_at":"2026-09-30T13:17:10.124069+00:00","at":"2026-09-30T12:56:01.761430+00:00","name":"sandbox_branch_r1","status":"done"}
+
+id: 13
+event: stage
+data: {"observed_at":"2026-09-30T13:17:10.124069+00:00","at":"2026-09-30T13:05:01.583677+00:00","name":"finetune_r2","status":"done"}
+
+id: 14
+event: stage
+data: {"observed_at":"2026-09-30T13:17:10.124069+00:00","at":"2026-09-30T13:06:34.319552+00:00","name":"dev_eval_r2","status":"done"}
+
+id: 15
+event: stage
+data: {"observed_at":"2026-09-30T13:17:10.124069+00:00","at":"2026-09-30T13:10:40.875320+00:00","name":"final_eval","status":"done"}
+
+id: 16
+event: spend
+data: {"observed_at":"2026-09-30T13:17:10.124069+00:00","total_usd":6.4595544,"cap_usd":7.0,"by_model":{"nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B":{"calls":71,"input_tokens":11068,"output_tokens":14182,"usd":0.0175024},"nvidia/Nemotron-3-Ultra-550b-a55b":{"calls":337,"input_tokens":345240,"output_tokens":142515,"usd":2.318355},"nvidia/nemotron-3-super-120b-a12b":{"calls":539,"input_tokens":533672,"output_tokens":196675,"usd":1.123697}},"finetune_usd_estimate":3.0}
+
+id: 17
+event: done
+data: {"observed_at":"2026-09-30T13:17:10.124069+00:00","status":"complete","decision":"REJECT"}
+
