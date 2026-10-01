@@ -1203,7 +1203,7 @@ def accounts_above_industry_avg_users(rng: random.Random) -> tuple[str, str]:
         rng,
         [
             f"Which {st} accounts in {c} created in or before {y} have more users than the average user count of accounts in their industry (over all accounts in that industry)? Return account_id and user count.",
-            f"List account_id and user count for {st} accounts (created up to {y}) whose number of users is above their industry's average per-account user count.",
+            f"List account_id and user count for {st} accounts in {c} (created up to {y}) whose number of users is above their industry's average per-account user count.",
         ],
     )
     return q, (

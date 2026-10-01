@@ -46,7 +46,7 @@ def test_estimate_arithmetic_all_priced() -> None:
     sc = SCALES["mini"]  # train 120, dev 30, heldout 60
     lines = est.build_estimate(
         sc, FULL, AVGS, row_chars=300.0, chars_per_token=3.0, epochs=3, rounds=2,
-        retries_factor=1.5, sec_per_generation=8.0,
+        retries_factor=1.5, sec_per_generation=8.0, stress_n=0,
     )  # fmt: skip
     usd = {ln.name: ln.usd for ln in lines}
     per_teacher_call = (1000 * 1 + 400 * 3) / 1e6
@@ -59,8 +59,28 @@ def test_estimate_arithmetic_all_priced() -> None:
     assert usd["fine-tune"] == pytest.approx(tokens * 2 / 1e6)
     n_gen = (30 + 60) + (30 * 2 + 60)
     assert usd["sandbox generation"] == pytest.approx(n_gen * 8.0 * 0.01)
-    assert all(ln.status == est.REAL_PRICE for ln in lines)
+    assert all(ln.status.startswith("console price") for ln in lines)
     assert "TOTAL: $" in est.render(lines)
+
+
+def test_stress_set_is_priced_by_default_and_assumed_prices_are_never_called_real() -> None:
+    sc = SCALES["mini"]  # stress 20
+    with_stress = {ln.name: ln for ln in est.build_estimate(sc, FULL, AVGS, row_chars=300.0)}
+    none = {ln.name: ln for ln in est.build_estimate(sc, FULL, AVGS, row_chars=300.0, stress_n=0)}
+    per_call = (1000 * 1 + 400 * 3) / 1e6
+    assert with_stress["teacher: held-out/stress eval"].usd == pytest.approx((60 + 20) * per_call)
+    assert with_stress["sandbox generation"].usd > none["sandbox generation"].usd
+    assumed = PriceFile(
+        llm={
+            est.TEACHER: Price(
+                input_per_mtok=1, output_per_mtok=3, source="ASSUMED ceiling", date="d"
+            )
+        }
+    )
+    lines = est.build_estimate(sc, assumed, AVGS, row_chars=300.0)
+    teacher = next(ln for ln in lines if ln.name == "teacher: train rows")
+    assert teacher.status == est.ASSUMED_PRICE and "console" not in teacher.status.split("(")[0]
+    assert "ASSUMED ceiling prices" in est.render(lines)
 
 
 def test_missing_prices_withhold_total() -> None:

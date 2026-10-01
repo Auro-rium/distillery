@@ -109,3 +109,31 @@ money figures are labelled ceiling estimates and are not quoted as costs.
 
 **What a REJECT would mean.** If the correctly trained student still fails the gate, that is the result: report it, with the stress-set numbers,
 and do not alter the gate, the sets, the templates or the hyperparameters to chase a PROMOTE.
+
+## 2026-10-01: Amendments recorded BEFORE any new data is generated (diagnostics results, audit, and two implementation details)
+**Diagnostics (b)(c)(e) ran on the real mini-run adapters (sandbox, approved).** (b) FAILED the pre-registered threshold: the student scored
+16.2% (round 1 adapter, 117 rows) and 17.4% (round 2 adapter, 138 rows) on its OWN training rows (base: 8.5% / 8.0%), under 50%. (c) did NOT trip:
+extracted-SQL identical rate student-vs-base was 0.9% to 3.3% (adapter is applied, not a no-op). (e) did not trip: training and eval prompts are
+byte-identical, `/no_think` is in both, the chat template renders `<think>\n\n</think>\n\n` before the answer exactly as the eval prompt ends with
+thinking off. So the defect found is the one already identified (implicit hyperparameters, 3-9 optimizer steps at lr 1e-5); it is fixed
+(explicit pinned hyperparameters, packing off, 50-step floor, regression tests). That this fully explains the weak student is NOT yet proven; the
+properly configured run is the test.
+
+**Template audit (`scripts/audit_templates.py`, offline, 89 templates, 300 draws each, seed 4242).** It found one real defect: template
+`accounts_above_industry_avg_users` had a second phrasing that omitted the country filter its gold applies (a hidden filter, so no model could
+answer it). Fixed by naming the country in the wording. After the fix: 0 templates with gold errors, 0 ORDER BY ties (checked by re-running every
+gold on a reversed-row-order copy of the database), 0 LIMIT-without-ORDER, 0 questions whose gold variants return different results. The
+template list is FROZEN at 89 names, sha256 of the sorted names `d06fa8221b54d6ca482cf4537ff87ca229638b800540093255f56c61e38d7320`. The audit
+is a CI test, so a later template cannot reintroduce a hidden filter.
+
+**Measured at the pre-registered scale (offline dry run, structure only, fake models).** 1,800 train / 150 dev / 300 gate / 100 stress tasks
+are all reachable. The stress rule resolves to `date_math` and `set_ops`. The 1,800 training tasks contain only 141 distinct question skeletons and
+97.3% of gate questions share a skeleton with a training question. This was accepted in advance (hand-written phrasings, skeleton overlap
+reported); it means the gate measures generalization across literals within known question shapes, not novel query structure. It must be stated
+wherever gate results are shown. The stress set is the only unseen-structure signal.
+
+**Implementation details fixed now.** (1) `oversample` 1.6 -> 1.1: it existed to absorb the removed agreement filter and 1.6 is not reachable
+(the 10 training families supply ~2.8k tasks). (2) The stress draw uses template_share 0.1 and family_share 1.0 because with only two families
+the default caps starve the pool. (3) One anchor training task per family is placed in train first, so every gate family is covered by training by
+construction. (4) Teacher yield: a train row exists only if the teacher's SQL matches template gold, so verified rows = 1,800 x teacher accuracy;
+if that falls below 1,500 the pre-registered range is missed and this is reported, not worked around.

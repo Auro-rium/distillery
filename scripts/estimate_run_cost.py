@@ -25,7 +25,12 @@ TEACHER = "nvidia/nemotron-3-super-120b-a12b"
 PLANNER = "nvidia/Nemotron-3-Ultra-550b-a55b"
 STUDENT = "Qwen/Qwen3-0.6B"
 MISSING_PRICE = "MISSING PRICE"
-REAL_PRICE = "real price"
+ASSUMED_PRICE = "ASSUMED ceiling price (not a console price)"
+
+
+def price_status(source: str) -> str:
+    """A price is only called real when its recorded source says it came from the console."""
+    return ASSUMED_PRICE if "ASSUMED" in source.upper() else f"console price ({source})"
 
 
 @dataclass(frozen=True)
@@ -81,7 +86,7 @@ def _llm_line(name: str, model: str, calls: float, prices: PriceFile, avgs: dict
         name,
         f"{qty} (avg {avg.input_tokens:.0f} in / {avg.output_tokens:.0f} out)",
         usd / 1e6,
-        REAL_PRICE,
+        price_status(price.source),
     )
 
 
@@ -95,13 +100,14 @@ def build_estimate(
     epochs: int = 3,
     rounds: int = 2,
     retries_factor: float = 1.0,
-    stress_n: int = 0,
+    stress_n: int | None = None,
     analysis_calls: float | None = None,
     sec_per_generation: float = 7.8,
     teacher: str = TEACHER,
     planner: str = PLANNER,
     student: str = STUDENT,
 ) -> list[Line]:
+    stress_n = scale.stress if stress_n is None else stress_n
     lines = [
         _llm_line("teacher: train rows", teacher, scale.train * retries_factor, prices, avgs),
         _llm_line("teacher: held-out/stress eval", teacher, scale.heldout + stress_n, prices, avgs),
@@ -132,17 +138,25 @@ def build_estimate(
                     "fine-tune",
                     qty,
                     tokens * ft_price.usd_per_mtok_trained_tokens / 1e6,
-                    REAL_PRICE,
+                    price_status(ft_price.source),
                 )
             )
 
-    n_gen = (scale.dev + scale.heldout) + (scale.dev * rounds + scale.heldout)  # base + student
+    # base: dev + gate + stress once; student: dev every round + gate + stress
+    n_gen = (scale.dev + scale.heldout + stress_n) + (scale.dev * rounds + scale.heldout + stress_n)
     secs = n_gen * sec_per_generation
     qty = f"{n_gen} generations x {sec_per_generation:g} s = {secs:,.0f} s"
     if prices.sandbox is None:
         lines.append(Line("sandbox generation", qty, None, f"{MISSING_PRICE}: sandbox price"))
     else:
-        lines.append(Line("sandbox generation", qty, secs * prices.sandbox.per_second, REAL_PRICE))
+        lines.append(
+            Line(
+                "sandbox generation",
+                qty,
+                secs * prices.sandbox.per_second,
+                price_status(prices.sandbox.source),
+            )
+        )
     return lines
 
 
@@ -154,12 +168,22 @@ def render(lines: list[Line]) -> str:
     missing = [ln for ln in lines if ln.usd is None]
     subtotal = sum(ln.usd for ln in lines if ln.usd is not None)
     if missing:
-        out.append(f"SUBTOTAL of priced lines only: ${subtotal:.4f} (NOT a run total)")
+        assumed = [ln.name for ln in lines if ln.status.startswith("ASSUMED")]
+        out.append(
+            f"SUBTOTAL of priced lines only: ${subtotal:.4f} (NOT a run total)"
+            + (f"; at ASSUMED ceiling prices: {', '.join(assumed)}" if assumed else "")
+        )
         out.append(
             "TOTAL withheld; missing: " + "; ".join(f"{m.name} ({m.status})" for m in missing)
         )
     else:
-        out.append(f"TOTAL: ${subtotal:.4f} (all lines priced from the price file)")
+        assumed = [ln.name for ln in lines if ln.status.startswith("ASSUMED")]
+        note = (
+            f"; lines at ASSUMED ceiling prices, not console prices: {', '.join(assumed)}"
+            if assumed
+            else " (all lines at console prices)"
+        )
+        out.append(f"TOTAL: ${subtotal:.4f}{note}")
     return "\n".join(out)
 
 
@@ -173,7 +197,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--rounds", type=int, default=2)
     ap.add_argument("--chars-per-token", type=float, default=3.0)
     ap.add_argument("--retries-factor", type=float, default=1.0)
-    ap.add_argument("--stress-n", type=int, default=0)
+    ap.add_argument("--stress-n", type=int, default=None, help="default: the scale's stress size")
     ap.add_argument("--analysis-calls", type=float, default=None)
     ap.add_argument("--sec-per-generation", type=float, default=7.8)
     ap.add_argument("--teacher-model", default=TEACHER)
