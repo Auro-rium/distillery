@@ -1,3 +1,4 @@
+# ruff: noqa: S310  # operator-supplied URL, http(s) only by construction
 """Post-deploy smoke suite for a running Distillery service. Free: it spends only a fake-model dry
 run and one playground teacher call (about $0.0005). Exit status 1 if any check fails.
 
