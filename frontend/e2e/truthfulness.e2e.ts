@@ -14,6 +14,7 @@ function payload(id: string) {
   const r = JSON.parse(JSON.stringify(FIXTURE));
   r.run_id = id; r.dry_run = true; r.recorded = false; r.recorded_at = null;
   const ev = r.evaluation;
+  ev.stress = null; // this test replaces the headline numbers; the stress card has its own
   ev.n = K.n;
   ev.accuracy = { base: K.base, student: K.student, teacher: K.teacher };
   Object.assign(ev.gate, {

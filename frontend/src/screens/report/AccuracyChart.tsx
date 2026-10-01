@@ -72,7 +72,7 @@ export function AccuracyChart({ rows, title, showCi = true }: { rows: BarRow[]; 
                 {ci && (
                   <span className="acc-ci" style={{ left: pct(ci[0]), width: pct(ci[1] - ci[0]) }}>
                     <span className="acc-ci-lab lo">{fmtPercent(ci[0])}</span>
-                    <span className="acc-ci-lab hi">{fmtPercent(ci[1])}</span>
+                    <span className={`acc-ci-lab hi${ci[1] > 0.9 ? " edge" : ""}`}>{fmtPercent(ci[1])}</span>
                   </span>
                 )}
               </span>
