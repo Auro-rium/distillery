@@ -64,6 +64,9 @@ class EvalReport:
     artifact: dict[str, str] = field(default_factory=dict)
     # Capped per-item examples; revealed only here, after scoring (see build_examples).
     examples: list[dict[str, Any]] = field(default_factory=list)
+    # Stress set (reserved families, never in train/dev/gate): scored after the gate, reported
+    # separately, never an input of evaluate_gate. None = no stress set was sealed for this run.
+    stress: dict[str, Any] | None = None
 
     def to_json(self) -> dict[str, Any]:
         return {
@@ -76,6 +79,7 @@ class EvalReport:
             "artifact": self.artifact,
             "gate": self.gate.model_dump(mode="json"),
             "examples": self.examples,
+            "stress": self.stress,
         }
 
 
@@ -253,7 +257,60 @@ def evaluate(
         class_counts=class_counts,
         artifact=artifact,
         examples=build_examples(items, scores),
+        stress=_score_stress(
+            store, run_id, generators, executor, db_ref=db_ref, schema_ddl=schema_ddl
+        ),
     )
+
+
+def _score_stress(
+    store: Store,
+    run_id: str,
+    generators: Mapping[str, Generator],
+    executor: Executor,
+    *,
+    db_ref: str,
+    schema_ddl: str,
+) -> dict[str, Any] | None:
+    """Accuracy of every model on the sealed stress set, per model and per family. Runs after the
+    gate decision is computed and shares nothing with it: the stress set cannot move the gate."""
+    items = store.load_stress(run_id)
+    if items is None:
+        return None
+    gold = executor.run_batch(db_ref, [str(it["gold_sql"]) for it in items])
+    for it, g in zip(items, gold, strict=True):
+        if not g.ok:
+            raise RuntimeError(f"gold SQL failed for stress item {it.get('task_id')}: {g.error}")
+    scores = {
+        role: score_model(
+            generators[role],
+            items,
+            gold,
+            schema_ddl=schema_ddl,
+            db_ref=db_ref,
+            executor=executor,
+            role=role,
+        )
+        for role in MODEL_ROLES
+    }
+    families = sorted({str(it["family"]) for it in items})
+    by_family = {
+        f: {
+            m: sum(scores[m].correct[i] for i, it in enumerate(items) if it["family"] == f)
+            / sum(1 for it in items if it["family"] == f)
+            for m in MODEL_ROLES
+        }
+        for f in families
+    }
+    return {
+        "sha256": sha256_hex(canonical_json(items).encode("utf-8")),
+        "n": len(items),
+        "families": families,
+        "accuracy": {m: s.accuracy for m, s in scores.items()},
+        "accuracy_by_family": by_family,
+        "unparseable": {m: s.unparseable for m, s in scores.items()},
+        "note": "reserved families, never in train/dev/gate; reported separately, not a gate input",
+    }
 
 
 # ---------------------------------------------------------------- student diagnostics

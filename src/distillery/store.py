@@ -18,6 +18,8 @@ _RUN_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS runs (
     run_id TEXT PRIMARY KEY, created_at TEXT NOT NULL, heldout_sha256 TEXT);
+CREATE TABLE IF NOT EXISTS seals (
+    run_id TEXT NOT NULL, name TEXT NOT NULL, sha256 TEXT NOT NULL, PRIMARY KEY (run_id, name));
 CREATE TABLE IF NOT EXISTS stages (
     run_id TEXT NOT NULL, stage TEXT NOT NULL, input_hash TEXT NOT NULL,
     status TEXT NOT NULL, output_sha256 TEXT, error TEXT, updated_at TEXT NOT NULL,
@@ -125,7 +127,7 @@ class Store:
             (run_id,),
         )
         heldout = self._query("SELECT heldout_sha256 FROM runs WHERE run_id=?", (run_id,))
-        manifest = {
+        manifest: dict[str, Any] = {
             "run_id": run_id,
             "heldout_sha256": heldout[0][0] if heldout else None,
             "stages": [
@@ -133,6 +135,9 @@ class Store:
                 for r in rows
             ],
         }
+        stress = self._query("SELECT sha256 FROM seals WHERE run_id=? AND name='stress'", (run_id,))
+        if stress:
+            manifest["stress_sha256"] = stress[0][0]
         atomic_write_bytes(
             self.run_dir(run_id) / "manifest.json",
             json.dumps(manifest, indent=2, sort_keys=True).encode("utf-8"),
@@ -210,6 +215,37 @@ class Store:
         data = self._heldout_path(run_id).read_bytes()
         if sha256_hex(data) != rows[0][0]:
             raise HeldoutIntegrityError("held-out set does not match its sealed sha256")
+        items: list[dict[str, Any]] = json.loads(data)
+        return items
+
+    # ---- stress set (sealed like the gate set, but never a gate input) -
+    def _stress_path(self, run_id: str) -> Path:
+        return self.run_dir(run_id) / "heldout" / "stress.json"
+
+    def seal_stress(self, run_id: str, items: list[dict[str, Any]]) -> str:
+        self.create_run(run_id)
+        payload = canonical_json(items).encode("utf-8")
+        digest = sha256_hex(payload)
+        rows = self._query("SELECT sha256 FROM seals WHERE run_id=? AND name='stress'", (run_id,))
+        if rows and rows[0][0] != digest:
+            raise HeldoutIntegrityError("stress set already sealed with different content")
+        atomic_write_bytes(self._stress_path(run_id), payload)
+        self._exec(
+            "INSERT OR REPLACE INTO seals(run_id, name, sha256) VALUES (?, 'stress', ?)",
+            (run_id, digest),
+        )
+        self._write_manifest(run_id)
+        return digest
+
+    def load_stress(self, run_id: str) -> list[dict[str, Any]] | None:
+        """Only evaluator.py may call this (enforced by an AST scan in tests). None = no stress
+        set was sealed for this run (e.g. runs made before the stress set existed)."""
+        rows = self._query("SELECT sha256 FROM seals WHERE run_id=? AND name='stress'", (run_id,))
+        if not rows:
+            return None
+        data = self._stress_path(run_id).read_bytes()
+        if sha256_hex(data) != rows[0][0]:
+            raise HeldoutIntegrityError("stress set does not match its sealed sha256")
         items: list[dict[str, Any]] = json.loads(data)
         return items
 

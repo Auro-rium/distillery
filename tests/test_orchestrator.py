@@ -35,9 +35,9 @@ from distillery.sandbox_executor import DB_PATH, SCRIPT_PATH, AsyncBridge, Sandb
 from distillery.store import Store
 from distillery.taskpacks.sql import schema as sql_schema
 from distillery.taskpacks.sql.executor import LocalExecutor
-from distillery.taskpacks.sql.questions import generate_tasks
+from distillery.taskpacks.sql.questions import generate_tasks, stress_families
 
-NANO = Scale(name="nano", train=16, dev=8, heldout=12)
+NANO = Scale(name="nano", train=16, dev=8, heldout=12, stress=6)
 
 
 _FAST_DIRS: list[Path] = []
@@ -149,11 +149,38 @@ def test_heldout_sealed_and_sized(reference: dict[str, Any]) -> None:
     items = store.load_heldout("dry-t")
     assert len(items) == NANO.heldout == rep["evaluation"]["n"]
     assert rep["data"]["train_tasks"] == NANO.train and rep["data"]["dev_tasks"] == NANO.dev
-    fams = {i["family"] for i in items if i["heldout_class"] == "unseen_family"}
-    train_fams = {d["family"] for d in reference["pipe"]._results["split"]["train"]}
-    assert fams and not fams & train_fams
-    unseen = sum(rep["data"]["heldout_class_counts"].get(k, 0) for k in ("unseen_family",))
-    assert unseen / NANO.heldout >= 0.2
+    # the gate set is purely in-distribution: every family in it is also trained on
+    assert {i["heldout_class"] for i in items} == {"in_distribution"}
+    split = reference["pipe"]._results["split"]
+    train_fams = {d["family"] for d in split["train"]}
+    assert {i["family"] for i in items} <= train_fams
+    assert rep["data"]["heldout_class_counts"] == {"in_distribution": NANO.heldout}
+    assert split["heldout_families"] == []
+    # never a gate question that was in train (questions are unique across the pool)
+    train_q = {d["question"] for d in split["train"]}
+    assert not {i["question"] for i in items} & train_q
+    assert 0.0 <= rep["data"]["heldout_skeleton_overlap_rate"] <= 1.0  # measured, reported
+
+
+def test_stress_set_sealed_separately_and_reported_not_gated(reference: dict[str, Any]) -> None:
+    rep, store, pipe = reference["report"], reference["store"], reference["pipe"]
+    split = pipe._results["split"]
+    stress = store.load_stress("dry-t")
+    assert stress is not None and len(stress) == NANO.stress == rep["data"]["stress_tasks"]
+    assert {i["heldout_class"] for i in stress} == {"stress"}
+    fams = {i["family"] for i in stress}
+    gate_fams = {i["family"] for i in store.load_heldout("dry-t")}
+    train_fams = {d["family"] for d in (*split["train"], *split["dev"])}
+    assert fams == set(rep["data"]["stress_families"])
+    assert not fams & (train_fams | gate_fams)  # reserved families appear nowhere else
+    assert {i["task_id"] for i in stress}.isdisjoint(split["heldout_task_ids"])
+    ev = rep["evaluation"]
+    assert ev["stress"]["n"] == NANO.stress and set(ev["stress"]["accuracy"]) == {
+        "base", "student", "teacher"
+    }  # fmt: skip
+    # the gate is computed from the gate set alone
+    assert ev["n"] == NANO.heldout and len(ev["gate"]["reasons"]) >= 0
+    assert rep["data"]["stress_sealed_sha256"] == split["stress_sealed_sha256"]
 
 
 def test_failure_analysis_prompts_contain_dev_items_only(reference: dict[str, Any]) -> None:
@@ -168,22 +195,24 @@ def test_failure_analysis_prompts_contain_dev_items_only(reference: dict[str, An
         text = "\n".join(m["content"] for m in call["messages"])
         for it in heldout:
             assert it["question"] not in text and it["gold_sql"] not in text
-            if it["heldout_class"] == "unseen_family":  # held-out families are never offered
-                allowed = re.findall(r"Allowed families: (.*)", text)[0].split(", ")
-                assert it["family"] not in allowed
+            allowed = re.findall(r"Allowed families: (.*)", text)[0].split(", ")
+            for fam in reference["report"]["data"]["stress_families"]:
+                assert fam not in allowed  # reserved stress families are never offered
         asked = re.findall(r"\] Q: (.*)", text)
         assert asked and set(asked) <= dev_q
 
 
-def test_planner_never_sees_heldout_after_crosscheck(reference: dict[str, Any]) -> None:
-    """Every non-crosscheck planner prompt (analysis) is held-out free (see DECISIONS)."""
+def test_no_model_touches_gold_and_planner_never_sees_heldout(reference: dict[str, Any]) -> None:
+    """Gold comes from templates: no model answers a question to vet it (the Ultra/Super
+    agreement filter is gone), and the planner only ever sees dev failures, never held-out."""
     heldout = {i["question"] for i in reference["store"].load_heldout("dry-t")}
     planner = [c for c in reference["dr"].transport.calls if c["model"] == "fake-planner"]
-    crosscheck = [c for c in planner if c["schema"] == "SqlAnswer"]
-    other = [c for c in planner if c["schema"] != "SqlAnswer"]
-    assert crosscheck and other
-    for c in other:
+    assert planner and all(c["schema"] != "SqlAnswer" for c in planner)  # analysis only
+    for c in planner:
         assert not any(q in m["content"] for m in c["messages"] for q in heldout)
+    cc = reference["report"]["counters"]["gold_crosscheck"]
+    assert cc["accepted"] + cc["discarded"] == cc["checked"]
+    assert not any(k.startswith("discard_") and "planner" in k for k in cc)
 
 
 def test_evaluated_artifact_is_trained_artifact(reference: dict[str, Any]) -> None:
@@ -455,23 +484,29 @@ def test_ultra_verifier_hook_is_documented_not_silent(tmp_path: Path, bridge: As
 # ---- pure split planning ------------------------------------------------------------------------
 
 
-def test_plan_split_exact_sizes_and_unseen_families(tmp_path: Path) -> None:
+def test_plan_split_in_distribution_exact_sizes_and_stress(tmp_path: Path) -> None:
     db = tmp_path / "d.sqlite"
     sql_schema.write_database(0, db)
-    tasks = generate_tasks(str(db), 120, 7).tasks
+    reserved = stress_families()
+    tasks = generate_tasks(str(db), 120, 7, exclude_families=reserved).tasks
+    stress = generate_tasks(str(db), 40, 8, families=reserved).tasks
     for scale in (NANO, SCALES["tiny"]):
-        plan = plan_split(tasks, scale, 3)
-        assert (len(plan.train), len(plan.dev), len(plan.heldout)) == (
-            scale.train, scale.dev, scale.heldout,
+        plan = plan_split(tasks, scale, 3, stress)
+        assert (len(plan.train), len(plan.dev), len(plan.heldout), len(plan.stress)) == (
+            scale.train, scale.dev, scale.heldout, scale.stress,
         )  # fmt: skip
-        ids = [t.task_id for t in (*plan.train, *plan.dev, *plan.heldout)]
+        ids = [t.task_id for t in (*plan.train, *plan.dev, *plan.heldout, *plan.stress)]
         assert len(ids) == len(set(ids))
-        train_fams = {t.family for t in (*plan.train, *plan.dev)}
-        assert not train_fams & set(plan.heldout_families)
-        unseen = [t for t in plan.heldout if t.family in plan.heldout_families]
-        assert len(unseen) / scale.heldout >= 0.2
+        assert plan.heldout_families == []  # the gate holds out no family
+        assert {t.family for t in plan.heldout} <= {t.family for t in plan.train}
+        assert {t.family for t in plan.stress} <= set(reserved)
+        assert not {t.family for t in plan.stress} & {t.family for t in plan.train}
+        assert plan.counters["heldout_questions_seen_in_train"] == 0
+        assert 0 <= plan.counters["heldout_skeleton_in_train"] <= scale.heldout
     with pytest.raises(ShortfallError):
-        plan_split(tasks[:30], SCALES["tiny"], 3)
+        plan_split(tasks[:30], SCALES["tiny"], 3, stress)
+    with pytest.raises(ShortfallError, match="leaked"):  # a stress family in the gate pool
+        plan_split([*tasks, stress[0]], SCALES["tiny"], 3, stress)
 
 
 # ---- integration through the sandbox executor ---------------------------------------------------

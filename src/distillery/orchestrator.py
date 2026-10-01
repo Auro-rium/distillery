@@ -68,13 +68,16 @@ from distillery.student import StudentServer
 from distillery.taskpacks.sql import schema as sql_schema
 from distillery.taskpacks.sql.executor import Executor
 from distillery.taskpacks.sql.questions import (
+    DEFAULT_SKELETON_CAP,
     FAMILIES,
+    IN_DISTRIBUTION,
+    STRESS,
     SqlTask,
-    classify_heldout,
     generate_tasks,
-    split_by_family,
+    skeleton,
+    stress_families,
 )
-from distillery.taskpacks.sql.runner import ExecOutcome, run_select
+from distillery.taskpacks.sql.runner import run_select
 from distillery.taskpacks.sql.verifier import compare_outcomes, corrupt_sql
 
 log = logging.getLogger(__name__)
@@ -198,14 +201,17 @@ class Scale(BaseModel):
     name: str
     train: int
     dev: int
-    heldout: int
+    heldout: int  # the gate set: sealed, in-distribution (every family also in train)
+    stress: int = 0  # reserved families, sealed separately, reported, never a gate input
 
 
+# "full" is the pre-registered benchmark (DECISIONS.md 2026-09-30): train 1800, dev 150, gate 300,
+# stress 100. The smaller scales exist for offline dry runs and plumbing checks.
 SCALES: dict[str, Scale] = {
-    "tiny": Scale(name="tiny", train=40, dev=10, heldout=20),
-    "mini": Scale(name="mini", train=120, dev=30, heldout=60),  # CLI-only: cheaper 2-round live run
-    "small": Scale(name="small", train=300, dev=50, heldout=100),
-    "full": Scale(name="full", train=2000, dev=150, heldout=300),
+    "tiny": Scale(name="tiny", train=40, dev=10, heldout=20, stress=10),
+    "mini": Scale(name="mini", train=120, dev=30, heldout=60, stress=20),  # CLI-only
+    "small": Scale(name="small", train=300, dev=50, heldout=100, stress=30),
+    "full": Scale(name="full", train=1800, dev=150, heldout=300, stress=100),
 }
 
 
@@ -217,7 +223,10 @@ class PipelineConfig(BaseModel):
     dry_run: bool = False
     db_seed: int = 0
     seed: int = 1234
-    oversample: float = 1.6  # generate this multiple of the needed tasks (drops + trimming)
+    # Generate this multiple of the needed tasks. Gold is template-written and every task that runs
+    # is accepted (no model vets it), so little is lost; 1.6 existed to absorb the old agreement
+    # filter and is not reachable at full scale (the 10 training families supply ~2.8k tasks).
+    oversample: float = 1.1
     headroom_max_base_acc: float = 0.80
     dev_target_acc: float = 0.90  # stop adding rounds once the student reaches this on dev
     max_rounds: int = 3  # total fine-tune rounds, including the first
@@ -574,66 +583,84 @@ def _item(t: SqlTask, heldout_class: str | None = None) -> dict[str, Any]:
 class SplitPlan:
     train: list[SqlTask]
     dev: list[SqlTask]
-    heldout: list[SqlTask]
-    heldout_families: list[str]
+    heldout: list[SqlTask]  # the gate set: in-distribution only
+    stress: list[SqlTask]  # reserved families, never in train/dev/heldout
+    heldout_families: list[str]  # families held out of TRAINING: none, the gate is in-distribution
     counters: dict[str, int] = field(default_factory=dict)
 
 
-def plan_split(tasks: Sequence[SqlTask], scale: Scale, seed: int) -> SplitPlan:
-    """Family-aware train/dev/held-out split with exact target sizes (or ShortfallError).
+def _rate(num: int, den: int) -> float:
+    return round(num / den, 4) if den else 0.0
 
-    Whole families are held out (>= 50% of the target held-out size comes from them, at most
-    60% is kept); the rest of held-out is an in-distribution sample. In-distribution surplus goes
-    back to train; surplus unseen-family tasks are discarded (counted) so the family stays unseen.
+
+def plan_split(
+    tasks: Sequence[SqlTask],
+    scale: Scale,
+    seed: int,
+    stress_tasks: Sequence[SqlTask] = (),
+) -> SplitPlan:
+    """In-distribution train/dev/gate split with exact target sizes (or ShortfallError), plus the
+    stress set drawn from ``stress_tasks`` (reserved families, so disjoint from all three).
+
+    Every gate family also appears in train. Questions and gold SQL are unique across the pool
+    (the generator dedupes both), so no gate question was seen in train. What can overlap is the
+    question SKELETON (same wording, other literals); that rate is measured and reported in the
+    counters, not hidden.
     """
     rng = random.Random(seed)  # noqa: S311 - deterministic sampling, not security
-    counts = Counter(t.family for t in tasks)
-    fams = sorted(counts)
-    rng.shuffle(fams)
-    target_u = math.ceil(0.5 * scale.heldout)
-    chosen: list[str] = []
-    u = 0
-    for f in fams:
-        if u >= target_u:
-            break
-        chosen.append(f)
-        u += counts[f]
-    chosen_set = set(chosen)
-    unseen_take = min(u, math.ceil(0.6 * scale.heldout))
-    n_rest = len(tasks) - u
-    seen_needed = max(0, scale.heldout - unseen_take)
-    frac = min(1.0, seen_needed / n_rest) if n_rest else 0.0
-    sp = split_by_family(list(tasks), chosen_set, seed, in_dist_fraction=frac)
-    unseen = [t for t in sp.heldout if t.family in chosen_set]
-    seen_h = [t for t in sp.heldout if t.family not in chosen_set]
-    rng.shuffle(unseen)
-    rng.shuffle(seen_h)
-    keep_unseen = unseen[:unseen_take]
-    keep_seen = seen_h[: scale.heldout - len(keep_unseen)]
-    back_to_train = seen_h[len(keep_seen) :]
-    short = scale.heldout - len(keep_unseen) - len(keep_seen)
-    if short > 0:
-        extra = unseen[len(keep_unseen) : len(keep_unseen) + short]
-        keep_unseen += extra
-    heldout = keep_unseen + keep_seen
-    discarded_unseen = len(unseen) - len(keep_unseen)
-    pool = list(sp.train) + back_to_train
+    reserved = set(stress_families())
+    if any(t.family in reserved for t in tasks):
+        raise ShortfallError("a stress family leaked into the in-distribution pool")
+    pool = list(tasks)
     rng.shuffle(pool)
-    dev = pool[: scale.dev]
-    train = pool[scale.dev : scale.dev + scale.train]
-    counters = {
-        "input_tasks": len(tasks),
-        "heldout_unseen_family_tasks_discarded": discarded_unseen,
-        "train_pool_trimmed": max(0, len(pool) - scale.dev - len(train)),
-        "heldout_seen_returned_to_train": len(back_to_train),
-    }
-    if len(heldout) < scale.heldout or len(dev) < scale.dev or len(train) < scale.train:
+    # one anchor task per family goes to train first, so every gate family is covered by training
+    # by construction (a plain shuffle can miss a family at small scales)
+    anchors: dict[str, SqlTask] = {}
+    for t in pool:
+        anchors.setdefault(t.family, t)
+    anchor_ids = {t.task_id for t in anchors.values()}
+    rest = [t for t in pool if t.task_id not in anchor_ids]
+    heldout = rest[: scale.heldout]
+    dev = rest[scale.heldout : scale.heldout + scale.dev]
+    train = (list(anchors.values()) + rest[scale.heldout + scale.dev :])[: scale.train]
+    pool = [*heldout, *dev, *train, *rest[scale.heldout + scale.dev + scale.train :]]
+    extra = list(stress_tasks)
+    rng.shuffle(extra)
+    stress = extra[: scale.stress]
+    if (
+        len(heldout) < scale.heldout
+        or len(dev) < scale.dev
+        or len(train) < scale.train
+        or len(stress) < scale.stress
+    ):
         raise ShortfallError(
             f"cannot fill scale {scale.name!r}: got train={len(train)}/{scale.train} "
             f"dev={len(dev)}/{scale.dev} heldout={len(heldout)}/{scale.heldout} "
-            f"from {len(tasks)} cross-checked tasks; raise oversample or lower the scale"
+            f"stress={len(stress)}/{scale.stress} from {len(tasks)} in-distribution and "
+            f"{len(extra)} stress tasks; raise oversample or lower the scale"
         )
-    return SplitPlan(train, dev, heldout, sorted(chosen), counters)
+    train_fams = {t.family for t in train}
+    uncovered = sorted({t.family for t in heldout} - train_fams)
+    if uncovered:
+        raise ShortfallError(f"gate families without any training task: {uncovered}")
+    train_sk = {skeleton(t.question) for t in train}
+    in_train = sum(skeleton(t.question) in train_sk for t in heldout)
+    train_q = {t.question for t in train}
+    return SplitPlan(
+        train,
+        dev,
+        heldout,
+        stress,
+        [],
+        {
+            "input_tasks": len(tasks),
+            "stress_input_tasks": len(extra),
+            "train_pool_trimmed": len(pool) - len(heldout) - len(dev) - len(train),
+            "heldout_questions_seen_in_train": sum(t.question in train_q for t in heldout),
+            "heldout_skeleton_in_train": in_train,
+            "train_distinct_skeletons": len(train_sk),
+        },
+    )
 
 
 def build_analysis_messages(
@@ -981,11 +1008,35 @@ class Pipeline:
     def _stage_questions(self) -> dict[str, Any]:
         sc = self.cfg.scale
         n_total = math.ceil((sc.train + sc.dev + sc.heldout) * self.cfg.oversample)
+        n_stress = math.ceil(sc.stress * self.cfg.oversample)
+        reserved = stress_families()
 
         def fn() -> dict[str, Any]:
-            rep = generate_tasks(self.db_ref, n_total, self.cfg.seed)
+            # in-distribution pool: every family except the reserved stress families
+            rep = generate_tasks(
+                self.db_ref,
+                n_total,
+                self.cfg.seed,
+                exclude_families=reserved,
+                skeleton_cap=DEFAULT_SKELETON_CAP,
+            )
+            stress_rep = (
+                generate_tasks(
+                    self.db_ref,
+                    n_stress,
+                    self.cfg.seed + 7,
+                    families=reserved,
+                    template_share=0.1,  # only two families: the default shares starve the pool
+                    family_share=1.0,
+                )
+                if n_stress
+                else None
+            )
+            stress_tasks = stress_rep.tasks if stress_rep is not None else []
             return {
                 "tasks": [_item(t) for t in rep.tasks],
+                "stress_tasks": [_item(t) for t in stress_tasks],
+                "stress_families": list(reserved),
                 "counters": {
                     "requested": n_total,
                     "generated": len(rep.tasks),
@@ -994,97 +1045,71 @@ class Pipeline:
                     "dropped_error": rep.dropped_error,
                     "dropped_empty": rep.dropped_empty,
                     "dropped_duplicate": rep.dropped_duplicate,
+                    "dropped_duplicate_question": rep.dropped_duplicate_question,
+                    "dropped_skeleton_cap": rep.dropped_skeleton_cap,
+                    "stress_requested": n_stress,
+                    "stress_generated": len(stress_tasks),
                 },
                 "dropped_by_template": dict(rep.dropped_by_template),
             }
 
-        res = self._stage("questions", {"n_total": n_total, "seed": self.cfg.seed}, ["schema"], fn)
-        self._observe([_task_from(d) for d in res["tasks"]])
+        res = self._stage(
+            "questions",
+            {
+                "n_total": n_total,
+                "seed": self.cfg.seed,
+                "n_stress": n_stress,
+                "stress_families": list(reserved),
+                "skeleton_cap": DEFAULT_SKELETON_CAP,
+            },
+            ["schema"],
+            fn,
+        )
+        self._observe([_task_from(d) for d in [*res["tasks"], *res.get("stress_tasks", [])]])
         return res
 
     def _observe(self, tasks: Sequence[SqlTask]) -> None:
         if self.deps.task_observer is not None:
             self.deps.task_observer(tasks)
 
-    # ---- stage 3: gold cross-check ---------------------------------------
+    # ---- stage 3: template gold, executed ---------------------------------
     def _stage_crosscheck(self) -> dict[str, Any]:
+        """Gold is the SQL a template wrote for its own question: no model touches it. This stage
+        only executes every gold in the executor (a Nebius Sandbox on a live run) and accepts the
+        task when it runs and returns rows. Stage name and `accepted` key are kept: later stages,
+        the playground and the UI read them."""
+
         def fn() -> dict[str, Any]:
             tasks = [_task_from(d) for d in self.questions["tasks"]]
-            msgs = [build_messages(t.question, self.ddl, role="train") for t in tasks]
-            answers: dict[str, list[str | None]] = {}
-            for role in ("planner", "teacher"):
-                res = self.runner.map(
-                    role, msgs, purpose=f"crosscheck_{role}", stage="gold_crosscheck",
-                    schema=SqlAnswer,
-                )  # fmt: skip
-                answers[role] = [
-                    r.parsed.sql.strip() if r is not None and r.parsed is not None else None
-                    for r in res
-                ]
-            ex = self.deps.executor
-            gold = ex.run_batch(self.db_ref, [t.gold_sql for t in tasks])
-            outs: dict[str, dict[int, ExecOutcome]] = {}
-            for role, sqls in answers.items():
-                idx = [i for i, s in enumerate(sqls) if s]
-                got = ex.run_batch(self.db_ref, [sqls[i] or "" for i in idx])
-                outs[role] = dict(zip(idx, got, strict=True))
+            stress = [_task_from(d) for d in self.questions.get("stress_tasks", [])]
+            outs = self.deps.executor.run_batch(
+                self.db_ref, [t.gold_sql for t in [*tasks, *stress]]
+            )
             reasons: Counter[str] = Counter()
             accepted: list[dict[str, Any]] = []
-            suspect: list[str] = []
-            identical_text = 0
-            for i, t in enumerate(tasks):
-                why = self._crosscheck_one(t, gold[i], i, answers, outs, suspect)
-                if why is None:
-                    accepted.append(_item(t))
-                    if answers["planner"][i] == answers["teacher"][i]:
-                        identical_text += 1
+            stress_accepted: list[dict[str, Any]] = []
+            for i, (t, o) in enumerate(zip([*tasks, *stress], outs, strict=True)):
+                if not o.ok:
+                    reasons["gold_error"] += 1
+                elif not o.rows:
+                    reasons["gold_empty"] += 1
                 else:
-                    reasons[why] += 1
+                    (accepted if i < len(tasks) else stress_accepted).append(_item(t))
             return {
                 "accepted": accepted,
-                "suspect_gold_task_ids": suspect,
+                "stress_accepted": stress_accepted,
                 "discarded_by_reason": dict(reasons),
                 "counters": {
                     "checked": len(tasks),
                     "accepted": len(accepted),
                     "discarded": len(tasks) - len(accepted),
-                    "accepted_with_identical_sql_text": identical_text,
-                    "suspect_gold": len(suspect),
+                    "stress_checked": len(stress),
+                    "stress_accepted": len(stress_accepted),
                     **{f"discard_{k}": v for k, v in reasons.items()},
                 },
             }
 
-        return self._stage("gold_crosscheck", {}, ["questions"], fn)
-
-    @staticmethod
-    def _crosscheck_one(
-        t: SqlTask,
-        gold: ExecOutcome,
-        i: int,
-        answers: Mapping[str, Sequence[str | None]],
-        outs: Mapping[str, Mapping[int, ExecOutcome]],
-        suspect: list[str],
-    ) -> str | None:
-        """Reason the task is discarded, or None if planner, teacher and gold all agree."""
-        if not gold.ok:
-            return "gold_error"
-        for role in ("planner", "teacher"):
-            if answers[role][i] is None:
-                return f"{role}_no_answer"  # LLM error, schema failure or empty sql
-        for role in ("planner", "teacher"):
-            if not outs[role][i].ok:
-                return f"{role}_exec_error"
-        pm = compare_outcomes(outs["planner"][i], gold, t.requires_order).ok
-        tm = compare_outcomes(outs["teacher"][i], gold, t.requires_order).ok
-        if pm and tm:
-            return None
-        if pm != tm:
-            return "planner_mismatch_only" if tm else "teacher_mismatch_only"
-        agree = compare_outcomes(outs["planner"][i], outs["teacher"][i], t.requires_order).ok
-        if agree:
-            suspect.append(t.task_id)  # both models agree with each other but not the template
-            return "both_mismatch_agreeing_suspect_gold"
-        return "both_mismatch_disagreeing"
+        return self._stage("gold_crosscheck", {"gold": "template"}, ["questions"], fn)
 
     @property
     def questions(self) -> dict[str, Any]:
@@ -1157,10 +1182,16 @@ class Pipeline:
     def _stage_split(self) -> dict[str, Any]:
         def fn() -> dict[str, Any]:
             accepted = [_task_from(d) for d in self._results["gold_crosscheck"]["accepted"]]
-            plan = plan_split(accepted, self.cfg.scale, self.cfg.seed)
-            labels = classify_heldout(plan.train, plan.heldout)
-            items = [_item(t, labels[t.task_id]) for t in plan.heldout]
+            stress_in = [
+                _task_from(d) for d in self._results["gold_crosscheck"].get("stress_accepted", [])
+            ]
+            plan = plan_split(accepted, self.cfg.scale, self.cfg.seed, stress_in)
+            items = [_item(t, IN_DISTRIBUTION) for t in plan.heldout]
             sealed = self.store.seal_heldout(self.run_id, items)
+            stress_items = [_item(t, STRESS) for t in plan.stress]
+            stress_sealed = (
+                self.store.seal_stress(self.run_id, stress_items) if stress_items else ""
+            )
             rng = random.Random(self.cfg.seed + 6)  # noqa: S311
             spot = rng.sample(items, min(self.cfg.spot_check_n, len(items)))
             atomic_write_bytes(
@@ -1184,7 +1215,7 @@ class Pipeline:
                     }
                 ).encode("utf-8"),
             )
-            class_counts = Counter(labels.values())
+            class_counts = Counter(str(it["heldout_class"]) for it in items)
             return {
                 "train": [_item(t) for t in plan.train],
                 "dev": [_item(t) for t in plan.dev],
@@ -1193,19 +1224,29 @@ class Pipeline:
                 "heldout_families": plan.heldout_families,
                 "heldout_class_counts": dict(class_counts),
                 "sealed_sha256": sealed,
+                "stress_sealed_sha256": stress_sealed,
+                "stress_task_ids": sorted(t.task_id for t in plan.stress),
+                "stress_families": sorted({t.family for t in plan.stress}),
                 "counters": {
                     **plan.counters,
                     "train": len(plan.train),
                     "dev": len(plan.dev),
                     "heldout": len(plan.heldout),
+                    "stress": len(plan.stress),
                     "spot_check_items": len(spot),
                 },
             }
 
         res = self._stage(
-            "split", {"scale": self.cfg.scale.model_dump(), "n_spot": self.cfg.spot_check_n},
-            ["gold_crosscheck"], fn,
-        )  # fmt: skip
+            "split",
+            {
+                "scale": self.cfg.scale.model_dump(),
+                "n_spot": self.cfg.spot_check_n,
+                "gate": "in_distribution",
+            },
+            ["gold_crosscheck"],
+            fn,
+        )
         self.sealed_sha = str(res["sealed_sha256"])
         self.say(f"[held-out] sealed sha256={self.sealed_sha} n={res['counters']['heldout']}")
         for d in (*res["train"], *res["dev"]):
@@ -1899,6 +1940,14 @@ class Pipeline:
                 "heldout_families": split["heldout_families"],
                 "heldout_class_counts": split["heldout_class_counts"],
                 "heldout_sealed_sha256": split["sealed_sha256"],
+                "heldout_kind": "in-distribution gate set (every family also in train)",
+                "stress_tasks": len(split["stress_task_ids"]),
+                "stress_families": split["stress_families"],
+                "stress_sealed_sha256": split["stress_sealed_sha256"],
+                "heldout_skeleton_overlap_rate": _rate(
+                    split["counters"]["heldout_skeleton_in_train"], len(split["heldout_task_ids"])
+                ),
+                "train_distinct_skeletons": split["counters"]["train_distinct_skeletons"],
                 "teacher_verified_rows_round1": len(data["rows"]),
                 "spot_check_file": "spot_check.json",
             },
