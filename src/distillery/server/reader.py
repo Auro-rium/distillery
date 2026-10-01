@@ -87,7 +87,7 @@ class RunReader:
         try:
             row = con.execute(
                 "SELECT COUNT(*), COALESCE(SUM(usd),0) FROM spend "
-                "WHERE run_id=? AND kind='finetune'",
+                "WHERE run_id=? AND kind IN ('finetune','finetune_ceiling')",
                 (run_id,),
             ).fetchone()
         finally:

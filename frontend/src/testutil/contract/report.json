@@ -248,6 +248,9 @@
     ],
     "stress_sealed_sha256": "9d1c4e7a2b6f8035c1ad7e94b3f20d68e5a1c7f4b92d3086ae15f7c0d4b8e231",
     "stress_tasks": 8,
+    "heldout_sealed_sha256": "c27e0cffe883c4e68f4cd34128bce82620edc235d534536a59848cc74f60bdf8",
+    "heldout_tasks": 20,
+    "spot_check_file": "spot_check.json",
     "teacher_verified_rows_round1": 40,
     "train_distinct_skeletons": 14,
     "train_tasks": 40

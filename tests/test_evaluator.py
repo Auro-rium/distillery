@@ -267,6 +267,44 @@ def test_only_evaluator_loads_heldout() -> None:
                 name = node.attr
             elif isinstance(node, ast.Name):
                 name = node.id
-            if name == "load_heldout":
+            if name in {"load_heldout", "load_stress"}:
                 offenders.append(f"{path.relative_to(SRC)}:{node.lineno}")
     assert offenders == []
+
+
+# ---- student diagnostics
+def test_identical_rate() -> None:
+    from distillery.evaluator import identical_rate
+
+    assert identical_rate(["a", None, "c"], ["a", None, "x"]) == pytest.approx(2 / 3)
+    assert identical_rate([], []) == 0.0
+    with pytest.raises(ValueError):
+        identical_rate(["a"], [])
+
+
+def test_diagnose_with_heldout_loads_each_model_once_and_scores(env) -> None:  # type: ignore[no-untyped-def]
+    from distillery.evaluator import diagnose_with_heldout
+
+    store, db, ddl, items, answers = env
+    dev = [dict(it) for it in items[:4]]
+    train = [
+        {**dict(it), "messages": [{"role": "user", "content": it["question"]}]} for it in items[4:6]
+    ]
+    base, student = Lookup(answers), Lookup(answers, wrong_every=2)
+    out = diagnose_with_heldout(
+        store, "r1", {"base": base, "student": student}, {"train": train, "dev": dev},
+        LocalExecutor(), db_ref=db, schema_ddl=ddl,
+    )  # fmt: skip
+    assert base.calls == student.calls == 2 + 4 + N  # one generate call per model
+    m = out["models"]
+    assert set(m["base"]) == {"train", "dev", "heldout"}
+    assert m["base"]["heldout"]["accuracy"] == 1.0 and m["base"]["heldout"]["n"] == N
+    assert m["base"]["dev"]["items"][0]["sql"] == items[0]["gold_sql"]
+    ident = out["identical_to_base"]["student"]
+    assert 0.0 < ident["dev"]["raw"] < 1.0 and ident["heldout"]["sql"] < 1.0
+    assert "gold_sql" not in m["base"]["heldout"]["items"][0]
+    with pytest.raises(ValueError):
+        diagnose_with_heldout(
+            store, "r1", {"base": base}, {"heldout": []}, LocalExecutor(),
+            db_ref=db, schema_ddl=ddl,
+        )  # fmt: skip

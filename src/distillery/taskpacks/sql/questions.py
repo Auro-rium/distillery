@@ -1,5 +1,5 @@
 # ruff: noqa: S608, S311, E501
-"""Templated text-to-SQL question generator with named families and family-aware splitting.
+"""Templated text-to-SQL question generator with named families, skeletons and stress families.
 
 Every template returns ``(question, gold_sql)``. ``requires_order`` is derived from the gold SQL
 (top-level ORDER BY), and templates whose gold has ORDER BY say so in the question. Gold SQL is
@@ -11,6 +11,7 @@ from __future__ import annotations
 import hashlib
 import math
 import random
+import re
 from collections import Counter
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -19,6 +20,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict
 
+from distillery.taskpacks.sql import schema as _schema
 from distillery.taskpacks.sql.runner import DbRef, run_select
 from distillery.taskpacks.sql.schema import (
     CATEGORIES,
@@ -1201,7 +1203,7 @@ def accounts_above_industry_avg_users(rng: random.Random) -> tuple[str, str]:
         rng,
         [
             f"Which {st} accounts in {c} created in or before {y} have more users than the average user count of accounts in their industry (over all accounts in that industry)? Return account_id and user count.",
-            f"List account_id and user count for {st} accounts (created up to {y}) whose number of users is above their industry's average per-account user count.",
+            f"List account_id and user count for {st} accounts in {c} (created up to {y}) whose number of users is above their industry's average per-account user count.",
         ],
     )
     return q, (
@@ -1674,8 +1676,77 @@ def _task_id(family: str, gold_sql: str) -> str:
     return "sql-" + hashlib.sha256(f"{family}|{gold_sql}".encode()).hexdigest()[:12]
 
 
+# ---- reserved stress families (pre-registered, DECISIONS.md 2026-09-30) -------------------------
+
+# The STRESS set is drawn only from these families; they never appear in train, dev or the gate
+# set. Chosen by a fixed written rule, not by past results:
+#     random.Random(STRESS_SEED).sample(sorted(FAMILIES), k=STRESS_FAMILY_COUNT)
+# (with the current 12 families: date_math and set_ops). Change neither constant after results.
+STRESS_SEED = 777
+STRESS_FAMILY_COUNT = 2
+
+
+def stress_families(families: tuple[str, ...] | None = None) -> tuple[str, ...]:
+    """The reserved stress families (sorted), by the fixed rule above."""
+    pool = sorted(FAMILIES if families is None else families)
+    return tuple(sorted(random.Random(STRESS_SEED).sample(pool, k=STRESS_FAMILY_COUNT)))
+
+
+# ---- question skeletons ------------------------------------------------------------------------
+
+# Every enumerated literal a template can put into a question (schema vocabulary + months,
+# currencies); masked together with quoted strings and anything containing a digit.
+_VOCAB: frozenset[str] = frozenset(
+    v.lower()
+    for group in (
+        _schema.INDUSTRIES, _schema.COUNTRIES, _schema.ACCOUNT_STATUSES, _schema.USER_ROLES,
+        _schema.TIERS, _schema.SUB_STATUSES, _schema.INVOICE_STATUSES, _schema.PAYMENT_METHODS,
+        _schema.PAYMENT_STATUSES, _schema.PRIORITIES, _schema.CATEGORIES,
+        _schema.TICKET_STATUSES, _schema.FEATURES, _MONTHS, ("USD", "EUR"),
+    )
+    for v in group
+)  # fmt: skip
+_VOCAB_RE = re.compile(
+    r"\b(" + "|".join(sorted(map(re.escape, _VOCAB), key=len, reverse=True)) + r")\b"
+)
+_QUOTED_RE = re.compile(r"'[^']*'")
+_NUMBER_RE = re.compile(r"\$?\d[\d,.:-]*")
+
+
+def skeleton(question: str) -> str:
+    """The question with every literal masked: quoted strings -> <s>, anything starting with a
+    digit (numbers, dates, $ amounts, ids) -> <n>, enumerated vocabulary (countries, statuses,
+    roles, tiers, months, ...) -> <v>; lower-cased, whitespace collapsed. Two tasks with the same
+    skeleton differ only in their parameters (near-duplicates)."""
+    s = _QUOTED_RE.sub("<s>", question.lower())
+    s = _NUMBER_RE.sub("<n>", s)
+    s = _VOCAB_RE.sub("<v>", s)
+    return " ".join(s.split())
+
+
+# ---- per-template capacity --------------------------------------------------------------------
+
+CAPACITY_PROBE_DRAWS = 200  # draws per template when measuring its distinct-SQL capacity
+TINY_TEMPLATE_MAX_SQL = 4  # a template with at most this many distinct SQL strings is "tiny"
+_CAPACITY_CACHE: dict[tuple[str, int], int] = {}
+
+
+def template_capacity(tpl: Template, draws: int = CAPACITY_PROBE_DRAWS) -> int:
+    """Distinct gold SQL strings the template produced in ``draws`` deterministic draws (exact for
+    small parameter spaces, a lower bound for large ones). Offline: builds only, no execution."""
+    key = (tpl.name, id(tpl.build))
+    if key not in _CAPACITY_CACHE:
+        rng = random.Random(f"capacity|{tpl.name}")
+        _CAPACITY_CACHE[key] = len({tpl.build(rng)[1] for _ in range(draws)})
+    return _CAPACITY_CACHE[key]
+
+
 DEFAULT_TEMPLATE_SHARE = 0.04
 DEFAULT_FAMILY_SHARE = 0.25
+# Max tasks per question skeleton in one generated pool. The templates have ~2 phrasing variants
+# each, so the 10 training families have only ~147 skeletons: 40 is the smallest round cap that
+# still fills the prereg pool (measured 2842 available at cap 40 vs 2475 needed, seed 1234).
+DEFAULT_SKELETON_CAP = 40
 
 
 @dataclass
@@ -1687,16 +1758,23 @@ class GenerationReport:
     dropped_empty: int = 0
     dropped_duplicate: int = 0
     dropped_cap: int = 0
+    dropped_skeleton_cap: int = 0
+    dropped_duplicate_question: int = 0
     attempts: int = 0
     dropped_by_template: Counter[str] = field(default_factory=Counter)
     capped_templates: set[str] = field(default_factory=set)
     capped_families: set[str] = field(default_factory=set)
+    tiny_templates: set[str] = field(default_factory=set)
     template_cap: int = 0
     family_cap: int = 0
+    skeleton_cap: int | None = None
 
     @property
     def dropped_total(self) -> int:
-        return self.dropped_error + self.dropped_empty + self.dropped_duplicate + self.dropped_cap
+        return (
+            self.dropped_error + self.dropped_empty + self.dropped_duplicate + self.dropped_cap
+            + self.dropped_skeleton_cap + self.dropped_duplicate_question
+        )  # fmt: skip
 
 
 def generate_tasks(
@@ -1705,47 +1783,85 @@ def generate_tasks(
     seed: int,
     *,
     families: tuple[str, ...] | None = None,
+    exclude_families: tuple[str, ...] = (),
     max_attempt_factor: int = 60,
     template_share: float = DEFAULT_TEMPLATE_SHARE,
     family_share: float = DEFAULT_FAMILY_SHARE,
+    skeleton_cap: int | None = None,
 ) -> GenerationReport:
     """Generate up to ``n`` distinct tasks whose gold SQL executes and returns >= 1 row.
 
-    Templates are cycled round-robin (with randomised parameters). No template may contribute more
-    than ``template_share * n`` tasks and no family more than ``family_share * n`` (each cap is
-    raised only as far as needed to make ``n`` reachable with the templates/families selected, e.g.
-    when ``families`` restricts the pool). Tasks that error, return an empty result, repeat an
-    existing gold SQL, or exceed a cap are dropped and counted in the report; a template whose
-    parameter space is exhausted or capped leaves the pool. The result can be shorter than ``n``
-    when the capped, deduplicated pool cannot supply that many. Deterministic for
-    (db contents, n, seed, families, shares).
+    Templates are cycled round-robin (with randomised parameters) over ``families`` (default: all)
+    minus ``exclude_families``. Caps, each counted when it drops a draw:
+
+    * per template: ``min(share cap, distinct-SQL capacity)``. The share cap is
+      ``template_share * n`` (raised only as far as needed to make ``n`` reachable); the capacity
+      is measured by ``template_capacity``, so a tiny template (<= 4 distinct SQL) leaves the pool
+      as soon as it has contributed its few tasks instead of burning draws on duplicates.
+    * per family: ``family_share * n`` (raised likewise).
+    * per question skeleton (``skeleton``): ``skeleton_cap`` (None = no cap), so near-duplicates
+      (same wording, other literals) cannot pile up. Checked before execution; a skeleton-capped
+      draw does not count towards a template's exhaustion streak.
+
+    Draws that repeat an existing gold SQL or an existing question text (a question must
+    determine its gold) are dropped, as are gold SQL that errors or returns no rows. The result
+    can be shorter than ``n`` when the capped, deduplicated pool cannot supply that many.
+    Deterministic for (db contents, n, seed, families, exclude_families, shares, skeleton_cap).
     """
     rng = random.Random(seed)
-    pool = [t for t in TEMPLATES if families is None or t.family in families]
+    excluded = set(exclude_families)
+    pool = [
+        t
+        for t in TEMPLATES
+        if (families is None or t.family in families) and t.family not in excluded
+    ]
     if not pool:
-        raise ValueError(f"no templates for families {families!r}")
+        raise ValueError(f"no templates for families {families!r} minus {exclude_families!r}")
     n_fams = len({t.family for t in pool})
     tpl_cap = max(1, math.ceil(template_share * n), math.ceil(n / len(pool)))
     fam_cap = max(1, math.ceil(family_share * n), math.ceil(n / n_fams))
-    report = GenerationReport(tasks=[], template_cap=tpl_cap, family_cap=fam_cap)
+    report = GenerationReport(
+        tasks=[], template_cap=tpl_cap, family_cap=fam_cap, skeleton_cap=skeleton_cap
+    )
+    capacity = {t.name: template_capacity(t) for t in pool}
+    report.tiny_templates = {k for k, v in capacity.items() if v <= TINY_TEMPLATE_MAX_SQL}
     seen: set[str] = set()
+    seen_q: set[str] = set()
     dup_streak: Counter[str] = Counter()
+    sk_streak: Counter[str] = Counter()
     per_tpl: Counter[str] = Counter()
     per_fam: Counter[str] = Counter()
+    per_sk: Counter[str] = Counter()
+
+    def tpl_limit(name: str) -> int:
+        return min(tpl_cap, capacity[name])
+
     i = 0
     while pool and len(report.tasks) < n and report.attempts < n * max_attempt_factor:
         tpl = pool[i % len(pool)]
         i += 1
         report.attempts += 1
         question, sql = tpl.build(rng)
-        if sql in seen:
-            report.dropped_duplicate += 1
+        sk = skeleton(question)
+        if sql in seen or question in seen_q:
+            if sql in seen:
+                report.dropped_duplicate += 1
+            else:
+                report.dropped_duplicate_question += 1
             report.dropped_by_template[tpl.name] += 1
             dup_streak[tpl.name] += 1
             if dup_streak[tpl.name] >= _EXHAUSTED_AFTER:  # parameter space used up
                 pool = [t for t in pool if t.name != tpl.name]
             continue
         dup_streak[tpl.name] = 0
+        if skeleton_cap is not None and per_sk[sk] >= skeleton_cap:
+            report.dropped_skeleton_cap += 1
+            report.dropped_by_template[tpl.name] += 1
+            sk_streak[tpl.name] += 1
+            if sk_streak[tpl.name] >= _SKELETON_EXHAUSTED_AFTER:  # every wording of it is capped
+                pool = [t for t in pool if t.name != tpl.name]
+            continue
+        sk_streak[tpl.name] = 0
         outcome = run_select(db, sql)
         if not outcome.ok:
             report.dropped_error += 1
@@ -1755,10 +1871,10 @@ def generate_tasks(
             report.dropped_empty += 1
             report.dropped_by_template[tpl.name] += 1
             continue
-        if per_tpl[tpl.name] >= tpl_cap or per_fam[tpl.family] >= fam_cap:
+        if per_tpl[tpl.name] >= tpl_limit(tpl.name) or per_fam[tpl.family] >= fam_cap:
             report.dropped_cap += 1
             report.dropped_by_template[tpl.name] += 1
-            if per_tpl[tpl.name] >= tpl_cap:
+            if per_tpl[tpl.name] >= tpl_limit(tpl.name):
                 report.capped_templates.add(tpl.name)
                 pool = [t for t in pool if t.name != tpl.name]
             if per_fam[tpl.family] >= fam_cap:
@@ -1766,10 +1882,12 @@ def generate_tasks(
                 pool = [t for t in pool if t.family != tpl.family]
             continue
         seen.add(sql)
+        seen_q.add(question)
         per_tpl[tpl.name] += 1
         per_fam[tpl.family] += 1
+        per_sk[sk] += 1
         # remove from the pool as soon as a cap is reached, so no attempts are wasted
-        if per_tpl[tpl.name] >= tpl_cap:
+        if per_tpl[tpl.name] >= tpl_limit(tpl.name):
             report.capped_templates.add(tpl.name)
             pool = [t for t in pool if t.name != tpl.name]
         if per_fam[tpl.family] >= fam_cap:
@@ -1790,71 +1908,12 @@ def generate_tasks(
     return report
 
 
-# ---- splitting -------------------------------------------------------------------------------
-
-UNSEEN_FAMILY = "unseen_family"
-UNSEEN_TABLE_COMBO = "unseen_table_combo"
-SEEN = "seen"
-MIN_UNSEEN_FRACTION = 0.2
 _EXHAUSTED_AFTER = 6
+_SKELETON_EXHAUSTED_AFTER = 30
 
+# ---- held-out labels ---------------------------------------------------------------------------
 
-@dataclass(frozen=True)
-class SplitResult:
-    train: list[SqlTask]
-    heldout: list[SqlTask]
-
-
-def split_by_family(
-    tasks: list[SqlTask],
-    heldout_families: set[str] | frozenset[str],
-    seed: int,
-    *,
-    in_dist_fraction: float = 0.15,
-) -> SplitResult:
-    """Split tasks so that whole ``heldout_families`` never appear in train.
-
-    Held-out = every task of the held-out families + a random ``in_dist_fraction`` of the
-    remaining tasks. The in-distribution share is capped so that at least 20% of held-out tasks
-    come from unseen families. Raises ValueError if no held-out family has tasks. Deterministic.
-    """
-    rng = random.Random(seed)
-    unseen = [t for t in tasks if t.family in heldout_families]
-    rest = [t for t in tasks if t.family not in heldout_families]
-    if not unseen:
-        raise ValueError("no tasks belong to the held-out families")
-    n_in = min(round(len(rest) * in_dist_fraction), 4 * len(unseen))
-    order = list(range(len(rest)))
-    rng.shuffle(order)
-    picked = set(order[:n_in])
-    train = [t for i, t in enumerate(rest) if i not in picked]
-    heldout = unseen + [t for i, t in enumerate(rest) if i in picked]
-    return SplitResult(train=train, heldout=heldout)
-
-
-def classify_heldout(train: list[SqlTask], heldout: list[SqlTask]) -> dict[str, str]:
-    """Map each held-out task_id to 'unseen_family', 'unseen_table_combo' or 'seen'."""
-    fams = {t.family for t in train}
-    combos = {frozenset(t.tables) for t in train}
-    out: dict[str, str] = {}
-    for t in heldout:
-        if t.family not in fams:
-            out[t.task_id] = UNSEEN_FAMILY
-        elif frozenset(t.tables) not in combos:
-            out[t.task_id] = UNSEEN_TABLE_COMBO
-        else:
-            out[t.task_id] = SEEN
-    return out
-
-
-def unseen_family_ids(train: list[SqlTask], heldout: list[SqlTask]) -> set[str]:
-    """task_ids of held-out items whose family never occurs in train."""
-    return {k for k, v in classify_heldout(train, heldout).items() if v == UNSEEN_FAMILY}
-
-
-def unseen_fraction(train: list[SqlTask], heldout: list[SqlTask]) -> float:
-    """Share of held-out tasks that are unseen-family or unseen-table-combination."""
-    if not heldout:
-        return 0.0
-    labels = classify_heldout(train, heldout)
-    return sum(1 for v in labels.values() if v != SEEN) / len(heldout)
+# The gate set is purely in-distribution (every family also in train); the stress set comes only
+# from the reserved stress families. These labels go into the sealed items ("heldout_class").
+IN_DISTRIBUTION = "in_distribution"
+STRESS = "stress"

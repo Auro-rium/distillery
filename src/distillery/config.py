@@ -9,7 +9,14 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Literal, get_args
 
-from pydantic import BaseModel, ConfigDict, Field, SecretStr, ValidationError
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    SecretStr,
+    ValidationError,
+    model_validator,
+)
 
 Role = Literal["planner", "teacher", "triage", "student"]
 ROLES: tuple[str, ...] = get_args(Role)
@@ -28,6 +35,52 @@ class Price(BaseModel):
     output_per_mtok: float = Field(ge=0)
     source: str = Field(min_length=1)
     date: str = Field(min_length=1)
+
+
+class FinetunePrice(BaseModel):
+    """Fine-tune price for one base model, per million TRAINED tokens (as the job reports them)."""
+
+    model_config = ConfigDict(frozen=True)
+
+    usd_per_mtok_trained_tokens: float = Field(ge=0)
+    source: str = Field(min_length=1)
+    date: str = Field(min_length=1)
+
+
+class SandboxPrice(BaseModel):
+    """Sandbox compute price. Exactly one of the two rates; both are USD per second."""
+
+    model_config = ConfigDict(frozen=True)
+
+    usd_per_cpu_second: float | None = Field(default=None, ge=0)
+    usd_per_second: float | None = Field(default=None, ge=0)
+    source: str = Field(min_length=1)
+    date: str = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def _exactly_one_rate(self) -> SandboxPrice:
+        if (self.usd_per_cpu_second is None) == (self.usd_per_second is None):
+            raise ValueError(
+                "sandbox price needs exactly one of usd_per_cpu_second, usd_per_second"
+            )
+        return self
+
+    @property
+    def per_second(self) -> float:
+        """The rate applied to measured wall-clock seconds of one sandbox."""
+        rate = self.usd_per_cpu_second if self.usd_per_second is None else self.usd_per_second
+        assert rate is not None  # noqa: S101 - guaranteed by the validator
+        return rate
+
+
+class PriceFile(BaseModel):
+    """A parsed price file: legacy per-model LLM prices plus the typed sections."""
+
+    model_config = ConfigDict(frozen=True)
+
+    llm: dict[str, Price] = Field(default_factory=dict)
+    finetune: dict[str, FinetunePrice] = Field(default_factory=dict)
+    sandbox: SandboxPrice | None = None
 
 
 class GateThresholds(BaseModel):
@@ -49,6 +102,8 @@ class Config(BaseModel):
     playground_daily_cap_usd: float = 1.0
     model_ids: dict[str, str] = Field(default_factory=dict)
     prices: dict[str, Price] = Field(default_factory=dict)
+    finetune_prices: dict[str, FinetunePrice] = Field(default_factory=dict)
+    sandbox_price: SandboxPrice | None = None
     gate: GateThresholds = Field(default_factory=GateThresholds)
 
     def require_model(self, role: str) -> str:
@@ -75,17 +130,34 @@ def verify_admin_token(supplied: str, expected: SecretStr | str | None) -> bool:
     return hmac.compare_digest(supplied.encode("utf-8"), exp.encode("utf-8"))
 
 
-def load_prices(path: str | Path) -> dict[str, Price]:
+PRICE_SECTIONS = ("finetune", "sandbox")  # reserved top-level keys of the price file
+
+
+def load_price_file(path: str | Path) -> PriceFile:
+    """Read a price file. Flat per-model LLM entries stay valid; ``finetune`` and ``sandbox``
+    are typed sections. Every entry must carry ``source`` and ``date``."""
     try:
         raw = json.loads(Path(path).read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as e:
         raise ConfigError(f"cannot read prices file {str(path)!r}: {e}") from e
     if not isinstance(raw, dict):
         raise ConfigError("prices file must be a JSON object keyed by model id")
+    ft_raw = raw.get("finetune", {})
+    if not isinstance(ft_raw, dict):
+        raise ConfigError("prices file: 'finetune' must be an object keyed by base model id")
     try:
-        return {str(k): Price.model_validate(v) for k, v in raw.items()}
+        llm = {str(k): Price.model_validate(v) for k, v in raw.items() if k not in PRICE_SECTIONS}
+        finetune = {str(k): FinetunePrice.model_validate(v) for k, v in ft_raw.items()}
+        sb_raw = raw.get("sandbox")
+        sandbox = SandboxPrice.model_validate(sb_raw) if sb_raw is not None else None
     except ValidationError as e:
         raise ConfigError(f"invalid price entry: {e}") from e
+    return PriceFile(llm=llm, finetune=finetune, sandbox=sandbox)
+
+
+def load_prices(path: str | Path) -> dict[str, Price]:
+    """The per-model LLM prices only (kept for callers that predate the typed sections)."""
+    return dict(load_price_file(path).llm)
 
 
 def _float_env(env: Mapping[str, str], name: str, default: float) -> float:
@@ -109,6 +181,7 @@ def load_config(env: Mapping[str, str] | None = None) -> Config:
     }
     project = e.get("NEBIUS_PROJECT_ID") or e.get("NEBIUS_AI_PROJECT")  # official name first
     prices_file = e.get("DISTILLERY_PRICES_FILE")
+    price_file = load_price_file(prices_file) if prices_file else PriceFile()
     gate_kwargs: dict[str, float | int] = {}
     if e.get("DISTILLERY_SEED"):
         try:
@@ -124,6 +197,8 @@ def load_config(env: Mapping[str, str] | None = None) -> Config:
         project_cap_usd=_float_env(e, "DISTILLERY_PROJECT_CAP_USD", 40.0),
         playground_daily_cap_usd=_float_env(e, "DISTILLERY_PLAYGROUND_DAILY_CAP_USD", 1.0),
         model_ids=models,
-        prices=load_prices(prices_file) if prices_file else {},
+        prices=dict(price_file.llm),
+        finetune_prices=dict(price_file.finetune),
+        sandbox_price=price_file.sandbox,
         gate=GateThresholds(**gate_kwargs),  # type: ignore[arg-type]
     )

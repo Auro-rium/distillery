@@ -1,0 +1,26 @@
+{
+  "nvidia/Nemotron-3-Ultra-550b-a55b": {
+    "input_per_mtok": 3.0,
+    "output_per_mtok": 9.0,
+    "source": "ASSUMED UPPER BOUND for budget guard, NOT the console price",
+    "date": "2026-09-30"
+  },
+  "nvidia/nemotron-3-super-120b-a12b": {
+    "input_per_mtok": 1.0,
+    "output_per_mtok": 3.0,
+    "source": "ASSUMED UPPER BOUND for budget guard, NOT the console price",
+    "date": "2026-09-30"
+  },
+  "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B": {
+    "input_per_mtok": 0.3,
+    "output_per_mtok": 1.0,
+    "source": "ASSUMED UPPER BOUND for budget guard, NOT the console price",
+    "date": "2026-09-30"
+  },
+  "Qwen/Qwen3-0.6B": {
+    "input_per_mtok": 0.0,
+    "output_per_mtok": 0.0,
+    "source": "ASSUMED UPPER BOUND for budget guard, NOT the console price",
+    "date": "2026-09-30"
+  }
+}

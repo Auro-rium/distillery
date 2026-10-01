@@ -11,13 +11,17 @@ import openai
 import pytest
 from pydantic import ValidationError
 
+from distillery.config import ConfigError
 from distillery.finetune import (
+    PINNED_HYPERPARAMETERS,
     FineTuneClient,
     FineTuneError,
     HyperParameters,
     JobFailedError,
     PollTimeoutError,
     paid_job,
+    planned_steps,
+    require_explicit_hyperparameters,
 )
 
 _REQ = httpx2.Request("POST", "https://example.invalid/v1/x")
@@ -36,6 +40,8 @@ def job(status: str, **kw: Any) -> Any:
         result_files=[],
         trained_steps=1,
         total_steps=2,
+        trained_tokens=kw.get("trained_tokens", 5000),
+        hyperparameters=kw.get("hyperparameters"),
     )
 
 
@@ -181,7 +187,7 @@ def test_create_job_request_shape() -> None:
         "Qwen/Qwen3-1.7B",
         "f-train",
         "f-val",
-        HyperParameters(lora=True, lora_r=16, lora_alpha=16),
+        PINNED_HYPERPARAMETERS,
         suffix="s",
         seed=42,
     )
@@ -190,7 +196,7 @@ def test_create_job_request_shape() -> None:
         "model": "Qwen/Qwen3-1.7B",
         "training_file": "f-train",
         "validation_file": "f-val",
-        "hyperparameters": {"lora": True, "lora_r": 16, "lora_alpha": 16},
+        "hyperparameters": PINNED_HYPERPARAMETERS.to_request(),
         "suffix": "s",
         "seed": 42,
     }
@@ -202,7 +208,7 @@ def test_create_job_is_not_retried() -> None:
     c, fake, *_ = make()
     fake.fine_tuning.jobs.create = lambda **kw: (_ for _ in ()).throw(err(503))
     with pytest.raises(openai.APIStatusError):
-        c.create_job("m", "f")
+        c.create_job("m", "f", hyperparameters=PINNED_HYPERPARAMETERS)
 
 
 # ---- upload / retry
@@ -302,7 +308,9 @@ def test_download_rejects_path_traversal(tmp_path: Path) -> None:
 def test_paid_job_cancels_on_exception() -> None:
     c, fake, *_ = make()
     with pytest.raises(RuntimeError, match="boom"):
-        with paid_job(lambda: c.create_job("m", "f"), c.cancel) as h:
+        with paid_job(
+            lambda: c.create_job("m", "f", hyperparameters=PINNED_HYPERPARAMETERS), c.cancel
+        ) as h:
             assert h.job_id == "job-1"
             raise RuntimeError("boom")
     assert fake.cancelled == ["job-1"]
@@ -310,14 +318,16 @@ def test_paid_job_cancels_on_exception() -> None:
 
 def test_paid_job_cancels_if_not_marked_succeeded() -> None:
     c, fake, *_ = make()
-    with paid_job(lambda: c.create_job("m", "f"), c.cancel):
+    with paid_job(lambda: c.create_job("m", "f", hyperparameters=PINNED_HYPERPARAMETERS), c.cancel):
         pass
     assert fake.cancelled == ["job-1"]
 
 
 def test_paid_job_no_cancel_on_success() -> None:
     c, fake, *_ = make()
-    with paid_job(lambda: c.create_job("m", "f"), c.cancel) as h:
+    with paid_job(
+        lambda: c.create_job("m", "f", hyperparameters=PINNED_HYPERPARAMETERS), c.cancel
+    ) as h:
         h.mark_succeeded()
     assert fake.cancelled == []
 
@@ -326,7 +336,9 @@ def test_paid_job_cancel_failure_does_not_mask_original() -> None:
     c, fake, *_ = make()
     fake.cancel_exc = err(409)
     with pytest.raises(RuntimeError) as ei:
-        with paid_job(lambda: c.create_job("m", "f"), c.cancel):
+        with paid_job(
+            lambda: c.create_job("m", "f", hyperparameters=PINNED_HYPERPARAMETERS), c.cancel
+        ):
             raise RuntimeError("boom")
     assert any("cancelling job job-1 failed" in n for n in ei.value.__notes__)
 
@@ -335,7 +347,9 @@ def test_paid_job_forced_failure_from_poll_cancels() -> None:
     c, fake, *_ = make()
     fake.job_script = [job("running"), job("failed", error=SimpleNamespace(code="x", message="y"))]
     with pytest.raises(JobFailedError):
-        with paid_job(lambda: c.create_job("m", "f"), c.cancel) as h:
+        with paid_job(
+            lambda: c.create_job("m", "f", hyperparameters=PINNED_HYPERPARAMETERS), c.cancel
+        ) as h:
             c.require_success(c.poll(h.job_id))
             h.mark_succeeded()
     assert fake.cancelled == ["job-1"]
@@ -381,3 +395,52 @@ def test_poll_does_not_tolerate_terminal_http_errors() -> None:
     with pytest.raises(openai.APIStatusError):
         c.poll("job-1")
     assert sleeps == []
+
+
+# ---- explicit hyperparameters guard
+def test_default_style_hyperparameters_refused_before_any_api_call() -> None:
+    c, fake, *_ = make()
+    with pytest.raises(ConfigError, match="batch_size"):
+        c.create_job("m", "f", hyperparameters=HyperParameters(lora=True, n_epochs=3))
+    with pytest.raises(ConfigError):
+        c.create_job("m", "f")  # none at all
+    assert fake.created == []
+
+
+def test_guard_requires_lora_true_and_each_field() -> None:
+    with pytest.raises(ConfigError, match="lora"):
+        require_explicit_hyperparameters(PINNED_HYPERPARAMETERS.model_copy(update={"lora": False}))
+    for k in ("batch_size", "learning_rate", "n_epochs", "lora_r", "lora_alpha", "packing"):
+        with pytest.raises(ConfigError, match=k):
+            require_explicit_hyperparameters(PINNED_HYPERPARAMETERS.model_copy(update={k: None}))
+    assert require_explicit_hyperparameters(PINNED_HYPERPARAMETERS) is PINNED_HYPERPARAMETERS
+
+
+def test_pinned_values() -> None:
+    assert PINNED_HYPERPARAMETERS.to_request() == {
+        "lora": True, "lora_r": 16, "lora_alpha": 16, "learning_rate": 1e-4, "n_epochs": 3,
+        "batch_size": 16, "packing": False, "warmup_ratio": 0.0, "weight_decay": 0.0,
+        "max_grad_norm": 1.0, "lora_dropout": 0.0, "context_length": 8192,
+    }  # fmt: skip
+
+
+def test_planned_steps() -> None:
+    assert planned_steps(117, PINNED_HYPERPARAMETERS) == 8 * 3
+    assert planned_steps(40, PINNED_HYPERPARAMETERS.model_copy(update={"packing": True})) is None
+
+
+# ---- resolved job fields / loss curve
+def test_job_info_carries_resolved_hyperparameters_and_tokens() -> None:
+    c, fake, *_ = make()
+    hp = {"batch_size": 8, "learning_rate": 1e-5, "packing": True}
+    fake.job_script = [job("succeeded", hyperparameters=SimpleNamespace(**hp))]
+    info = c.get("job-1")
+    assert info.hyperparameters == hp
+    assert info.trained_tokens == 5000 and info.trained_steps == 1 and info.total_steps == 2
+    fake.job_script = [job("succeeded", hyperparameters=hp)]
+    assert c.get("job-1").hyperparameters == hp
+
+
+def test_loss_curve_from_checkpoints() -> None:
+    c, *_ = make()
+    assert c.loss_curve("job-1") == [{"step": 3, "train_loss": 1.0, "valid_loss": None}]

@@ -6,6 +6,7 @@ Until a real bundle exists the default replay item is the labelled dry-run sampl
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -79,6 +80,21 @@ def load_bundles(replay_dir: Path, sample_report: Path | None) -> dict[str, Bund
     return out
 
 
+_ABS_PATH = re.compile(
+    r"(?:^|[\s\"'=(:])(?:/(?:home|tmp|Users|var|root|mnt|opt|usr|etc|srv)/|[A-Za-z]:\\)"
+)
+
+
+def _absolute_paths(obj: Any) -> list[str]:
+    if isinstance(obj, str):
+        return [obj[:120]] if _ABS_PATH.search(obj) else []
+    if isinstance(obj, dict):
+        return [s for v in obj.values() for s in _absolute_paths(v)]
+    if isinstance(obj, list):
+        return [s for v in obj for s in _absolute_paths(v)]
+    return []
+
+
 def export_bundle(
     reader: RunReader, run_id: str, replay_dir: Path, *, allow_dry_run: bool, recorded_at: str
 ) -> Path:
@@ -94,6 +110,10 @@ def export_bundle(
         raise ExportError(f"run {run_id} has no report.json (not finished?)")
     if bool(report.get("dry_run")) != run_id.startswith(DRY_PREFIX):
         raise ExportError(f"run {run_id}: report dry_run flag disagrees with the run id")
+    data = report.get("data")
+    if isinstance(data, dict) and isinstance(data.get("spot_check_file"), str):
+        # older runs wrote the absolute path of the machine that ran them
+        report = {**report, "data": {**data, "spot_check_file": Path(data["spot_check_file"]).name}}
     detail = reader.detail(run_id)
     detail["recorded"], detail["recorded_at"] = True, recorded_at
     events, _ = reader.events_after(run_id, 0, detail, report.get("decision"), None)
@@ -107,6 +127,12 @@ def export_bundle(
         "events.json": [{"id": i, "event": e, "data": d} for i, e, d in events],
         "tree.json": tree_from_report(report),
     }
+    leaks = [p for obj in files.values() for p in _absolute_paths(obj)]
+    if leaks:
+        raise ExportError(
+            f"refusing to export {run_id}: the bundle contains an absolute path "
+            f"(e.g. {leaks[0]!r}); bundles must carry relative paths only"
+        )
     for name, obj in files.items():
         blob = json.dumps(obj, indent=2, sort_keys=True, ensure_ascii=False) + "\n"
         atomic_write_bytes(dest / name, blob.encode("utf-8"))

@@ -143,6 +143,7 @@ def create_app(settings: ServerSettings) -> FastAPI:
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         yield
+        await run_in_threadpool(playground.close)
         await run_in_threadpool(worker.stop, settings.shutdown_grace_s + 10.0)
         reader.close()
 
@@ -240,8 +241,11 @@ def create_app(settings: ServerSettings) -> FastAPI:
             },
             "run_cap_usd": cfg.run_cap_usd,
             "playground": {
-                "enabled": playground.teacher_unavailable_reason() is None,
+                "enabled": playground.any_available(),
+                "models": playground.statuses(),
                 "per_ip_per_hour": settings.playground_per_ip_per_hour,
+                "student_per_ip_per_hour": settings.playground_student_per_ip_per_hour,
+                "student_daily_cap": settings.playground_student_daily_cap,
                 "daily_cap_usd": cfg.playground_daily_cap_usd,
                 "spent_today_usd": playground.ledger.playground_spent(),
             },
@@ -249,7 +253,17 @@ def create_app(settings: ServerSettings) -> FastAPI:
 
     @app.get("/api/runs")
     def runs() -> list[dict[str, Any]]:
-        return reader.list_runs()
+        items = reader.list_runs()
+        have = {i["run_id"] for i in items}
+        # Recorded bundles are served like runs; a local run of the same id wins. The built-in
+        # unrecorded sample is not a run and stays on /api/replay only.
+        items += [
+            b.item()
+            for b in load_bundles(settings.replay_dir, settings.sample_report).values()
+            if b.recorded and b.run_id not in have
+        ]
+        items.sort(key=lambda i: i["created_at"] or "", reverse=True)
+        return items
 
     @app.get("/api/runs/{run_id}")
     def run_detail(run_id: str) -> dict[str, Any]:
@@ -426,7 +440,7 @@ def create_app(settings: ServerSettings) -> FastAPI:
                            {"Retry-After": str(int(retry) + 1)})  # fmt: skip
         body = _parse(PlaygroundRequest, await _read_body(request, settings.max_body_bytes))
         try:
-            return await playground.answer(body.question)
+            return await playground.answer(body.question, _ip(request))
         except DemoBudgetExhaustedError:
             raise ApiError(503, "demo_budget_exhausted",
                            "demo budget exhausted, see replay") from None  # fmt: skip

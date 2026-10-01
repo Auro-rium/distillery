@@ -55,6 +55,9 @@ def test_health_and_config_have_no_secrets(client: TestClient) -> None:
         "per_ip_per_hour",
         "daily_cap_usd",
         "spent_today_usd",
+        "models",
+        "student_daily_cap",
+        "student_per_ip_per_hour",
     }
     assert c["playground"]["enabled"] is False  # no LLM injected: honest
 

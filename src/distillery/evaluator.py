@@ -7,6 +7,7 @@ evaluated adapter is the trained one, and hands the per-item outcomes to the pur
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
@@ -64,6 +65,9 @@ class EvalReport:
     artifact: dict[str, str] = field(default_factory=dict)
     # Capped per-item examples; revealed only here, after scoring (see build_examples).
     examples: list[dict[str, Any]] = field(default_factory=list)
+    # Stress set (reserved families, never in train/dev/gate): scored after the gate, reported
+    # separately, never an input of evaluate_gate. None = no stress set was sealed for this run.
+    stress: dict[str, Any] | None = None
 
     def to_json(self) -> dict[str, Any]:
         return {
@@ -76,6 +80,7 @@ class EvalReport:
             "artifact": self.artifact,
             "gate": self.gate.model_dump(mode="json"),
             "examples": self.examples,
+            "stress": self.stress,
         }
 
 
@@ -211,19 +216,9 @@ def evaluate(
         if not g.ok:
             raise RuntimeError(f"gold SQL failed for held-out item {it.get('task_id')}: {g.error}")
 
-    scores: dict[str, ModelScores] = {}
-    for role in MODEL_ROLES:
-        scores[role] = score_model(
-            generators[role],
-            items,
-            gold,
-            schema_ddl=schema_ddl,
-            db_ref=db_ref,
-            executor=executor,
-            role=role,
-        )
-        if on_scores is not None:
-            on_scores(role, scores[role])
+    scores = _score_roles(
+        generators, items, gold, executor, db_ref=db_ref, schema_ddl=schema_ddl, on_scores=on_scores
+    )
 
     classes = [str(it.get("heldout_class", "seen")) for it in items]
     class_counts = {c: classes.count(c) for c in sorted(set(classes))}
@@ -253,4 +248,191 @@ def evaluate(
         class_counts=class_counts,
         artifact=artifact,
         examples=build_examples(items, scores),
+        stress=_score_stress(
+            store, run_id, generators, executor, db_ref=db_ref, schema_ddl=schema_ddl
+        ),
     )
+
+
+def _score_roles(
+    generators: Mapping[str, Generator],
+    items: Sequence[Mapping[str, Any]],
+    gold: Sequence[ExecOutcome],
+    executor: Executor,
+    *,
+    db_ref: str,
+    schema_ddl: str,
+    on_scores: Callable[[str, ModelScores], None] | None,
+) -> dict[str, ModelScores]:
+    """Score base, student and teacher concurrently: the models are independent (the base and the
+    student each run in their own sandbox), so serving them one after another only adds wall
+    time. The sandbox layer's global in-flight semaphore keeps the operation count under the cap.
+    ``on_scores`` is called on the calling thread, in completion order."""
+    scores: dict[str, ModelScores] = {}
+    with ThreadPoolExecutor(max_workers=len(MODEL_ROLES), thread_name_prefix="score") as pool:
+        futures = {
+            pool.submit(
+                score_model,
+                generators[role],
+                items,
+                gold,
+                schema_ddl=schema_ddl,
+                db_ref=db_ref,
+                executor=executor,
+                role=role,
+            ): role
+            for role in MODEL_ROLES
+        }
+        for fut in as_completed(futures):
+            role = futures[fut]
+            scores[role] = fut.result()  # a failure in any model aborts the evaluation
+            if on_scores is not None:
+                on_scores(role, scores[role])
+    return {role: scores[role] for role in MODEL_ROLES}  # stable order
+
+
+def _score_stress(
+    store: Store,
+    run_id: str,
+    generators: Mapping[str, Generator],
+    executor: Executor,
+    *,
+    db_ref: str,
+    schema_ddl: str,
+) -> dict[str, Any] | None:
+    """Accuracy of every model on the sealed stress set, per model and per family. Runs after the
+    gate decision is computed and shares nothing with it: the stress set cannot move the gate."""
+    items = store.load_stress(run_id)
+    if items is None:
+        return None
+    gold = executor.run_batch(db_ref, [str(it["gold_sql"]) for it in items])
+    for it, g in zip(items, gold, strict=True):
+        if not g.ok:
+            raise RuntimeError(f"gold SQL failed for stress item {it.get('task_id')}: {g.error}")
+    scores = _score_roles(
+        generators, items, gold, executor, db_ref=db_ref, schema_ddl=schema_ddl, on_scores=None
+    )
+    families = sorted({str(it["family"]) for it in items})
+    by_family = {
+        f: {
+            m: sum(scores[m].correct[i] for i, it in enumerate(items) if it["family"] == f)
+            / sum(1 for it in items if it["family"] == f)
+            for m in MODEL_ROLES
+        }
+        for f in families
+    }
+    return {
+        "sha256": sha256_hex(canonical_json(items).encode("utf-8")),
+        "n": len(items),
+        "families": families,
+        "accuracy": {m: s.accuracy for m, s in scores.items()},
+        "accuracy_by_family": by_family,
+        "unparseable": {m: s.unparseable for m, s in scores.items()},
+        "note": "reserved families, never in train/dev/gate; reported separately, not a gate input",
+    }
+
+
+# ---------------------------------------------------------------- student diagnostics
+
+
+def identical_rate(a: Sequence[str | None], b: Sequence[str | None]) -> float:
+    """Fraction of positions where two output lists are exactly equal (0.0 when empty)."""
+    if len(a) != len(b):
+        raise ValueError("output lists differ in length")
+    return sum(x == y for x, y in zip(a, b, strict=True)) / len(a) if a else 0.0
+
+
+def diagnose_generate(
+    generators: Mapping[str, Generator],
+    sets: Mapping[str, Sequence[Mapping[str, Any]]],
+    executor: Executor,
+    *,
+    db_ref: str,
+    schema_ddl: str,
+    compare_to: str = "base",
+) -> dict[str, Any]:
+    """Generate with every model over every named item set and score it.
+
+    Each item needs ``task_id``, ``gold_sql``, ``requires_order`` and either ``messages`` (the exact
+    prompt to send) or ``question`` (prompt built with the eval prompt builder). All sets go to a
+    model in ONE ``generate`` call, so each model (sandbox image + weights) is loaded once. Returns
+    ``{"models": {model: {set: {n, accuracy, items[{task_id, raw, sql, correct, reason}]}}},
+    "identical_to_<compare_to>": {model: {set: {raw, sql}}}}``.
+    """
+    names = list(sets)
+    flat: list[Mapping[str, Any]] = [it for n in names for it in sets[n]]
+    prompts: list[ChatMessages] = [
+        list(it["messages"])
+        if it.get("messages") is not None
+        else build_messages(str(it["question"]), schema_ddl, role="eval_student")
+        for it in flat
+    ]
+    gold = executor.run_batch(db_ref, [str(it["gold_sql"]) for it in flat]) if flat else []
+    models: dict[str, Any] = {}
+    for model, gen in generators.items():
+        outputs = gen.generate(prompts) if prompts else []
+        if len(outputs) != len(flat):
+            raise RuntimeError(f"{model}: got {len(outputs)} outputs for {len(flat)} items")
+        sqls = [extract_sql(o) for o in outputs]
+        runnable = [i for i, s in enumerate(sqls) if s is not None]
+        outcomes = executor.run_batch(db_ref, [sqls[i] or "" for i in runnable]) if runnable else []
+        by_index = dict(zip(runnable, outcomes, strict=True))
+        per_set: dict[str, Any] = {}
+        pos = 0
+        for n in names:
+            rows: list[dict[str, Any]] = []
+            for it in sets[n]:
+                i = pos
+                pos += 1
+                if sqls[i] is None:
+                    ok, why = False, "no SQL extracted from output"
+                else:
+                    v = compare_outcomes(by_index[i], gold[i], bool(it.get("requires_order")))
+                    ok, why = v.ok, v.reason
+                rows.append(
+                    {"task_id": it.get("task_id"), "raw": outputs[i], "sql": sqls[i],
+                     "correct": ok, "reason": why}
+                )  # fmt: skip
+            per_set[n] = {
+                "n": len(rows),
+                "accuracy": sum(r["correct"] for r in rows) / len(rows) if rows else 0.0,
+                "items": rows,
+            }
+        models[model] = per_set
+    ident: dict[str, Any] = {}
+    if compare_to in models:
+        for model, per_set in models.items():
+            if model == compare_to:
+                continue
+            ident[model] = {
+                n: {
+                    f: identical_rate(
+                        [r[f] for r in models[compare_to][n]["items"]],
+                        [r[f] for r in per_set[n]["items"]],
+                    )
+                    for f in ("raw", "sql")
+                }
+                for n in names
+            }
+    return {"models": models, f"identical_to_{compare_to}": ident}
+
+
+def diagnose_with_heldout(
+    store: Store,
+    run_id: str,
+    generators: Mapping[str, Generator],
+    sets: Mapping[str, Sequence[Mapping[str, Any]]],
+    executor: Executor,
+    *,
+    db_ref: str,
+    schema_ddl: str,
+) -> dict[str, Any]:
+    """``diagnose_generate`` with the sealed held-out added as the set ``"heldout"``. Only task
+    ids, outputs and verdicts are returned for it (no held-out question or gold SQL)."""
+    if "heldout" in sets:
+        raise ValueError("'heldout' is reserved for the sealed set")
+    items = store.load_heldout(run_id)
+    return diagnose_generate(
+        generators, {**sets, "heldout": items}, executor,
+        db_ref=db_ref, schema_ddl=schema_ddl,
+    )  # fmt: skip

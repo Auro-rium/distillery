@@ -53,7 +53,7 @@ Either target works; pick one. Both are UNVERIFIED: no Nebius deployment was mad
 | `DISTILLERY_ADMIN_TOKEN` | a long random string; required for anything that spends money. Keep it in the secret store only |
 | `NEBIUS_API_KEY`, `NEBIUS_BASE_URL`, `NEBIUS_AI_PROJECT` | Token Factory and sandboxes. Without the key the server starts in `replay-only` mode |
 | `DISTILLERY_RUN_CAP_USD`, `DISTILLERY_PROJECT_CAP_USD`, `DISTILLERY_PLAYGROUND_DAILY_CAP_USD` | budget caps in USD; set them deliberately before exposing the endpoint |
-| `DISTILLERY_PRICES_FILE` | path (inside the container) to your hand-copied price table; without it live runs have no price table |
+| `DISTILLERY_PRICES_FILE` | path (inside the container) to the price table, e.g. `/app/deploy/prices.json`; without it live runs have no price table. See "Price file" below |
 | `DISTILLERY_HOME` | `/data`, on a persistent volume |
 | `DISTILLERY_TRUSTED_PROXIES` | the address(es) of your reverse proxy, so per-IP rate limits use `X-Forwarded-For`. Default: header ignored |
 
@@ -65,6 +65,26 @@ allowed request headers are `X-Admin-Token`, `Content-Type`, `Last-Event-ID`; th
 
 Allow only the **production** Vercel origin. Preview deployments get a new URL each time, so they cannot use
 the live backend; that is intended. Do not add wildcards to work around it.
+
+### Price file
+
+`deploy/prices.json` is committed and contains no secrets, so the container can read it. **Its numbers are
+ASSUMED UPPER BOUNDS for the budget guard, not console prices** (each entry says so in `source`). Before
+trusting any cost figure, replace them with the prices shown in the Nebius console. Every entry needs
+`source` and `date`. Beyond the flat per-model LLM entries (`input_per_mtok`, `output_per_mtok`) there are two
+optional typed sections:
+
+```json
+"finetune": {"Qwen/Qwen3-0.6B": {"usd_per_mtok_trained_tokens": <console>, "source": "...", "date": "..."}},
+"sandbox": {"usd_per_cpu_second": <console>, "source": "...", "date": "..."}
+```
+
+Without a `finetune` price the fine-tune is costed at the operator ceiling and labelled `ceiling estimate`;
+without a `sandbox` price sandbox compute stays "unavailable". Nothing is ever priced at zero silently. With
+prices present, reports say `billed-basis (measured tokens x console price)`. Check a scale before running
+with `python scripts/estimate_run_cost.py --scale mini --prices deploy/prices.json`; recompute past spend with
+`python scripts/rebase_ledger.py --root .distillery/live --prices deploy/prices.json` (report-only; `--apply`
+appends corrective rows).
 
 ### 1.4 HTTPS is required
 

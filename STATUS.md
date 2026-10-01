@@ -23,6 +23,20 @@
 - Round 2+ live path (targeted generation, sandbox branch) has only run against fakes.
 - Backend public over HTTPS on Nebius (see docs/DEPLOY.md); the Vercel page currently cannot reach an API.
 
+## Step 1 diagnostics (2026-09-30, real data; paid runs stopped by the user)
+- (d) Loss curve, from the real job objects (read-only API): tiny `ftjob-...a03b41d4` 3 steps, train loss 0.771 -> 0.751, valid 0.813 -> 0.760; mini r1 `...055e25f8` 6 steps, train 0.674 -> 0.609, valid 0.803 -> 0.685; mini r2 `...08191a95` 9 steps, train 0.687 -> 0.566, valid 0.743 -> 0.606. Loss decreased, but from only 3 to 9 optimizer steps.
+- ROOT CAUSE FOUND: the pipeline sent only `lora` and `n_epochs`. The provider defaults applied: batch_size 8, learning_rate 1e-5, lora_r 8, lora_alpha 8, packing TRUE, context_length 8192. trained_tokens 115,611 / 336,855 / 396,885 (total 849,351). With packing, 117 rows became about 14 sequences, i.e. 6 steps. The student was barely trained. Fix in progress: explicit hyperparameters, a refusal below a minimum planned-steps floor, a `finetune` section in the report (each with a regression test).
+- (f) Same 3 dev tasks in both rounds: YES. Solved sets are identical (sql-11ad884fef53, sql-26279784c953, sql-61d5a3e22b1c), 3/30 after round 1 and after round 2; round 2 changed nothing measurable.
+- (a) console prices: NOT done, needs the user. (b) student on its own training rows, (c) base-vs-student identical-string rate, (e) train-vs-eval prompt render: pending (batched sandbox job, approved; scripts being built).
+- Pre-registration committed in DECISIONS.md (7b39bee) before any new data.
+
+## PAUSED (user stepped away): parallel build of the pre-registered plan
+Plan: `/home/lenovo/.claude/plans/eager-percolating-snowglobe.md`. Four builders were stopped mid-work; nothing is merged, nothing spent.
+- WP-A (explicit hyperparameters, min-steps guard, `finetune` report section, diagnostic scripts): uncommitted edits in `.claude/worktrees/agent-a1ac65091e248630a` (finetune.py, orchestrator.py, pipeline_fakes.py, tests/test_finetune.py).
+- WP-C (real price model, cost estimate script): 1 commit plus edits in `.claude/worktrees/agent-a4326907543148acc`.
+- WP-B (template gold, in-distribution gate set, stress set) and WP-D (backend bundles, playground student, banners, snapshot removal): little or no work survived (no worktree changes found); restart from the briefs in the plan.
+- Resume: merge A, then C, then B, then D; run the full gates after each. No live run may start before the step-5 estimate is approved.
+
 ## Config
 - Student: `Qwen/Qwen3-0.6B` (LoRA), served on Nebius Sandbox CPU. Budget: $19.50 project cap, $10 of it reserved for the demo.
 - Live home (holds the spend ledger, keep using it so the project cap accounting stays correct): `.distillery/live` (gitignored).

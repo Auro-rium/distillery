@@ -36,19 +36,28 @@ import openai
 from pydantic import BaseModel, ConfigDict, Field
 
 from distillery import evaluator as evaluator_mod
-from distillery.budget import Ledger
-from distillery.config import Config
+from distillery.budget import (
+    BASIS_CEILING,
+    Ledger,
+    sandbox_seconds,
+    spend_lines,
+)
+from distillery.config import Config, ConfigError
 from distillery.endpoint_student import EndpointBackend, EndpointSpec
 from distillery.evaluator import ExpectedArtifact, ModelScores, score_model
 from distillery.finetune import (
     ACTIVE_STATUSES,
+    PINNED_HYPERPARAMETERS,
     CheckpointInfo,
     DownloadedFile,
+    EventInfo,
     FineTuneClient,
     HyperParameters,
     JobInfo,
     TrainedArtifact,
     paid_job,
+    planned_steps,
+    require_explicit_hyperparameters,
 )
 from distillery.llm import CallRecord, ChatResult, LLMClient, LLMError
 from distillery.prompts import build_messages, extract_sql, to_training_row
@@ -59,13 +68,16 @@ from distillery.student import StudentServer
 from distillery.taskpacks.sql import schema as sql_schema
 from distillery.taskpacks.sql.executor import Executor
 from distillery.taskpacks.sql.questions import (
+    DEFAULT_SKELETON_CAP,
     FAMILIES,
+    IN_DISTRIBUTION,
+    STRESS,
     SqlTask,
-    classify_heldout,
     generate_tasks,
-    split_by_family,
+    skeleton,
+    stress_families,
 )
-from distillery.taskpacks.sql.runner import ExecOutcome, run_select
+from distillery.taskpacks.sql.runner import run_select
 from distillery.taskpacks.sql.verifier import compare_outcomes, corrupt_sql
 
 log = logging.getLogger(__name__)
@@ -142,6 +154,17 @@ STUDENT_COST_UNAVAILABLE = (
 DRY_PREFIX = "dry-"
 _SCHEMA_OVERHEAD_TOKENS = 120  # rough prompt overhead of the JSON-schema instruction (estimate)
 
+
+def _planned_trained_tokens(train_jsonl: bytes, chars_per_token: int, n_epochs: int | None) -> int:
+    """Planned trained tokens for the preflight: file characters / chars-per-token, x epochs.
+
+    An ESTIMATE used only to size the pre-spend budget check (the recorded cost uses the job's
+    measured trained_tokens). Epochs default to 3 when the request leaves them to the service.
+    """
+    text = train_jsonl.decode("utf-8")
+    return -(-len(text) // max(chars_per_token, 1)) * (n_epochs or 3)
+
+
 # ---------------------------------------------------------------- errors
 
 
@@ -178,14 +201,17 @@ class Scale(BaseModel):
     name: str
     train: int
     dev: int
-    heldout: int
+    heldout: int  # the gate set: sealed, in-distribution (every family also in train)
+    stress: int = 0  # reserved families, sealed separately, reported, never a gate input
 
 
+# "full" is the pre-registered benchmark (DECISIONS.md 2026-09-30): train 1800, dev 150, gate 300,
+# stress 100. The smaller scales exist for offline dry runs and plumbing checks.
 SCALES: dict[str, Scale] = {
-    "tiny": Scale(name="tiny", train=40, dev=10, heldout=20),
-    "mini": Scale(name="mini", train=120, dev=30, heldout=60),  # CLI-only: cheaper 2-round live run
-    "small": Scale(name="small", train=300, dev=50, heldout=100),
-    "full": Scale(name="full", train=2000, dev=150, heldout=300),
+    "tiny": Scale(name="tiny", train=40, dev=10, heldout=20, stress=10),
+    "mini": Scale(name="mini", train=120, dev=30, heldout=60, stress=20),  # CLI-only
+    "small": Scale(name="small", train=300, dev=50, heldout=100, stress=30),
+    "full": Scale(name="full", train=1800, dev=150, heldout=300, stress=100),
 }
 
 
@@ -197,7 +223,10 @@ class PipelineConfig(BaseModel):
     dry_run: bool = False
     db_seed: int = 0
     seed: int = 1234
-    oversample: float = 1.6  # generate this multiple of the needed tasks (drops + trimming)
+    # Generate this multiple of the needed tasks. Gold is template-written and every task that runs
+    # is accepted (no model vets it), so little is lost; 1.6 existed to absorb the old agreement
+    # filter and is not reachable at full scale (the 10 training families supply ~2.8k tasks).
+    oversample: float = 1.1
     headroom_max_base_acc: float = 0.80
     dev_target_acc: float = 0.90  # stop adding rounds once the student reaches this on dev
     max_rounds: int = 3  # total fine-tune rounds, including the first
@@ -215,7 +244,12 @@ class PipelineConfig(BaseModel):
     poll_interval_s: float = 15.0
     poll_timeout_s: float = 6 * 3600.0
     finetune_estimate_usd: float | None = None  # docs give no fine-tune price: caller must say
-    hyperparameters: HyperParameters = HyperParameters(lora=True, n_epochs=3)
+    # Pinned, never provider defaults (measured: defaults gave 3-9 optimizer steps for 40-138 rows).
+    hyperparameters: HyperParameters = PINNED_HYPERPARAMETERS
+    # Refuse before any spend when the planned optimizer steps fall below this (dry runs exempt).
+    min_planned_steps: int = Field(default=50, ge=0)
+    # packing=True makes the step count unknowable; refuse unless the caller says so explicitly.
+    allow_packing: bool = False
     ultra_verifier_authoring: bool = False  # documented hook, intentionally unimplemented
     # How the student and base are served. "injected" (default) = use Deps.student_factory /
     # Deps.base_factory as given. The others build both from Deps (UNVERIFIED against real APIs).
@@ -284,6 +318,10 @@ class FineTuner(Protocol):
     ) -> JobInfo: ...
 
     def checkpoints(self, job_id: str) -> list[CheckpointInfo]: ...
+
+    def loss_curve(self, job_id: str) -> list[dict[str, Any]]: ...
+
+    def events(self, job_id: str, *, limit: int = ..., max_pages: int = ...) -> list[EventInfo]: ...
 
     def trained_artifact(
         self, job: JobInfo, checkpoint: CheckpointInfo, directory: Path | str
@@ -545,66 +583,84 @@ def _item(t: SqlTask, heldout_class: str | None = None) -> dict[str, Any]:
 class SplitPlan:
     train: list[SqlTask]
     dev: list[SqlTask]
-    heldout: list[SqlTask]
-    heldout_families: list[str]
+    heldout: list[SqlTask]  # the gate set: in-distribution only
+    stress: list[SqlTask]  # reserved families, never in train/dev/heldout
+    heldout_families: list[str]  # families held out of TRAINING: none, the gate is in-distribution
     counters: dict[str, int] = field(default_factory=dict)
 
 
-def plan_split(tasks: Sequence[SqlTask], scale: Scale, seed: int) -> SplitPlan:
-    """Family-aware train/dev/held-out split with exact target sizes (or ShortfallError).
+def _rate(num: int, den: int) -> float:
+    return round(num / den, 4) if den else 0.0
 
-    Whole families are held out (>= 50% of the target held-out size comes from them, at most
-    60% is kept); the rest of held-out is an in-distribution sample. In-distribution surplus goes
-    back to train; surplus unseen-family tasks are discarded (counted) so the family stays unseen.
+
+def plan_split(
+    tasks: Sequence[SqlTask],
+    scale: Scale,
+    seed: int,
+    stress_tasks: Sequence[SqlTask] = (),
+) -> SplitPlan:
+    """In-distribution train/dev/gate split with exact target sizes (or ShortfallError), plus the
+    stress set drawn from ``stress_tasks`` (reserved families, so disjoint from all three).
+
+    Every gate family also appears in train. Questions and gold SQL are unique across the pool
+    (the generator dedupes both), so no gate question was seen in train. What can overlap is the
+    question SKELETON (same wording, other literals); that rate is measured and reported in the
+    counters, not hidden.
     """
     rng = random.Random(seed)  # noqa: S311 - deterministic sampling, not security
-    counts = Counter(t.family for t in tasks)
-    fams = sorted(counts)
-    rng.shuffle(fams)
-    target_u = math.ceil(0.5 * scale.heldout)
-    chosen: list[str] = []
-    u = 0
-    for f in fams:
-        if u >= target_u:
-            break
-        chosen.append(f)
-        u += counts[f]
-    chosen_set = set(chosen)
-    unseen_take = min(u, math.ceil(0.6 * scale.heldout))
-    n_rest = len(tasks) - u
-    seen_needed = max(0, scale.heldout - unseen_take)
-    frac = min(1.0, seen_needed / n_rest) if n_rest else 0.0
-    sp = split_by_family(list(tasks), chosen_set, seed, in_dist_fraction=frac)
-    unseen = [t for t in sp.heldout if t.family in chosen_set]
-    seen_h = [t for t in sp.heldout if t.family not in chosen_set]
-    rng.shuffle(unseen)
-    rng.shuffle(seen_h)
-    keep_unseen = unseen[:unseen_take]
-    keep_seen = seen_h[: scale.heldout - len(keep_unseen)]
-    back_to_train = seen_h[len(keep_seen) :]
-    short = scale.heldout - len(keep_unseen) - len(keep_seen)
-    if short > 0:
-        extra = unseen[len(keep_unseen) : len(keep_unseen) + short]
-        keep_unseen += extra
-    heldout = keep_unseen + keep_seen
-    discarded_unseen = len(unseen) - len(keep_unseen)
-    pool = list(sp.train) + back_to_train
+    reserved = set(stress_families())
+    if any(t.family in reserved for t in tasks):
+        raise ShortfallError("a stress family leaked into the in-distribution pool")
+    pool = list(tasks)
     rng.shuffle(pool)
-    dev = pool[: scale.dev]
-    train = pool[scale.dev : scale.dev + scale.train]
-    counters = {
-        "input_tasks": len(tasks),
-        "heldout_unseen_family_tasks_discarded": discarded_unseen,
-        "train_pool_trimmed": max(0, len(pool) - scale.dev - len(train)),
-        "heldout_seen_returned_to_train": len(back_to_train),
-    }
-    if len(heldout) < scale.heldout or len(dev) < scale.dev or len(train) < scale.train:
+    # one anchor task per family goes to train first, so every gate family is covered by training
+    # by construction (a plain shuffle can miss a family at small scales)
+    anchors: dict[str, SqlTask] = {}
+    for t in pool:
+        anchors.setdefault(t.family, t)
+    anchor_ids = {t.task_id for t in anchors.values()}
+    rest = [t for t in pool if t.task_id not in anchor_ids]
+    heldout = rest[: scale.heldout]
+    dev = rest[scale.heldout : scale.heldout + scale.dev]
+    train = (list(anchors.values()) + rest[scale.heldout + scale.dev :])[: scale.train]
+    pool = [*heldout, *dev, *train, *rest[scale.heldout + scale.dev + scale.train :]]
+    extra = list(stress_tasks)
+    rng.shuffle(extra)
+    stress = extra[: scale.stress]
+    if (
+        len(heldout) < scale.heldout
+        or len(dev) < scale.dev
+        or len(train) < scale.train
+        or len(stress) < scale.stress
+    ):
         raise ShortfallError(
             f"cannot fill scale {scale.name!r}: got train={len(train)}/{scale.train} "
             f"dev={len(dev)}/{scale.dev} heldout={len(heldout)}/{scale.heldout} "
-            f"from {len(tasks)} cross-checked tasks; raise oversample or lower the scale"
+            f"stress={len(stress)}/{scale.stress} from {len(tasks)} in-distribution and "
+            f"{len(extra)} stress tasks; raise oversample or lower the scale"
         )
-    return SplitPlan(train, dev, heldout, sorted(chosen), counters)
+    train_fams = {t.family for t in train}
+    uncovered = sorted({t.family for t in heldout} - train_fams)
+    if uncovered:
+        raise ShortfallError(f"gate families without any training task: {uncovered}")
+    train_sk = {skeleton(t.question) for t in train}
+    in_train = sum(skeleton(t.question) in train_sk for t in heldout)
+    train_q = {t.question for t in train}
+    return SplitPlan(
+        train,
+        dev,
+        heldout,
+        stress,
+        [],
+        {
+            "input_tasks": len(tasks),
+            "stress_input_tasks": len(extra),
+            "train_pool_trimmed": len(pool) - len(heldout) - len(dev) - len(train),
+            "heldout_questions_seen_in_train": sum(t.question in train_q for t in heldout),
+            "heldout_skeleton_in_train": in_train,
+            "train_distinct_skeletons": len(train_sk),
+        },
+    )
 
 
 def build_analysis_messages(
@@ -785,6 +841,27 @@ class Pipeline:
         }
         atomic_write_bytes(meta_path, json.dumps(meta, indent=2, sort_keys=True).encode("utf-8"))
 
+    def _bill_sandbox_on_close(self, server: Any, purpose: str) -> Any:
+        """Record the measured sandbox seconds (per-batch ``load_s`` + ``gen_s``) when the
+        server is closed. Priced by the ledger only if a sandbox price is configured."""
+        inner_close = server.close
+
+        def close() -> None:
+            try:
+                inner_close()
+            finally:
+                timings = getattr(server, "timings", None) or []
+                secs = sum(
+                    float(t.get("load_s") or 0) + float(t.get("gen_s") or 0) for t in timings
+                )
+                n = sum(int(t.get("n") or 0) for t in timings)
+                if secs > 0:
+                    self.ledger.record_sandbox(secs, purpose, samples=n)
+                server.timings = []  # a second close must not bill the same batches again
+
+        server.close = close
+        return server
+
     def _resolve_serving(self) -> None:
         """Build student/base factories from Deps when ``student_serving`` asks for it."""
         mode, deps = self.cfg.student_serving, self.deps
@@ -812,11 +889,14 @@ class Pipeline:
             }
             self.deps = replace(
                 deps,
-                student_factory=lambda trained: SandboxCpuStudent.for_artifact(
-                    sandbox, image, bridge, trained, base_model=base_model, **kw
+                student_factory=lambda trained: self._bill_sandbox_on_close(
+                    SandboxCpuStudent.for_artifact(
+                        sandbox, image, bridge, trained, base_model=base_model, **kw
+                    ),
+                    "student",
                 ),
-                base_factory=lambda: SandboxCpuStudent(
-                    sandbox, image, bridge, base_model=base_model, **kw
+                base_factory=lambda: self._bill_sandbox_on_close(
+                    SandboxCpuStudent(sandbox, image, bridge, base_model=base_model, **kw), "base"
                 ),
             )  # fmt: skip
         else:
@@ -875,10 +955,11 @@ class Pipeline:
                 "no student/base serving path is available (spike S4 undecided; the base model is "
                 "not on the serverless API either); refusing to start before spending anything"
             )
-        if self.cfg.finetune_estimate_usd is None:
+        student = self.config.require_model("student")
+        if student not in self.config.finetune_prices and self.cfg.finetune_estimate_usd is None:
             raise ConfigRefusal(
-                "finetune_estimate_usd is not set: the docs give no fine-tune price, so the "
-                "budget preflight needs an explicit estimate"
+                f"no fine-tune price for {student!r} in the price file and finetune_estimate_usd "
+                "is not set: refusing to guess a fine-tune cost"
             )
 
     # ---- run -------------------------------------------------------------
@@ -927,11 +1008,35 @@ class Pipeline:
     def _stage_questions(self) -> dict[str, Any]:
         sc = self.cfg.scale
         n_total = math.ceil((sc.train + sc.dev + sc.heldout) * self.cfg.oversample)
+        n_stress = math.ceil(sc.stress * self.cfg.oversample)
+        reserved = stress_families()
 
         def fn() -> dict[str, Any]:
-            rep = generate_tasks(self.db_ref, n_total, self.cfg.seed)
+            # in-distribution pool: every family except the reserved stress families
+            rep = generate_tasks(
+                self.db_ref,
+                n_total,
+                self.cfg.seed,
+                exclude_families=reserved,
+                skeleton_cap=DEFAULT_SKELETON_CAP,
+            )
+            stress_rep = (
+                generate_tasks(
+                    self.db_ref,
+                    n_stress,
+                    self.cfg.seed + 7,
+                    families=reserved,
+                    template_share=0.1,  # only two families: the default shares starve the pool
+                    family_share=1.0,
+                )
+                if n_stress
+                else None
+            )
+            stress_tasks = stress_rep.tasks if stress_rep is not None else []
             return {
                 "tasks": [_item(t) for t in rep.tasks],
+                "stress_tasks": [_item(t) for t in stress_tasks],
+                "stress_families": list(reserved),
                 "counters": {
                     "requested": n_total,
                     "generated": len(rep.tasks),
@@ -940,97 +1045,71 @@ class Pipeline:
                     "dropped_error": rep.dropped_error,
                     "dropped_empty": rep.dropped_empty,
                     "dropped_duplicate": rep.dropped_duplicate,
+                    "dropped_duplicate_question": rep.dropped_duplicate_question,
+                    "dropped_skeleton_cap": rep.dropped_skeleton_cap,
+                    "stress_requested": n_stress,
+                    "stress_generated": len(stress_tasks),
                 },
                 "dropped_by_template": dict(rep.dropped_by_template),
             }
 
-        res = self._stage("questions", {"n_total": n_total, "seed": self.cfg.seed}, ["schema"], fn)
-        self._observe([_task_from(d) for d in res["tasks"]])
+        res = self._stage(
+            "questions",
+            {
+                "n_total": n_total,
+                "seed": self.cfg.seed,
+                "n_stress": n_stress,
+                "stress_families": list(reserved),
+                "skeleton_cap": DEFAULT_SKELETON_CAP,
+            },
+            ["schema"],
+            fn,
+        )
+        self._observe([_task_from(d) for d in [*res["tasks"], *res.get("stress_tasks", [])]])
         return res
 
     def _observe(self, tasks: Sequence[SqlTask]) -> None:
         if self.deps.task_observer is not None:
             self.deps.task_observer(tasks)
 
-    # ---- stage 3: gold cross-check ---------------------------------------
+    # ---- stage 3: template gold, executed ---------------------------------
     def _stage_crosscheck(self) -> dict[str, Any]:
+        """Gold is the SQL a template wrote for its own question: no model touches it. This stage
+        only executes every gold in the executor (a Nebius Sandbox on a live run) and accepts the
+        task when it runs and returns rows. Stage name and `accepted` key are kept: later stages,
+        the playground and the UI read them."""
+
         def fn() -> dict[str, Any]:
             tasks = [_task_from(d) for d in self.questions["tasks"]]
-            msgs = [build_messages(t.question, self.ddl, role="train") for t in tasks]
-            answers: dict[str, list[str | None]] = {}
-            for role in ("planner", "teacher"):
-                res = self.runner.map(
-                    role, msgs, purpose=f"crosscheck_{role}", stage="gold_crosscheck",
-                    schema=SqlAnswer,
-                )  # fmt: skip
-                answers[role] = [
-                    r.parsed.sql.strip() if r is not None and r.parsed is not None else None
-                    for r in res
-                ]
-            ex = self.deps.executor
-            gold = ex.run_batch(self.db_ref, [t.gold_sql for t in tasks])
-            outs: dict[str, dict[int, ExecOutcome]] = {}
-            for role, sqls in answers.items():
-                idx = [i for i, s in enumerate(sqls) if s]
-                got = ex.run_batch(self.db_ref, [sqls[i] or "" for i in idx])
-                outs[role] = dict(zip(idx, got, strict=True))
+            stress = [_task_from(d) for d in self.questions.get("stress_tasks", [])]
+            outs = self.deps.executor.run_batch(
+                self.db_ref, [t.gold_sql for t in [*tasks, *stress]]
+            )
             reasons: Counter[str] = Counter()
             accepted: list[dict[str, Any]] = []
-            suspect: list[str] = []
-            identical_text = 0
-            for i, t in enumerate(tasks):
-                why = self._crosscheck_one(t, gold[i], i, answers, outs, suspect)
-                if why is None:
-                    accepted.append(_item(t))
-                    if answers["planner"][i] == answers["teacher"][i]:
-                        identical_text += 1
+            stress_accepted: list[dict[str, Any]] = []
+            for i, (t, o) in enumerate(zip([*tasks, *stress], outs, strict=True)):
+                if not o.ok:
+                    reasons["gold_error"] += 1
+                elif not o.rows:
+                    reasons["gold_empty"] += 1
                 else:
-                    reasons[why] += 1
+                    (accepted if i < len(tasks) else stress_accepted).append(_item(t))
             return {
                 "accepted": accepted,
-                "suspect_gold_task_ids": suspect,
+                "stress_accepted": stress_accepted,
                 "discarded_by_reason": dict(reasons),
                 "counters": {
                     "checked": len(tasks),
                     "accepted": len(accepted),
                     "discarded": len(tasks) - len(accepted),
-                    "accepted_with_identical_sql_text": identical_text,
-                    "suspect_gold": len(suspect),
+                    "stress_checked": len(stress),
+                    "stress_accepted": len(stress_accepted),
                     **{f"discard_{k}": v for k, v in reasons.items()},
                 },
             }
 
-        return self._stage("gold_crosscheck", {}, ["questions"], fn)
-
-    @staticmethod
-    def _crosscheck_one(
-        t: SqlTask,
-        gold: ExecOutcome,
-        i: int,
-        answers: Mapping[str, Sequence[str | None]],
-        outs: Mapping[str, Mapping[int, ExecOutcome]],
-        suspect: list[str],
-    ) -> str | None:
-        """Reason the task is discarded, or None if planner, teacher and gold all agree."""
-        if not gold.ok:
-            return "gold_error"
-        for role in ("planner", "teacher"):
-            if answers[role][i] is None:
-                return f"{role}_no_answer"  # LLM error, schema failure or empty sql
-        for role in ("planner", "teacher"):
-            if not outs[role][i].ok:
-                return f"{role}_exec_error"
-        pm = compare_outcomes(outs["planner"][i], gold, t.requires_order).ok
-        tm = compare_outcomes(outs["teacher"][i], gold, t.requires_order).ok
-        if pm and tm:
-            return None
-        if pm != tm:
-            return "planner_mismatch_only" if tm else "teacher_mismatch_only"
-        agree = compare_outcomes(outs["planner"][i], outs["teacher"][i], t.requires_order).ok
-        if agree:
-            suspect.append(t.task_id)  # both models agree with each other but not the template
-            return "both_mismatch_agreeing_suspect_gold"
-        return "both_mismatch_disagreeing"
+        return self._stage("gold_crosscheck", {"gold": "template"}, ["questions"], fn)
 
     @property
     def questions(self) -> dict[str, Any]:
@@ -1103,10 +1182,16 @@ class Pipeline:
     def _stage_split(self) -> dict[str, Any]:
         def fn() -> dict[str, Any]:
             accepted = [_task_from(d) for d in self._results["gold_crosscheck"]["accepted"]]
-            plan = plan_split(accepted, self.cfg.scale, self.cfg.seed)
-            labels = classify_heldout(plan.train, plan.heldout)
-            items = [_item(t, labels[t.task_id]) for t in plan.heldout]
+            stress_in = [
+                _task_from(d) for d in self._results["gold_crosscheck"].get("stress_accepted", [])
+            ]
+            plan = plan_split(accepted, self.cfg.scale, self.cfg.seed, stress_in)
+            items = [_item(t, IN_DISTRIBUTION) for t in plan.heldout]
             sealed = self.store.seal_heldout(self.run_id, items)
+            stress_items = [_item(t, STRESS) for t in plan.stress]
+            stress_sealed = (
+                self.store.seal_stress(self.run_id, stress_items) if stress_items else ""
+            )
             rng = random.Random(self.cfg.seed + 6)  # noqa: S311
             spot = rng.sample(items, min(self.cfg.spot_check_n, len(items)))
             atomic_write_bytes(
@@ -1130,7 +1215,7 @@ class Pipeline:
                     }
                 ).encode("utf-8"),
             )
-            class_counts = Counter(labels.values())
+            class_counts = Counter(str(it["heldout_class"]) for it in items)
             return {
                 "train": [_item(t) for t in plan.train],
                 "dev": [_item(t) for t in plan.dev],
@@ -1139,19 +1224,29 @@ class Pipeline:
                 "heldout_families": plan.heldout_families,
                 "heldout_class_counts": dict(class_counts),
                 "sealed_sha256": sealed,
+                "stress_sealed_sha256": stress_sealed,
+                "stress_task_ids": sorted(t.task_id for t in plan.stress),
+                "stress_families": sorted({t.family for t in plan.stress}),
                 "counters": {
                     **plan.counters,
                     "train": len(plan.train),
                     "dev": len(plan.dev),
                     "heldout": len(plan.heldout),
+                    "stress": len(plan.stress),
                     "spot_check_items": len(spot),
                 },
             }
 
         res = self._stage(
-            "split", {"scale": self.cfg.scale.model_dump(), "n_spot": self.cfg.spot_check_n},
-            ["gold_crosscheck"], fn,
-        )  # fmt: skip
+            "split",
+            {
+                "scale": self.cfg.scale.model_dump(),
+                "n_spot": self.cfg.spot_check_n,
+                "gate": "in_distribution",
+            },
+            ["gold_crosscheck"],
+            fn,
+        )
         self.sealed_sha = str(res["sealed_sha256"])
         self.say(f"[held-out] sealed sha256={self.sealed_sha} n={res['counters']['heldout']}")
         for d in (*res["train"], *res["dev"]):
@@ -1293,12 +1388,12 @@ class Pipeline:
         self, r: int, rows: Sequence[Mapping[str, Any]], dev: Sequence[SqlTask], upstream: str
     ) -> dict[str, Any]:
         name = f"finetune_r{r}"
-        estimate = float(self.cfg.finetune_estimate_usd or 0.0)
         rows_hash = _digest(list(rows))
 
         def fn() -> dict[str, Any]:
             ft = self.deps.finetune
             base_model = self.config.require_model("student")
+            self._finetune_preflight(len(rows))
             rdir = self.run_dir / f"round{r}"
             train_p, val_p = rdir / "train.jsonl", rdir / "dev.jsonl"
             atomic_write_bytes(
@@ -1310,7 +1405,15 @@ class Pipeline:
             )
             orphans = self._cancel_orphans(r)
             existing = self._adoptable_job(r)  # a paid job an earlier attempt left ambiguous
-            self.ledger.preflight(estimate)  # refuse BEFORE any upload/job
+            # Refuse BEFORE any upload/job: planned tokens x price when the price exists,
+            # else the operator ceiling.
+            planned = _planned_trained_tokens(
+                train_p.read_bytes(), self.cfg.chars_per_token, self.cfg.hyperparameters.n_epochs
+            )
+            pre_usd, pre_basis = self.ledger.preflight_finetune(
+                base_model, planned, self.cfg.finetune_estimate_usd
+            )
+            self.say(f"[finetune r{r}] preflight ${pre_usd:.4f} ({pre_basis})")
             job_ref: list[str] = []
 
             def create() -> str:
@@ -1333,6 +1436,7 @@ class Pipeline:
                 return jid
 
             outcome = "aborted"
+            cost_line: dict[str, Any] = {}
             try:
                 with paid_job(create, ft.cancel) as handle:
                     info = FineTuneClient.require_success(
@@ -1351,6 +1455,7 @@ class Pipeline:
                     if not cks:
                         raise PipelineError(f"job {handle.job_id} succeeded with no checkpoints")
                     art = ft.trained_artifact(info, cks[-1], rdir / "checkpoints")
+                    training = self._training_record(ft, r, info, base_model)
                     # Record what was trained BEFORE anything is evaluated.
                     self.store.add_experiment(
                         self.run_id,
@@ -1362,7 +1467,15 @@ class Pipeline:
                             "adapter_sha256": art.adapter_sha256,
                         },
                     )
-                    self.ledger.record("finetune", None, estimate)
+                    ft_usd, ft_basis = self.ledger.record_finetune(
+                        base_model, info.trained_tokens, self.cfg.finetune_estimate_usd
+                    )
+                    cost_line = {
+                        "usd": ft_usd,
+                        "basis": ft_basis,
+                        "trained_tokens": info.trained_tokens,
+                    }
+                    self.say(f"[finetune r{r}] cost ${ft_usd:.4f} ({ft_basis})")
                     handle.mark_succeeded()
                     outcome = "succeeded"
             finally:
@@ -1374,8 +1487,10 @@ class Pipeline:
                     )
             return {
                 "artifact": artifact_to_json(art, self.run_dir),
+                "training": training,
                 "train_rows": len(rows),
                 "dev_validation_rows": len(val_rows),
+                "cost": cost_line,
                 "counters": {
                     "orphan_jobs_cancelled": orphans[0],
                     "orphan_cancel_errors": orphans[1],
@@ -1385,11 +1500,64 @@ class Pipeline:
 
         return self._stage(
             name,
-            {"rows": rows_hash, "hp": self.cfg.hyperparameters.to_request(), "est": estimate,
+            {"rows": rows_hash, "hp": self.cfg.hyperparameters.to_request(),
+             "est": float(self.cfg.finetune_estimate_usd or 0.0),
              "student": self.config.model_ids.get("student"), "seed": self.cfg.seed},
             [upstream],
             fn,
         )  # fmt: skip
+
+    def _finetune_preflight(self, train_rows: int) -> None:
+        """Refuse (before any upload or spend) hyperparameters that would under-train."""
+        hp = self.cfg.hyperparameters
+        try:
+            require_explicit_hyperparameters(hp)
+        except ConfigError as exc:
+            raise ConfigRefusal(str(exc)) from exc
+        if self.cfg.dry_run:
+            return
+        if hp.packing:
+            if not self.cfg.allow_packing:
+                raise ConfigRefusal(
+                    "packing=True makes the optimizer-step count unknowable; refusing. "
+                    "Set allow_packing to accept that explicitly"
+                )
+            return
+        steps = planned_steps(train_rows, hp)
+        assert steps is not None  # noqa: S101 - packing is False and batch/epochs are set
+        if steps < self.cfg.min_planned_steps:
+            raise ConfigRefusal(
+                f"planned optimizer steps {steps} = ceil({train_rows} rows / batch "
+                f"{hp.batch_size}) x {hp.n_epochs} epochs is below min_planned_steps="
+                f"{self.cfg.min_planned_steps}; the student would be barely trained. Add rows or "
+                "epochs, lower batch_size, or lower min_planned_steps deliberately"
+            )
+
+    def _training_record(
+        self, ft: FineTuner, r: int, info: JobInfo, base_model: str
+    ) -> dict[str, Any]:
+        """What the provider actually trained with (resolved values) and how the loss moved.
+        Diagnostics only: a failure to read them must never fail (and so cancel) a paid job."""
+        rec: dict[str, Any] = {
+            "round": r,
+            "job_id": info.id,
+            "base_model": info.model or base_model,
+            "hyperparameters": info.hyperparameters,
+            "trained_tokens": info.trained_tokens,
+            "trained_steps": info.trained_steps,
+            "total_steps": info.total_steps,
+            "loss_curve": [],
+            "events": [],
+        }
+        try:
+            rec["loss_curve"] = ft.loss_curve(info.id)
+            rec["events"] = [
+                {"created_at": e.created_at, "level": e.level, "message": e.message}
+                for e in ft.events(info.id)
+            ]
+        except Exception as exc:  # noqa: BLE001
+            rec["diagnostics_error"] = f"{type(exc).__name__}: {exc}"
+        return rec
 
     def _adoptable_job(self, r: int) -> str | None:
         """A job of this round that an earlier attempt aborted but may not have managed to cancel
@@ -1683,15 +1851,39 @@ class Pipeline:
 
     # ---- report ------------------------------------------------------------
     def _cost_basis(self) -> dict[str, Any]:
-        """Every cost figure here is an estimate; say so, with the price source(s) in use."""
+        """Every cost figure here is an estimate; say so, with the basis of each cost line."""
         used = cost_by_model(self.store, self.run_id)
         sources = {m: self.config.prices[m].source for m in used if m in self.config.prices}
         names = "; ".join(sorted(set(sources.values()))) or "no priced model was used"
+        lines = spend_lines(self.store, self.run_id)
+        ft_bases = sorted({str(x["basis"]) for x in lines if str(x["kind"]).startswith("finetune")})
+        sb_bases = sorted({str(x["basis"]) for x in lines if str(x["kind"]).startswith("sandbox")})
         return {
-            "basis": "ESTIMATES, not billed amounts: measured token counts x the configured "
-            f"price table (price source: {names}); the fine-tune line is the operator-supplied "
-            "ceiling; sandbox compute is not priced",
+            "basis": "ESTIMATES, not billed amounts. LLM lines: measured token counts x the "
+            f"configured price table (price source: {names}); fine-tune: "
+            f"{', '.join(ft_bases) or 'no fine-tune ran'}; sandbox compute: "
+            f"{', '.join(sb_bases) or 'not recorded'}",
             "price_sources": sources,
+            "finetune_lines": [x for x in lines if str(x["kind"]).startswith("finetune")],
+            "sandbox_lines": [x for x in lines if str(x["kind"]).startswith("sandbox")],
+        }
+
+    def _finetune_usd_text(self, rounds_run: int) -> str:
+        lines = [x for x in spend_lines(self.store, self.run_id) if str(x["kind"]).startswith("f")]
+        total = sum(float(x["usd"]) for x in lines)
+        bases = sorted({str(x["basis"]) for x in lines}) or [BASIS_CEILING]
+        return f"${total:.4f} [{', '.join(bases)}]; rounds run: {rounds_run}"
+
+    def _student_cost_per_1k(self) -> Any:
+        """Measured sandbox seconds per student sample x the sandbox price, or 'unavailable'."""
+        secs, n = sandbox_seconds(self.store, self.run_id, "student")
+        if self.ledger.sandbox_price is None or n == 0:
+            return STUDENT_COST_UNAVAILABLE
+        return {
+            "basis": "billed-basis (measured seconds x console price)",
+            "samples": n,
+            "sandbox_seconds": secs,
+            "usd_per_1k_tasks": self.ledger.estimate_sandbox_cost(secs) / n * 1000,
         }
 
     def _build_report(
@@ -1748,14 +1940,25 @@ class Pipeline:
                 "heldout_families": split["heldout_families"],
                 "heldout_class_counts": split["heldout_class_counts"],
                 "heldout_sealed_sha256": split["sealed_sha256"],
+                "heldout_kind": "in-distribution gate set (every family also in train)",
+                "stress_tasks": len(split["stress_task_ids"]),
+                "stress_families": split["stress_families"],
+                "stress_sealed_sha256": split["stress_sealed_sha256"],
+                "heldout_skeleton_overlap_rate": _rate(
+                    split["counters"]["heldout_skeleton_in_train"], len(split["heldout_task_ids"])
+                ),
+                "train_distinct_skeletons": split["counters"]["train_distinct_skeletons"],
                 "teacher_verified_rows_round1": len(data["rows"]),
-                "spot_check_file": str(self.run_dir / "spot_check.json"),
+                "spot_check_file": "spot_check.json",
             },
             "headroom": {
                 "base_dev_acc": self._results["headroom"]["base_dev_acc"],
                 "max_allowed": self.cfg.headroom_max_base_acc,
             },
             "rounds": rounds["rounds"],
+            "finetune": [
+                self._results[rd["finetune_stage"]]["training"] for rd in rounds["rounds"]
+            ],
             "rounds_stop_reason": rounds["stop_reason"],
             "counters": counters,
             "llm_errors_by_purpose": dict(llm_errors),
@@ -1765,11 +1968,10 @@ class Pipeline:
                 "llm_by_model": cost_by_model(self.store, self.run_id),
                 "run_total_usd": self.ledger.spent(),
                 "run_cap_usd": self.ledger.run_cap,
-                "finetune_usd": "ESTIMATE from --finetune-estimate-usd (no fine-tune price known); "
-                f"rounds run: {len(rounds['rounds'])}",
+                "finetune_usd": self._finetune_usd_text(len(rounds["rounds"])),
                 "cost_per_1k_tasks": {
                     "teacher": teacher_cost,
-                    "student": STUDENT_COST_UNAVAILABLE,
+                    "student": self._student_cost_per_1k(),
                 },
             },
             "sandbox_lineage": [
