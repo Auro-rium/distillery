@@ -6,7 +6,7 @@
 1. **Free diagnostics: done** (evidence below). 2. **Pre-registration: done** (DECISIONS.md, committed before any new data). 3. **Gold from templates: done** (code, audit, tests). 4. **Student config: done in code** (pinned hyperparameters, 50-step floor, base/student/teacher scored concurrently). 5. **Cost estimate: blocked on you** (console prices). 6. **Real backend: partly done** (see bottom); host and `vercel.json` decisions are yours.
 
 ## Step 1 diagnostics (real data, 2026-09-30/10-01)
-- **(a) console prices / billed spend: NOT done, needs you.** All money figures stay labelled ASSUMED ceilings.
+- **(a) prices:** LLM prices found via the API (see Step 5). Billed spend, the fine-tune price and the sandbox price: console only, not done.
 - **(b) student on its OWN training rows (sandbox, run on the two real mini-run adapters): 16.2% (round 1, 117 rows) and 17.4% (round 2, 138 rows); base on the same rows 8.5% / 8.0%.** Threshold was "low if < 50%": **tripped.**
 - **(c) identical-string rate student vs base (extracted SQL): 0.9% to 3.3%** on train/dev/held-out. Threshold "high if > 90%": not tripped. The adapter is applied and changes outputs.
 - **(d) loss curves (real job objects):** tiny 3 steps (train 0.771 to 0.751), mini r1 6 steps (0.674 to 0.609), mini r2 9 steps (0.687 to 0.566). Loss fell, from only 3 to 9 optimizer steps.
@@ -23,21 +23,21 @@
 - Teacher yield risk: a train row exists only if the teacher's SQL matches gold, so rows = 1800 x teacher accuracy; if under 1500 the pre-registered range is missed and that is reported.
 
 ## Step 5: pre-flight estimate (NOT approved, nothing spent)
-`scripts/estimate_run_cost.py --scale full --rounds 1 --prices deploy/prices.json` on the real mini run's measured token averages:
-- teacher on 1800 train rows: $3.75 and teacher on 400 gate/stress items: $0.83, **both at ASSUMED ceiling prices, not console prices.**
-- fine-tune: **price missing** (about 8.07M trained tokens estimated: 1800 rows x 4,483 chars / 3 x 3 epochs; chars/3 is an estimate, not a tokenizer count).
-- sandbox generation: **price missing** (1,100 generations x 7.8 s = 8,580 s).
-- **No total is shown because two lines have no price.** What I need from you: Super/Ultra/Nano input and output price per Mtok, the Qwen3-0.6B fine-tune price per Mtok trained tokens, any sandbox price, and the billed spend so far (console). Then I print the real total and wait for your yes.
+**LLM prices are now real**, read from the API itself (`GET /v1/models?verbose=true`, 2026-10-01): Nano $0.06 in / $0.24 out, Super $0.30 / $0.90, Ultra $1.00 / $3.00 per Mtok. My earlier ceilings were 3 to 10x too high. Re-priced, the two smoke runs consumed **$1.46 of LLM calls** (not about $4.2).
+`scripts/estimate_run_cost.py --scale full --rounds 1` (measured token averages from the real mini run): teacher on 1800 train rows **$1.13**, teacher on 400 gate/stress items **$0.25**, planner $0 (no analysis in a 1-round run), subtotal **$1.38**.
+**Still unpriced, and not findable without the console:** the SFT/LoRA fine-tune price (about 8.07M trained tokens estimated for the run) and the Sandbox price (1,100 generations x 7.8 s = 8,580 s). I searched the docs, the OpenAPI spec, the model endpoints and the pricing site: no usage or billing endpoint exists, and the only fine-tune price in the API is for a different product (speculative-decoder training). So no total is shown.
+**What fits, as arithmetic not a quote:** working budget $9.50 ($19.50 cap minus the $10 demo reserve), minus $1.46 spent on LLM calls, minus the earlier fine-tune jobs (849k tokens x the unknown price), minus the $1.38 above. That leaves about $6.66 for the new fine-tune plus sandbox, so if sandbox is free the run fits only when the fine-tune price is under about **$0.74 per Mtok trained tokens**. The console price decides it.
 
 ## What the earlier smoke runs do and do not show
 Both are plumbing proofs, not results: `sql-tiny-live1` (n=20: base 0.15, student 0.15, teacher 0.95, REJECT) and `sql-mini-live1` (n=60, 2 rounds: base 0.033, student 0.05, teacher 1.0, REJECT, real sandbox-branch tree). Estimated (not billed) spend about $3.07 and $6.46 at ceiling prices.
 
 ## Step 6 backend / deploy
-Done: `/api/runs` lists recorded replay bundles (both real runs shipped in `replay/`, no absolute paths or secrets), `spot_check_file` is relative, Dockerfile copies `replay/` and `deploy/`, playground can serve base and student on sandbox CPU (opt-in via `DISTILLERY_PLAYGROUND_SANDBOX_MODELS=1`, lazy, rate limited, unverified live), New run is admin-token gated server-side.
-Needs you: a Nebius host for the container; permission to remove the static snapshot (`frontend/public/static-api`, `scripts/export_static_api.py`, vercel rewrites/headers and the `VITE_API_BASE` build override) and set the API origin in the CSP; the Vercel site keeps working from the snapshot until then.
+Done in code: `/api/runs` lists recorded bundles (both real runs in `replay/`), relative `spot_check_file`, Dockerfile copies `replay/` and `deploy/`, playground can serve base and student on sandbox CPU (opt-in, unverified live), New run admin-token gated server-side.
+**Hosting finding:** the Token Factory key cannot create a container with a public port (Sandboxes have no inbound ports; dedicated endpoints host models only). A web service needs **Nebius AI Cloud serverless endpoints** (`nebius ai endpoint create --image ... --container-port 8000`), which need the `nebius` CLI and a federated browser login. The CLI is installed (`~/.nebius/bin/nebius`, v0.12.282); **the one step I cannot do is `nebius profile create` (browser login).** I am not putting the API key or the stateful backend on Vercel functions (SQLite state, SSE and run subprocesses do not fit serverless).
+Order once a profile exists: push the image, create the endpoint, curl `/api/health` and `/api/runs`, confirm a POST without the admin token is 401, only then change Vercel (remove the static rewrites/headers and the `VITE_API_BASE` override, set the real origin in the CSP and `DISTILLERY_ALLOWED_ORIGINS`), run Playwright against the live URL, and finally delete `frontend/public/static-api` and `scripts/export_static_api.py`. The Vercel site keeps serving the recorded runs from the snapshot until then.
 
 ## Config
-- Student `Qwen/Qwen3-0.6B` (LoRA) on Nebius Sandbox CPU. Budget: $19.50 project cap, $10 reserved for the demo. Live home (spend ledger): `.distillery/live` (gitignored). Prices: `.distillery/prices.json` and `deploy/prices.json`, both labelled assumed.
+- Student `Qwen/Qwen3-0.6B` (LoRA) on Nebius Sandbox CPU. Budget: $19.50 project cap, $10 reserved for the demo. Live home (spend ledger): `.distillery/live` (gitignored). Prices: `.distillery/prices.json` and `deploy/prices.json` (LLM prices from the API listing; no fine-tune or sandbox price yet).
 
 ## Blockers (you)
-Console prices and billed spend; approval of the step-5 estimate; Nebius host; vercel.json / VITE_API_BASE permission; demo video; Devpost submit; make the repo public.
+Billed spend and the fine-tune and sandbox prices from the console; `nebius profile create`; approval of the step-5 estimate; Nebius host; vercel.json / VITE_API_BASE permission; demo video; Devpost submit; make the repo public.
