@@ -6,7 +6,7 @@ import { ApiErrorState, EmptyState, LabelBanner, Spinner } from "../../component
 import { RunShell } from "../../components/RunShell";
 import { ExamplesCard } from "./Examples";
 import { Summary } from "./Summary";
-import { Accuracy, ByClass, Clusters, Counters, CostLatency, GateDetails } from "./sections";
+import { Accuracy, ByClass, GateCaveat, Stress, Clusters, Counters, CostLatency, GateDetails } from "./sections";
 import { useAsync } from "./useAsync";
 import "./report.css";
 
@@ -17,10 +17,12 @@ export function ReportView({ r }: { r: Report }) {
       <h2 className="sr-only">Report</h2>
       <Summary r={r} />
       <p className="muted rp-meta">Pack {r.pack} · candidate round {fmtInt(r.candidate_round)}</p>
+      <GateCaveat r={r} />
       <div className="rp-grid">
         <Accuracy r={r} />
         <GateDetails r={r} />
         <ByClass r={r} />
+        <Stress r={r} />
         <ExamplesCard id={r.run_id} />
         <CostLatency r={r} />
         <Clusters r={r} />

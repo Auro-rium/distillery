@@ -210,3 +210,47 @@ describe("provenance with everything loaded", () => {
     expect(unexplained(text, [contract.report, contract.examples, contract.examplesHeaders], [AXIS, CARD, SHOWN])).toEqual([]);
   });
 });
+
+describe("stress set and in-distribution caveat", () => {
+  const withNew = contract.report as unknown as Report;
+  const oldRun = (() => {
+    const o = JSON.parse(JSON.stringify(base)) as Report;
+    delete o.evaluation.stress;
+    for (const k of ["heldout_skeleton_overlap_rate", "train_distinct_skeletons", "stress_tasks"] as const) delete o.data[k];
+    return o;
+  })();
+
+  it("shows the stress section with captions, per-model and per-family accuracy", () => {
+    view(withNew);
+    const card = screen.getByText("Stress set").closest("section, div.card, article") as HTMLElement;
+    expect(card.textContent).toContain("Reserved families, never in train/dev/gate, NOT a gate input");
+    const s = withNew.evaluation.stress!;
+    expect(card.textContent).toContain(`n=${s.n}`);
+    for (const f of Object.keys(s.accuracy_by_family)) expect(card.textContent).toContain(f);
+    expect(card.querySelectorAll("table tbody tr")).toHaveLength(1 + Object.keys(s.accuracy_by_family).length);
+  });
+
+  it("renders nothing for the stress set when it is null or missing", () => {
+    view({ ...withNew, evaluation: { ...withNew.evaluation, stress: null } });
+    expect(screen.queryByText("Stress set")).toBeNull();
+    cleanup();
+    view(oldRun);
+    expect(screen.queryByText("Stress set")).toBeNull();
+  });
+
+  it("shows the caveat with the percentage and skeleton count from the payload", () => {
+    view(withNew);
+    const note = screen.getByRole("note");
+    const d = withNew.data;
+    expect(note.textContent).toContain("Gate set is in-distribution");
+    expect(note.textContent).toContain(`${(d.heldout_skeleton_overlap_rate! * 100).toFixed(0)}% of gate questions`);
+    expect(note.textContent).toContain(`${d.train_distinct_skeletons} distinct training skeletons`);
+    expect(note.textContent).toContain("not novel query structure");
+  });
+
+  it("omits the caveat for an old run and still renders its unseen classes", () => {
+    view(oldRun);
+    expect(screen.queryByText(/in-distribution/)).toBeNull();
+    expect(screen.getAllByText("not in training").length).toBeGreaterThan(0);
+  });
+});

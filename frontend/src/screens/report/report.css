@@ -16,7 +16,7 @@
 .rp-note { margin: var(--space-3) 0 0; font-size: .86rem; }
 @media (min-width: 900px) {
   .rp-grid { grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); }
-  .rp-grid > .rp-cls, .rp-grid > .rp-ex, .rp-grid > .rp-cnt { grid-column: 1 / -1; }
+  .rp-grid > .rp-stress, .rp-grid > .rp-cls, .rp-grid > .rp-ex, .rp-grid > .rp-cnt { grid-column: 1 / -1; }
 }
 
 /* ---------- sticky summary ---------- */
@@ -158,3 +158,6 @@
   .exb-list .exb-item:focus-visible { outline-offset: -2px; } /* the list scrolls, so an outside outline would be clipped */
   .exb-pick { align-self: start; }
 }
+
+.rp-caveat { margin: 0 0 var(--space-4); border-left: 4px solid var(--warn, #b45309); }
+.rp-caveat-text { margin: 0; font-weight: 600; }

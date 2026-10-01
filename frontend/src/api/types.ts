@@ -164,6 +164,16 @@ export interface TeacherCostPer1k {
   usd_per_1k_tasks: number;
 }
 
+export interface StressEval {
+  accuracy: AccTriple;
+  accuracy_by_family: Record<string, AccTriple>;
+  families: string[];
+  n: number;
+  note?: string;
+  sha256: string;
+  unparseable?: Partial<Record<"base" | "student" | "teacher", number>>;
+}
+
 export interface Report {
   candidate_round: number;
   candidate_selection: string;
@@ -196,6 +206,13 @@ export interface Report {
     heldout_families: string[];
     heldout_sealed_sha256: string;
     heldout_tasks: number;
+    // Added with the stress set / in-distribution gate; absent in older recorded runs.
+    heldout_kind?: string;
+    heldout_skeleton_overlap_rate?: number;
+    stress_families?: string[];
+    stress_sealed_sha256?: string;
+    stress_tasks?: number;
+    train_distinct_skeletons?: number;
     spot_check_file?: string;
     teacher_verified_rows_round1: number;
     train_tasks: number;
@@ -211,6 +228,8 @@ export interface Report {
     gate: Gate;
     heldout_sha256: string;
     n: number;
+    // null (or absent in older runs) when no stress set was evaluated
+    stress?: StressEval | null;
     unparseable: { base: number; student: number; teacher: number };
   };
   headroom: { base_dev_acc: number; max_allowed: number };

@@ -233,3 +233,39 @@ export function Clusters({ r }: { r: Report }) {
     </Card>
   );
 }
+
+/** Shown only when the payload carries the overlap rate: the gate set shares question shapes with training. */
+export function GateCaveat({ r }: { r: Report }) {
+  const rate = r.data?.heldout_skeleton_overlap_rate;
+  if (typeof rate !== "number") return null;
+  return (
+    <Card title="Gate set is in-distribution" className="rp-caveat">
+      <p role="note" className="rp-caveat-text">
+        Gate set is in-distribution: {fmtPercent(rate, 0)} of gate questions share a question skeleton with a training question
+        {typeof r.data.train_distinct_skeletons === "number" ? ` (${fmtInt(r.data.train_distinct_skeletons)} distinct training skeletons)` : ""}.
+        The gate measures generalisation across literals within known question shapes, not novel query structure.
+      </p>
+    </Card>
+  );
+}
+
+/** Rendered only when the report has a stress block; nothing is invented otherwise. */
+export function Stress({ r }: { r: Report }) {
+  const s = r.evaluation.stress;
+  if (!s) return null;
+  const fams = Object.keys(s.accuracy_by_family ?? {});
+  const rows = modelRows(s.accuracy, null);
+  const table: TableRow[] = [
+    { name: "All stress", n: s.n, values: rows },
+    ...fams.map((f) => ({ name: f, n: null, values: modelRows(s.accuracy_by_family[f], null) })),
+  ];
+  return (
+    <Card title="Stress set" className="rp-stress">
+      <p className="muted rp-note">Reserved families, never in train/dev/gate, NOT a gate input.</p>
+      <Legend />
+      <AccuracyChart title="Stress accuracy by model" rows={rows} showCi={false} />
+      <p className="muted rp-note">Stress n={fmtInt(s.n)}{fams.length > 0 ? `; families ${fams.join(", ")}` : ""}.</p>
+      <AccuracyTable caption="Stress accuracy overall and per family" columns={MODELS} rows={table} showN nLabel="n" />
+    </Card>
+  );
+}
