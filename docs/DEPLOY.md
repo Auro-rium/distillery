@@ -137,3 +137,9 @@ not present replay-only mode as a real run.
   `/data` volume and is not touched by an image change.
 - **Emergency stop for spending:** unset `DISTILLERY_ADMIN_TOKEN` or `NEBIUS_API_KEY` and restart; the server
   falls back to replay-only or refuses live runs. Rotate the admin token if it may have leaked.
+
+## Render (chosen host: the Token Factory credit does not cover Nebius AI Cloud hosting)
+1. Render dashboard -> New -> Blueprint -> connect the GitHub repo -> it reads `render.yaml` (service `distillery-api`, Docker, free plan).
+2. When prompted, paste `NEBIUS_API_KEY` and `NEBIUS_AI_PROJECT` (secrets live only in Render). Do not set `DISTILLERY_ADMIN_TOKEN`: without it every New run attempt is refused, which is what a public demo wants.
+3. After the first deploy, check `https://<service>.onrender.com/api/health` and `/api/runs` (both recorded runs listed). The free plan sleeps when idle; the first request after a sleep is slow.
+4. Point the Vercel frontend at it: set `VITE_API_BASE=https://<service>.onrender.com` in the Vercel project, put that origin in the CSP `connect-src` in `frontend/vercel.json`, and keep the Vercel URL in `DISTILLERY_ALLOWED_ORIGINS`.

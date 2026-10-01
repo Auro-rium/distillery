@@ -1,0 +1,39 @@
+# Render blueprint: the API plus the built frontend in one Docker web service (see Dockerfile).
+# Secrets are NOT in this file: Render asks for every `sync: false` value in its dashboard.
+# DISTILLERY_ADMIN_TOKEN is deliberately absent, so New run stays locked (every attempt is refused).
+# Free plan: the service sleeps when idle (first request after a sleep takes about a minute) and its
+# disk is ephemeral, which is fine here: recorded runs ship inside the image (replay/).
+services:
+  - type: web
+    name: distillery-api
+    runtime: docker
+    plan: free
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NEBIUS_API_KEY
+        sync: false
+      - key: NEBIUS_AI_PROJECT
+        sync: false
+      - key: NEBIUS_BASE_URL
+        value: https://api.tokenfactory.nebius.com/v1/
+      - key: DISTILLERY_PRICES_FILE
+        value: /app/deploy/prices.json
+      - key: DISTILLERY_MODEL_PLANNER
+        value: nvidia/Nemotron-3-Ultra-550b-a55b
+      - key: DISTILLERY_MODEL_TEACHER
+        value: nvidia/nemotron-3-super-120b-a12b
+      - key: DISTILLERY_MODEL_TRIAGE
+        value: nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B
+      - key: DISTILLERY_MODEL_STUDENT
+        value: Qwen/Qwen3-0.6B
+      - key: DISTILLERY_PROJECT_CAP_USD
+        value: "19.5"
+      - key: DISTILLERY_RUN_CAP_USD
+        value: "5"
+      # Public playground: a small daily ceiling on teacher calls (ephemeral disk, so it resets on restart).
+      - key: DISTILLERY_PLAYGROUND_DAILY_CAP_USD
+        value: "0.5"
+      # The Vercel frontend calls this API cross-origin; list its exact origin(s), comma separated.
+      - key: DISTILLERY_ALLOWED_ORIGINS
+        value: https://frontend-one-khaki-34.vercel.app
