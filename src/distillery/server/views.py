@@ -3,10 +3,8 @@ not present in the report is None (shown as "not measured" by the UI)."""
 
 from __future__ import annotations
 
-import re
 from typing import Any
 
-_ROUND_LABEL = re.compile(r"^round-(\d+)$")
 EXAMPLE_KINDS = ("fixed", "still_wrong", "regressed", "all")
 
 

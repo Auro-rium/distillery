@@ -25,14 +25,14 @@ flowchart LR
         EV[evaluator.py<br/>only reader of held-out]
         GATE[gate.py + stats.py<br/>pure functions]
         ST[store.py<br/>SQLite + content-addressed artifacts]
-        BUD[budget.py<br/>ledger, paid_resource]
+        BUD[budget.py<br/>ledger, spend caps]
         CFG[config.py<br/>env, prices, thresholds]
     end
     subgraph Nebius
         LLM[llm.py LLMClient<br/>Token Factory inference]
         FT[finetune.py<br/>files, jobs, checkpoints]
         SB[sandbox.py + sandbox_executor.py<br/>Sandboxes, branching]
-        SV[student.py, sandbox_student.py,<br/>endpoint_student.py<br/>student serving options]
+        SV[student.py, sandbox_student.py<br/>student serving in Sandboxes]
     end
     UI -->|/api| APP
     CLI --> ORCH
@@ -59,7 +59,7 @@ Notes tied to the code:
 
 - The API never runs the pipeline in-process. `worker.py` starts `python -m distillery run` as a subprocess (one at a time; a second live run gets 409) and streams its output to SSE.
 - `pipeline_fakes.py` holds the deterministic fakes used by `--dry-run` and tests; dry runs use a separate store root and a `dry-` run id prefix.
-- Serving the student has three candidate paths (spike S4, all UNVERIFIED): sandbox CPU with peft (`sandbox_student.py`), dedicated endpoint (`endpoint_student.py`), or a serverless job (not found in docs). `student.py` holds the interface.
+- The student and the un-tuned base are served on CPU with peft inside Nebius Sandboxes (`sandbox_student.py`, `student_serving="sandbox_cpu"` on the live path). `student.py` holds the interface.
 - `LLMClient` routes by role (planner, teacher, triage, student), classifies retries, handles `json_schema` structured output, splits reasoning from content, and logs usage into the budget ledger.
 
 ## Pipeline stages

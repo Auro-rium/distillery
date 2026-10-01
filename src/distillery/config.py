@@ -155,11 +155,6 @@ def load_price_file(path: str | Path) -> PriceFile:
     return PriceFile(llm=llm, finetune=finetune, sandbox=sandbox)
 
 
-def load_prices(path: str | Path) -> dict[str, Price]:
-    """The per-model LLM prices only (kept for callers that predate the typed sections)."""
-    return dict(load_price_file(path).llm)
-
-
 def _float_env(env: Mapping[str, str], name: str, default: float) -> float:
     val = env.get(name)
     if val is None or val == "":

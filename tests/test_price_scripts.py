@@ -1,6 +1,5 @@
 # ruff: noqa: S101
 import importlib.util
-import sqlite3
 import sys
 from pathlib import Path
 from types import ModuleType
@@ -24,7 +23,6 @@ def load(name: str) -> ModuleType:
 
 
 est = load("estimate_run_cost")
-reb = load("rebase_ledger")
 
 
 def px(i: float, o: float) -> Price:
@@ -120,35 +118,3 @@ def test_measure_avgs_and_row_chars(tmp_path: Path) -> None:
     f.write_text("aaaa\nbbbbbb\n\n")
     assert est.avg_row_chars(f) == 5.0
     assert est.avg_row_chars(tmp_path / "nope.jsonl") is None
-
-
-def test_rebase_report_then_apply_is_idempotent(tmp_path: Path) -> None:
-    make_run(tmp_path).close()
-    deltas = reb.compute(tmp_path, FULL, {"r1": [1_000_000]})
-    d = deltas[0]
-    new_llm = (4000 * 1 + 400 * 3) / 1e6
-    assert d.old_usd == pytest.approx(7.0)
-    assert d.new_usd == pytest.approx(new_llm + 1_000_000 * 2 / 1e6)
-    # report-only: nothing written
-    con = sqlite3.connect(tmp_path / "index.sqlite")
-    assert con.execute("SELECT COUNT(*) FROM spend").fetchone()[0] == 2
-    con.close()
-    assert reb.apply(tmp_path, deltas) == 1
-    con = sqlite3.connect(tmp_path / "index.sqlite")
-    rows = con.execute("SELECT kind, usd FROM spend ORDER BY id").fetchall()
-    con.close()
-    assert [k for k, _ in rows] == ["llm", "finetune_ceiling", "rebase"]  # rows only appended
-    assert rows[0][1] == 5.0
-    again = reb.compute(tmp_path, FULL, {"r1": [1_000_000]})
-    assert again[0].delta == pytest.approx(0.0)
-    assert reb.apply(tmp_path, again) == 0
-
-
-def test_rebase_refuses_unpriced_model_and_keeps_ceiling_without_tokens(tmp_path: Path) -> None:
-    make_run(tmp_path).close()
-    d = reb.compute(tmp_path, PriceFile(), None)[0]
-    assert d.new_usd is None
-    assert "no price" in d.note
-    assert reb.apply(tmp_path, [d]) == 0
-    d2 = reb.compute(tmp_path, FULL, None)[0]  # priced, but no trained_tokens known
-    assert d2.new_usd == pytest.approx((4000 * 1 + 400 * 3) / 1e6 + 2.0)

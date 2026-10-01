@@ -1,19 +1,14 @@
-"""Spend ledger with hard caps, and a leak-proof paid-resource context manager."""
+"""Spend ledger with hard caps."""
 
 from __future__ import annotations
 
-import logging
 import sqlite3
 import threading
-from collections.abc import Callable, Iterator
-from contextlib import contextmanager
 from datetime import UTC, datetime
 from typing import Any
 
 from distillery.config import Config, FinetunePrice, Price, SandboxPrice
 from distillery.store import Store
-
-log = logging.getLogger(__name__)
 
 PLAYGROUND = "playground"
 
@@ -166,10 +161,6 @@ class Ledger:
         with self._lock:
             return self._run
 
-    def project_spent(self) -> float:
-        with self._lock:
-            return self._project
-
     def playground_spent(self, day: str | None = None) -> float:
         d = day or _today()
         with self._lock:
@@ -230,23 +221,6 @@ class Ledger:
                 )
                 if model is not None and kind not in NON_LLM_KINDS:
                     self.store.record_llm_call(self.run_id, model, input_tokens, output_tokens, usd)
-
-
-@contextmanager
-def paid_resource[T](create: Callable[[], T], cancel: Callable[[T], object]) -> Iterator[T]:
-    """Guarantee `cancel(resource)` runs on any exit path, including BaseException.
-
-    If `create` itself raises, nothing exists to cancel. Errors from `cancel` are
-    logged and never mask an in-flight exception.
-    """
-    resource = create()
-    try:
-        yield resource
-    finally:
-        try:
-            cancel(resource)
-        except Exception:  # noqa: BLE001 - cleanup must never mask the original error
-            log.exception("cancel of paid resource failed; it may still be running and billing")
 
 
 def spend_lines(store: Store, run_id: str) -> list[dict[str, Any]]:

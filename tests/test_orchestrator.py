@@ -207,7 +207,7 @@ def test_no_model_touches_gold_and_planner_never_sees_heldout(reference: dict[st
     agreement filter is gone), and the planner only ever sees dev failures, never held-out."""
     heldout = {i["question"] for i in reference["store"].load_heldout("dry-t")}
     planner = [c for c in reference["dr"].transport.calls if c["model"] == "fake-planner"]
-    assert planner and all(c["schema"] != "SqlAnswer" for c in planner)  # analysis only
+    assert planner and all(c["schema"] == "FailureClusters" for c in planner)  # analysis only
     for c in planner:
         assert not any(q in m["content"] for m in c["messages"] for q in heldout)
     cc = reference["report"]["counters"]["gold_crosscheck"]
@@ -270,8 +270,8 @@ def test_resume_after_mid_stage_kill_skips_done_stages_and_matches_hashes(
     assert not done & set(pipe2.ran), "completed stages must be skipped"
     assert "teacher_data" in pipe2.ran
     # no planner call at all in the resumed process except failure analysis
-    assert not [c for c in dr2.transport.calls if c["schema"] == "SqlAnswer"
-                and c["model"] == "fake-planner"]  # fmt: skip
+    assert all(c["schema"] == "FailureClusters" for c in dr2.transport.calls
+               if c["model"] == "fake-planner")  # fmt: skip
     for stage, digest in pipe2.hashes.items():
         assert digest == reference["pipe"].hashes[stage], stage
     assert report["decision"] == reference["report"]["decision"]
@@ -475,12 +475,6 @@ def test_report_carries_capped_examples_after_scoring(reference: dict[str, Any])
     assert {"task_id", "gold_sql", "base_sql", "student_sql", "teacher_sql"} <= set(ex[0])
 
 
-def test_ultra_verifier_hook_is_documented_not_silent(tmp_path: Path, bridge: AsyncBridge) -> None:
-    pipe, _dr, _s = make(tmp_path, bridge, ultra_verifier_authoring=True)
-    with pytest.raises(NotImplementedError, match="hook"):
-        pipe.run()
-
-
 # ---- pure split planning ------------------------------------------------------------------------
 
 
@@ -580,10 +574,11 @@ def test_serving_modes_refuse_ambiguity_or_missing_config(
     pipe, _dr, _s = make(tmp_path, bridge, dry=dry)  # fake factories still set
     with pytest.raises(ConfigRefusal, match="already has serving factories"):
         pipe._resolve_serving()
-    dry = build_dry_run(NANO, bridge, student_serving="endpoint")
+    dry = build_dry_run(NANO, bridge, student_serving="sandbox_cpu")
     dry.deps.student_factory = dry.deps.base_factory = None
+    dry.deps.sandbox = None
     pipe, dr, _s = make(tmp_path, bridge, dry=dry)
-    with pytest.raises(ConfigRefusal, match="hourly price"):
+    with pytest.raises(ConfigRefusal, match="needs Deps.sandbox"):
         pipe.run()
     assert dr.transport.calls == []
 
@@ -673,43 +668,6 @@ def test_base_factory_failure_and_student_close_failure_both_surface(
     assert isinstance(err, RuntimeError) and "base create failed" in str(err)
 
 
-# ---- endpoint identity: the served model must match the configured / trained one ---------------
-
-
-class _NoCreateControl:
-    def __init__(self) -> None:
-        self.created: list[Any] = []
-
-    def templates(self) -> Any:
-        return []
-
-    def create(self, payload: Any) -> Any:
-        self.created.append(payload)
-        raise AssertionError("must not create an endpoint")
-
-    def status(self, endpoint_id: str) -> str:
-        return "ready"
-
-    def delete(self, endpoint_id: str) -> None:
-        return None
-
-
-def _endpoint_pipe(
-    tmp_path: Path, bridge: AsyncBridge, **spec_kw: Any
-) -> tuple[Pipeline, _NoCreateControl]:
-    from distillery.endpoint_student import EndpointBackend, EndpointSpec
-
-    control = _NoCreateControl()
-    spec = EndpointSpec(
-        flavor_name="f", gpu_type="g", gpu_count=1, region="r", hourly_cost_usd=1.0, **spec_kw
-    )  # type: ignore[arg-type]
-    dry = build_dry_run(NANO, bridge, student_serving="endpoint", student_endpoint=spec)
-    dry.deps.student_factory = dry.deps.base_factory = None
-    dry.deps.endpoint = EndpointBackend(control, lambda url: None)  # type: ignore[arg-type,return-value]
-    pipe, _dr, _s = make(tmp_path, bridge, dry=dry)
-    return pipe, control
-
-
 def _trained_art(base: str | None, ckpt: str | None) -> Any:
     from distillery.finetune import TrainedArtifact
 
@@ -718,47 +676,15 @@ def _trained_art(base: str | None, ckpt: str | None) -> Any:
     )
 
 
-def test_endpoint_refuses_spec_base_model_not_matching_student_id(
-    tmp_path: Path, bridge: AsyncBridge
-) -> None:
-    pipe, control = _endpoint_pipe(tmp_path, bridge, base_model_name="some/other-base")
-    with pytest.raises(ConfigRefusal, match="base_model_name"):
-        pipe._resolve_serving()
-    pipe, control = _endpoint_pipe(tmp_path, bridge, model_name="ft")  # base_model_name unset
-    with pytest.raises(ConfigRefusal, match="base_model_name"):
-        pipe._resolve_serving()
-    assert control.created == []
-
-
-def test_endpoint_refuses_trained_base_or_checkpoint_mismatch(
-    tmp_path: Path, bridge: AsyncBridge
-) -> None:
-    probe, _c = _endpoint_pipe(tmp_path, bridge, base_model_name="x")
-    student_id = probe.config.require_model("student")
-    pipe, control = _endpoint_pipe(
-        tmp_path, bridge, base_model_name=student_id, model_name="ft-served"
-    )
-    pipe._resolve_serving()
-    assert pipe.deps.student_factory is not None
-    with pytest.raises(ConfigRefusal, match="trained base_model"):
-        pipe.deps.student_factory(_trained_art("another/base", "ft-served"))
-    with pytest.raises(ConfigRefusal, match="checkpoint"):
-        pipe.deps.student_factory(_trained_art(student_id, "other-ckpt"))
-    assert control.created == []
-
-
-def test_report_artifact_records_served_model_names() -> None:
+def test_report_artifact_records_trained_model_names() -> None:
     from distillery.orchestrator import _with_serving
 
-    class S:
-        served_model = "ft-served"
-
-    class B:
-        served_model = "base-served"
-
-    out = _with_serving({"job_id": "j"}, _trained_art("base/x", "ft-served"), S(), B())
-    assert out["served_model"] == "ft-served" and out["served_base_model"] == "base-served"
-    assert out["trained_base_model"] == "base/x" and out["trained_checkpoint_name"] == "ft-served"
+    out = _with_serving({"job_id": "j"}, _trained_art("base/x", "ft-ckpt"))
+    assert out == {
+        "job_id": "j",
+        "trained_base_model": "base/x",
+        "trained_checkpoint_name": "ft-ckpt",
+    }
 
 
 # ---- live sandbox-CPU serving wiring (offline; FakeSandbox stands in for Nebius) -----------------

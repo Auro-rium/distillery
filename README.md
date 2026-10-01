@@ -100,7 +100,7 @@ These are enforced in code and covered by offline tests, not by convention.
 - **Train prompts equal eval prompts.** One message builder (`prompts.py`) is used for training rows and evaluation.
 - **Artifact identity.** The adapter that is evaluated is checked by SHA-256 against the one the fine-tune job produced; a mismatch aborts.
 - **No LLM in the gate.** `gate.py` is a pure function over booleans; verification is execution match, not a judge.
-- **Money.** Paid resources (fine-tune jobs, dedicated endpoints) are cancelled or deleted in `finally` blocks on failure and normal exit, covered by tests for failed jobs, failed generation and failing `close()` (a failed endpoint delete is raised loudly, since it may keep billing); runs preflight against a budget cap; live runs need an admin token and explicit approval.
+- **Money.** Paid resources (fine-tune jobs, sandbox serving) are cancelled or closed in `finally` blocks on failure and normal exit, covered by tests for failed jobs, failed generation and failing `close()` (a failed close is raised loudly, since it may keep billing); runs preflight against a budget cap; live runs need an admin token and explicit approval.
 
 ## Quickstart
 

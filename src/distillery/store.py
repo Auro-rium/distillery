@@ -144,13 +144,6 @@ class Store:
         )
 
     # ---- resumable stages -------------------------------------------
-    def stage_complete(self, run_id: str, stage: str, inputs: dict[str, Any]) -> bool:
-        key = stage_key(stage, inputs)
-        rows = self._query(
-            "SELECT status FROM stages WHERE run_id=? AND input_hash=?", (run_id, key)
-        )
-        return bool(rows) and rows[0][0] == "complete"
-
     def get_or_run(
         self, run_id: str, stage: str, inputs: dict[str, Any], fn: Callable[[], Any]
     ) -> Any:

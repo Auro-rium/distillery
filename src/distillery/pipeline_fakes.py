@@ -160,7 +160,7 @@ class FakeTransport:
             return "sorry, here is your query"  # invalid JSON: exercises the schema-retry path
         wrong = _unit(self.salt, model, question, temperature) < self.error_rates.get(model, 0.0)
         sql = _WRONG_SQL if wrong else self.oracle.gold(question)
-        return json.dumps({"sql": sql}) if schema == "SqlAnswer" else f"```sql\n{sql}\n```"
+        return f"```sql\n{sql}\n```"
 
     @staticmethod
     def _clusters(messages: Sequence[Mapping[str, Any]]) -> str:

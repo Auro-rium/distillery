@@ -13,8 +13,8 @@ copyright holder rather than a person, since no legal name was provided; change 
   `suspect_gold` (probable template bug). Cross-check runs on all generated questions, including future held-out ones
   (label quality), so "the planner never sees held-out" is enforced for failure analysis and every later planner call
   (tested), not for the gold cross-check.
-- **Verifier authoring by Ultra: not built.** For the SQL pack the verifier is the deterministic execution match. The hook is
-  `PipelineConfig.ultra_verifier_authoring`; setting it raises NotImplementedError (never silently ignored). The self-test
+- **Verifier authoring by Ultra: not built.** For the SQL pack the verifier is the deterministic execution match. (The former
+  `PipelineConfig.ultra_verifier_authoring` hook, which only raised NotImplementedError, was removed as dead code.) The self-test
   (gold accepted, every `corrupt_sql` variant rejected) runs through the pipeline's real Executor, and also checks the executor
   agrees with the local reference, so it doubles as a sandbox-path test.
 - **Rounds.** `max_rounds` = total fine-tune rounds including the first. Each round: dev eval -> (planner clusters dev failures
