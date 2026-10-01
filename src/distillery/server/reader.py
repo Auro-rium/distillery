@@ -11,6 +11,7 @@ from typing import Any
 
 from distillery.driver import driver_alive
 from distillery.orchestrator import DRY_PREFIX, cost_by_model, stage_rows
+from distillery.pipeline_fakes import DRY_RUN_CAP_USD
 from distillery.server.settings import ServerSettings
 from distillery.server.views import detail_from_report
 from distillery.server.worker import Job, Worker
@@ -173,7 +174,10 @@ class RunReader:
                 or "run is not active and produced no report (interrupted?)"
             )
         dry = run_id.startswith(DRY_PREFIX)
-        cap = ((report or {}).get("cost") or {}).get("run_cap_usd", self.s.config.run_cap_usd)
+        # a live dry run is capped by the fake pipeline, not by this server's real-run cap, so show
+        # that one: the number must not change when the run completes and its report appears
+        live_cap = DRY_RUN_CAP_USD if dry else self.s.config.run_cap_usd
+        cap = ((report or {}).get("cost") or {}).get("run_cap_usd", live_cap)
         ops_done = [
             r for r in rows if r["stage"] == "verifier_selftest" and r["status"] == "complete"
         ]

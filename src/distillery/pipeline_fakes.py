@@ -63,6 +63,11 @@ DEFAULT_STUDENT_ERROR_RATES: tuple[float, ...] = (0.45, 0.25, 0.10)
 _WRONG_SQL = "SELECT 1"
 
 
+DRY_RUN_CAP_USD = (
+    10.0  # the fake-model pipeline's spend cap; the API shows it while a dry run is live
+)
+
+
 def _unit(*parts: object) -> float:
     """Deterministic pseudo-random number in [0, 1) from the parts."""
     h = hashlib.sha256("|".join(str(p) for p in parts).encode()).hexdigest()
@@ -386,7 +391,7 @@ def build_dry_run(
     error_rates: Mapping[str, float] | None = None,
     student_error_rates: Sequence[float] = DEFAULT_STUDENT_ERROR_RATES,
     fail_rounds: frozenset[int] = frozenset(),
-    run_cap_usd: float = 10.0,
+    run_cap_usd: float = DRY_RUN_CAP_USD,
     on_stage: Callable[[str], None] | None = None,
     garbage_student: bool = False,
     **pipeline_overrides: Any,

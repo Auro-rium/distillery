@@ -10,6 +10,7 @@ import pytest
 from fastapi.testclient import TestClient
 from server_helpers import (
     ADMIN,
+    make_config,
     make_settings,
     sample_report,
     scripted_executor,
@@ -339,3 +340,19 @@ def test_starting_a_live_run_is_admin_gated(tmp_path: Path) -> None:
         small = {"scale": "small", "dry_run": True}
         assert c.post("/api/runs", json=small).status_code == 403
         assert c.get("/api/runs").json() == []  # nothing was started
+
+
+def test_live_dry_run_cap_matches_the_cap_its_report_will_show(tmp_path: Path) -> None:
+    """The cap shown while a dry run is live must equal the one in its finished report (it used to
+    jump from the server's real-run cap to the fake pipeline's cap when the run completed)."""
+    from distillery.pipeline_fakes import DRY_RUN_CAP_USD
+    from distillery.server.reader import RunReader
+
+    rid = "dry-sql-tiny-capcheck"
+    store = Store(tmp_path / "data" / "dry-runs")
+    store.get_or_run(rid, "schema", {}, lambda: {"ok": 1})  # running: no report yet
+    store.close()
+    settings = make_settings(tmp_path, config=make_config(run_cap_usd=5.0))  # like production
+    assert settings.config.run_cap_usd != DRY_RUN_CAP_USD  # the two caps really differ here
+    live = RunReader(settings).detail(rid)
+    assert live is not None and live["spend"]["cap_usd"] == DRY_RUN_CAP_USD
