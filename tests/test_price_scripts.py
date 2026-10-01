@@ -152,3 +152,13 @@ def test_rebase_refuses_unpriced_model_and_keeps_ceiling_without_tokens(tmp_path
     assert reb.apply(tmp_path, [d]) == 0
     d2 = reb.compute(tmp_path, FULL, None)[0]  # priced, but no trained_tokens known
     assert d2.new_usd == pytest.approx((4000 * 1 + 400 * 3) / 1e6 + 2.0)
+
+
+def test_measured_tokens_per_row_drives_the_fine_tune_line() -> None:
+    sc = SCALES["mini"]  # train 120
+    lines = est.build_estimate(
+        sc, FULL, AVGS, row_chars=999999.0, tokens_per_row=960.0, epochs=3, rounds=1, stress_n=0
+    )
+    ft = next(ln for ln in lines if ln.name == "fine-tune")
+    assert ft.usd == pytest.approx(120 * 960 * 3 * 2 / 1e6)  # price 2 per Mtok; chars ignored
+    assert "MEASURED" in ft.quantity

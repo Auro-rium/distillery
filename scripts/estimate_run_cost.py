@@ -97,6 +97,7 @@ def build_estimate(
     *,
     row_chars: float | None,
     chars_per_token: float = 3.0,
+    tokens_per_row: float | None = None,
     epochs: int = 3,
     rounds: int = 2,
     retries_factor: float = 1.0,
@@ -118,7 +119,26 @@ def build_estimate(
     )
 
     ft_price = prices.finetune.get(student)
-    if row_chars is None:
+    if tokens_per_row is not None:
+        tokens = math.ceil(scale.train * tokens_per_row) * epochs * rounds
+        qty = (
+            f"{tokens:,} trained tokens ({scale.train} rows x {tokens_per_row:g} tokens/row, "
+            f"MEASURED by the 3 real jobs, x {epochs} epochs x {rounds} rounds)"
+        )
+        if ft_price is None:
+            lines.append(
+                Line("fine-tune", qty, None, f"{MISSING_PRICE}: fine-tune price for {student}")
+            )
+        else:
+            lines.append(
+                Line(
+                    "fine-tune",
+                    qty,
+                    tokens * ft_price.usd_per_mtok_trained_tokens / 1e6,
+                    price_status(ft_price.source),
+                )
+            )
+    elif row_chars is None:
         lines.append(
             Line("fine-tune", "no train.jsonl to measure", None, "MISSING MEASUREMENT: train.jsonl")
         )
@@ -196,6 +216,13 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--epochs", type=int, default=3)
     ap.add_argument("--rounds", type=int, default=2)
     ap.add_argument("--chars-per-token", type=float, default=3.0)
+    ap.add_argument(
+        "--tokens-per-row",
+        type=float,
+        default=960.0,
+        help="measured: 963/960/959 trained tokens per row in the three real jobs; 0 = estimate "
+        "from characters instead",
+    )
     ap.add_argument("--retries-factor", type=float, default=1.0)
     ap.add_argument("--stress-n", type=int, default=None, help="default: the scale's stress size")
     ap.add_argument("--analysis-calls", type=float, default=None)
@@ -209,6 +236,7 @@ def main(argv: list[str] | None = None) -> int:
     row_chars = avg_row_chars(a.root / "runs" / a.run / "round1" / "train.jsonl")
     lines = build_estimate(
         SCALES[a.scale], prices, avgs, row_chars=row_chars, chars_per_token=a.chars_per_token,
+        tokens_per_row=a.tokens_per_row or None,
         epochs=a.epochs, rounds=a.rounds, retries_factor=a.retries_factor, stress_n=a.stress_n,
         analysis_calls=a.analysis_calls, sec_per_generation=a.sec_per_generation,
         teacher=a.teacher_model, planner=a.planner_model, student=a.student_model,
