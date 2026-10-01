@@ -1,5 +1,6 @@
 # ruff: noqa: S101, S105, S106
 import json
+import sqlite3
 from pathlib import Path
 from typing import Any
 
@@ -128,3 +129,57 @@ def test_tables_and_spend(tmp_path: Path) -> None:
     assert s.total_spend() == pytest.approx(0.3)
     assert s.total_spend("r1", exclude_kind="playground") == pytest.approx(0.1)
     assert s.spend_on_day("2026-01-01", "playground") == pytest.approx(0.2)
+
+
+def test_stress_seal_and_load(tmp_path: Path) -> None:
+    s = Store(tmp_path)
+    items = [{"q": "a", "family": "f"}, {"q": "b", "family": "g"}]
+    h = s.seal_stress("r1", items)
+    assert len(h) == 64
+    assert s.seal_stress("r1", items) == h  # idempotent
+    assert s.load_stress("r1") == items
+    assert Store(tmp_path).load_stress("r1") == items  # survives reopening
+    assert "artifacts" not in str(s._stress_path("r1"))
+
+
+def test_stress_none_when_never_sealed(tmp_path: Path) -> None:
+    s = Store(tmp_path)
+    assert s.load_stress("nope") is None
+    s.seal_heldout("r1", [{"q": 1}])  # a sealed gate set does not imply a stress set
+    assert s.load_stress("r1") is None
+
+
+def test_stress_tamper_and_reseal_detected(tmp_path: Path) -> None:
+    s = Store(tmp_path)
+    s.seal_stress("r1", [{"q": "a"}])
+    with pytest.raises(HeldoutIntegrityError):
+        s.seal_stress("r1", [{"q": "other"}])
+    s._stress_path("r1").write_bytes(b"[]")
+    with pytest.raises(HeldoutIntegrityError):
+        s.load_stress("r1")
+
+
+def test_manifest_has_stress_sha_only_when_sealed(tmp_path: Path) -> None:
+    s = Store(tmp_path)
+    manifest = tmp_path / "runs" / "r1" / "manifest.json"
+    s.seal_heldout("r1", [{"q": 1}])
+    assert "stress_sha256" not in json.loads(manifest.read_text())
+    h = s.seal_stress("r1", [{"q": 2}])
+    m = json.loads(manifest.read_text())
+    assert m["stress_sha256"] == h
+    assert m["heldout_sha256"] != h
+
+
+def test_old_db_without_seals_table_opens(tmp_path: Path) -> None:
+    s = Store(tmp_path)
+    s.seal_heldout("r1", [{"q": 1}])
+    s.close()
+    db = sqlite3.connect(tmp_path / "index.sqlite")
+    db.execute("DROP TABLE seals")
+    db.commit()
+    db.close()
+    s2 = Store(tmp_path)  # CREATE TABLE IF NOT EXISTS recreates it
+    assert s2.load_heldout("r1") == [{"q": 1}]
+    assert s2.load_stress("r1") is None
+    s2.seal_stress("r1", [{"q": 3}])
+    assert s2.load_stress("r1") == [{"q": 3}]

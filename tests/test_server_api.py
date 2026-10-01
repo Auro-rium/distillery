@@ -319,3 +319,17 @@ def test_second_live_run_conflicts_and_cancel_works(tmp_path: Path) -> None:
         d = wait_for(c, rid, "failed")
         assert d["error"] == "cancelled"
         assert c.post("/api/runs/nope/cancel", headers=h).status_code == 404
+
+
+def test_starting_a_live_run_is_admin_gated(tmp_path: Path) -> None:
+    body = {"scale": "tiny", "dry_run": False}  # no approve_spend: never actually starts a job
+    with _client(tmp_path) as c:
+        assert c.post("/api/runs", json=body).status_code == 401
+        assert c.post("/api/runs", json=body, headers={"X-Admin-Token": "wrong"}).status_code == 403
+        # with the right token the auth check passes and the next check (spend approval) answers
+        r = c.post("/api/runs", json=body, headers={"X-Admin-Token": ADMIN})
+        assert r.status_code == 400 and r.json()["error"] == "spend_not_approved"
+        # anonymous dry runs are only allowed at scale 'tiny'
+        small = {"scale": "small", "dry_run": True}
+        assert c.post("/api/runs", json=small).status_code == 403
+        assert c.get("/api/runs").json() == []  # nothing was started
