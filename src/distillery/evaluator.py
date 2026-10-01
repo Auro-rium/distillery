@@ -7,6 +7,7 @@ evaluated adapter is the trained one, and hands the per-item outcomes to the pur
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
@@ -215,19 +216,9 @@ def evaluate(
         if not g.ok:
             raise RuntimeError(f"gold SQL failed for held-out item {it.get('task_id')}: {g.error}")
 
-    scores: dict[str, ModelScores] = {}
-    for role in MODEL_ROLES:
-        scores[role] = score_model(
-            generators[role],
-            items,
-            gold,
-            schema_ddl=schema_ddl,
-            db_ref=db_ref,
-            executor=executor,
-            role=role,
-        )
-        if on_scores is not None:
-            on_scores(role, scores[role])
+    scores = _score_roles(
+        generators, items, gold, executor, db_ref=db_ref, schema_ddl=schema_ddl, on_scores=on_scores
+    )
 
     classes = [str(it.get("heldout_class", "seen")) for it in items]
     class_counts = {c: classes.count(c) for c in sorted(set(classes))}
@@ -263,6 +254,43 @@ def evaluate(
     )
 
 
+def _score_roles(
+    generators: Mapping[str, Generator],
+    items: Sequence[Mapping[str, Any]],
+    gold: Sequence[ExecOutcome],
+    executor: Executor,
+    *,
+    db_ref: str,
+    schema_ddl: str,
+    on_scores: Callable[[str, ModelScores], None] | None,
+) -> dict[str, ModelScores]:
+    """Score base, student and teacher concurrently: the models are independent (the base and the
+    student each run in their own sandbox), so serving them one after another only adds wall
+    time. The sandbox layer's global in-flight semaphore keeps the operation count under the cap.
+    ``on_scores`` is called on the calling thread, in completion order."""
+    scores: dict[str, ModelScores] = {}
+    with ThreadPoolExecutor(max_workers=len(MODEL_ROLES), thread_name_prefix="score") as pool:
+        futures = {
+            pool.submit(
+                score_model,
+                generators[role],
+                items,
+                gold,
+                schema_ddl=schema_ddl,
+                db_ref=db_ref,
+                executor=executor,
+                role=role,
+            ): role
+            for role in MODEL_ROLES
+        }
+        for fut in as_completed(futures):
+            role = futures[fut]
+            scores[role] = fut.result()  # a failure in any model aborts the evaluation
+            if on_scores is not None:
+                on_scores(role, scores[role])
+    return {role: scores[role] for role in MODEL_ROLES}  # stable order
+
+
 def _score_stress(
     store: Store,
     run_id: str,
@@ -281,18 +309,9 @@ def _score_stress(
     for it, g in zip(items, gold, strict=True):
         if not g.ok:
             raise RuntimeError(f"gold SQL failed for stress item {it.get('task_id')}: {g.error}")
-    scores = {
-        role: score_model(
-            generators[role],
-            items,
-            gold,
-            schema_ddl=schema_ddl,
-            db_ref=db_ref,
-            executor=executor,
-            role=role,
-        )
-        for role in MODEL_ROLES
-    }
+    scores = _score_roles(
+        generators, items, gold, executor, db_ref=db_ref, schema_ddl=schema_ddl, on_scores=None
+    )
     families = sorted({str(it["family"]) for it in items})
     by_family = {
         f: {
