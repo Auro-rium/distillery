@@ -17,3 +17,4 @@ spikes/out/
 .DS_Store
 .distillery/
 replay/*.tmp
+.claude/

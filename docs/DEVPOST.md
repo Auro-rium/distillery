@@ -18,10 +18,10 @@ Teams pay a large model to do the same narrow job millions of times. Distilling 
 
 Given a narrow task (today: text-to-SQL over a synthetic SQLite database), Distillery:
 
-1. Generates tasks and gold answers, then cross-checks the gold labels with the planner (Nemotron 3 Ultra) and teacher (Nemotron 3 Super) by comparing execution results.
-2. Seals a held-out set, including task families the student never trains on.
+1. Generates tasks whose gold SQL comes from parameterized templates and is executed in a Nebius Sandbox (no model writes or vets gold).
+2. Seals an in-distribution gate set and, separately, a stress set of reserved task families the student never trains on (reported, never a gate input).
 3. Has the teacher write training answers; only rows that execute correctly in a sandbox are kept. Nemotron 3 Nano flags dirty formatting.
-4. Fine-tunes Qwen3-1.7B (LoRA) on Nebius Token Factory, scores it on a dev set, has the planner cluster the failures into families, generates targeted data, and branches the sandbox. Each round is a node in an experiment tree.
+4. Fine-tunes Qwen3-0.6B (LoRA) on Nebius Token Factory, scores it on a dev set, has the planner cluster the failures into families, generates targeted data, and branches the sandbox. Each round is a node in an experiment tree.
 5. Scores the best-on-dev candidate once on the sealed held-out set and applies a pure-Python gate: PROMOTE only if the student's accuracy relative to the teacher has a bootstrap lower bound of at least 0.85 and the student beats the base model on an exact McNemar test.
 6. Produces a report: accuracy with confidence intervals, cost split, examples fixed / still wrong / regressed, and the experiment tree.
 
@@ -55,7 +55,7 @@ Serve the student on Nebius and close the cost comparison; more task packs (a Py
 
 ## Built with
 
-Nebius Token Factory (Nemotron 3 Ultra, Super, Nano; fine-tuning; Sandboxes), Qwen3-1.7B, Python, FastAPI, SQLite, React, TypeScript, Vite, Docker.
+Nebius Token Factory (Nemotron 3 Ultra, Super, Nano; fine-tuning; Sandboxes), Qwen3-0.6B, Python, FastAPI, SQLite, React, TypeScript, Vite, Docker.
 
 ## Results (fill from a real run only)
 

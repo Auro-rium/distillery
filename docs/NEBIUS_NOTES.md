@@ -1,5 +1,7 @@
 # NEBIUS NOTES
 
+> Historical working notes from the first days of the build. Where they disagree with [DECISIONS.md](../DECISIONS.md) or [STATUS.md](../STATUS.md) (e.g. the 1.7B student, unverified sandbox claims), those win.
+
 Everything below is **from docs, not yet verified live** unless a line says otherwise. Sources are the
 saved pages under `spikes/out/` (fetched from https://docs.tokenfactory.nebius.com/<path>.md, 2026-09-29).
 Spikes S1-S5 have not been run. Discrepancies between the build spec and the docs are listed at the end.
