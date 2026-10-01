@@ -9,13 +9,13 @@ import "./replay.css";
 
 const STEPS = [
   "The task pack supplies a schema and questions.",
-  "Gold answers are cross-checked by executing them.",
-  "The held-out set is sealed; only the evaluator reads it.",
+  "Gold answers come from templates and are only executed; one is accepted if it runs and returns rows.",
+  "The gate set and a separate stress set are sealed; only the evaluator reads them.",
   "The teacher writes training data that is verified by execution.",
   "The student is fine-tuned on it.",
   "Dev evaluation finds failures and clusters them.",
   "Targeted new data is added in a sandbox branch, and the student is fine-tuned again.",
-  "The best round is evaluated once on the held-out set for base, student and teacher.",
+  "The best round is evaluated once on the gate set and the stress set for base, student and teacher.",
   "A fixed gate decides PROMOTE or REJECT.",
 ];
 

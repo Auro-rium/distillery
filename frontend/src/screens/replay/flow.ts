@@ -28,13 +28,13 @@ type Id = (typeof STAGE_IDS)[number];
 
 const STAGES: Record<Id, { title: string; sub: string }> = {
   a: { title: "Schema + questions", sub: "the task pack" },
-  b: { title: "Gold cross-check", sub: "verified by execution" },
-  c: { title: "Seal held-out set", sub: "evaluator access only" },
+  b: { title: "Template gold", sub: "accepted if it runs" },
+  c: { title: "Seal gate + stress", sub: "evaluator access only" },
   d: { title: "Teacher data", sub: "verified examples" },
   e: { title: "Fine-tune student", sub: "small model" },
   f: { title: "Dev eval + failures", sub: "cluster what broke" },
   g: { title: "Targeted data", sub: "sandbox branch" },
-  h: { title: "Final held-out eval", sub: "base, student, teacher" },
+  h: { title: "Gate + stress eval", sub: "base, student, teacher" },
   i: { title: "Gate", sub: "PROMOTE or REJECT" },
 };
 

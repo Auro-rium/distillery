@@ -64,6 +64,7 @@ test("replay: labels come from each payload, and a missing flag is never shown a
   const item = (run_id: string, extra: object) => ({ run_id, status: "complete", decision: "PROMOTE", created_at: null, ...extra });
   await page.route(API, (route) => {
     const u = new URL(route.request().url());
+    if (u.pathname === "/api/runs") return route.fulfill({ json: [] }); // the live section: nothing active here
     if (u.pathname === "/api/replay")
       return route.fulfill({
         json: [

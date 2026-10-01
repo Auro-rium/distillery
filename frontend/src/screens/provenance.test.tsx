@@ -29,7 +29,7 @@ describe("render provenance: numbers on screen come from the contract payloads",
   });
   it("replay", async () => {
     stubFetch(contractFetch());
-    await check("/", contract.replay[0].run_id, [contract.replay]);
+    await check("/", contract.replay[0].run_id, [contract.replay, contract.runs]);
   });
   it("report", async () => {
     stubFetch(contractFetch());

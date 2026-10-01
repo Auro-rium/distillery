@@ -41,3 +41,4 @@
 .bundle-date { margin: 0; font-size: .9rem; }
 .bundle-date time { font-family: var(--font-mono); font-size: .86em; }
 .bundle-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: auto; }
+.demo-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); }

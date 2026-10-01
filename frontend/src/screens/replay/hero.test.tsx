@@ -11,7 +11,7 @@ describe("replay landing", () => {
   it("the label banner comes before the hero in the document", async () => {
     stubFetch(contractFetch());
     const { container } = renderApp("/");
-    await waitFor(() => screen.getByText("DRY RUN — fake models, numbers are NOT results"));
+    await waitFor(() => screen.getAllByText("DRY RUN — fake models, numbers are NOT results"));
     const banner = container.querySelector(".banners")!;
     const hero = container.querySelector(".hero")!;
     expect(banner.compareDocumentPosition(hero) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
@@ -32,7 +32,7 @@ describe("replay landing", () => {
       expect(svg.getAttribute("aria-hidden")).toBe("true");
       expect(svg.querySelectorAll("text").length).toBeGreaterThan(8);
       expect(svg.getAttribute("viewBox")).toMatch(/^0 0 \d+ \d+$/);
-      expect(svg.textContent).toContain("Gold cross-check");
+      expect(svg.textContent).toContain("Template gold");
       expect(svg.textContent).toContain("next round");
     }
     expect(pipe.querySelector(".pipe-scroll")).toBeNull();
@@ -67,7 +67,7 @@ describe("replay landing", () => {
   });
   it("shows one banner per distinct label and tags every bundle with its own label", async () => {
     const base = contract.replay[0];
-    stubFetch(contractFetch({ replay: [base, { ...base, run_id: "rec-1", dry_run: false, recorded: true, recorded_at: "2026-02-03T00:00:00Z" }] }));
+    stubFetch(contractFetch({ runs: [], replay: [base, { ...base, run_id: "rec-1", dry_run: false, recorded: true, recorded_at: "2026-02-03T00:00:00Z" }] }));
     const { container } = renderApp("/");
     await waitFor(() => screen.getByText("rec-1"));
     expect(container.querySelectorAll(".banners .label-banner")).toHaveLength(2);

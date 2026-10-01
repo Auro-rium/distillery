@@ -4,8 +4,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import Replay from ".";
 
 const run = { run_id: "r1", dry_run: true, recorded: false, recorded_at: null, status: "complete", decision: "REJECT", created_at: "t" };
+// /api/runs (the live section) answers an empty list here, so these tests only see the stored list.
 const stub = (body: unknown, status = 200) =>
-  vi.stubGlobal("fetch", vi.fn(() => Promise.resolve(new Response(JSON.stringify(body), { status }))));
+  vi.stubGlobal("fetch", vi.fn((url: string) =>
+    Promise.resolve(new Response(JSON.stringify(String(url).endsWith("/runs") ? [] : body), { status: String(url).endsWith("/runs") ? 200 : status }))));
 const view = () => render(<MemoryRouter><Replay /></MemoryRouter>);
 afterEach(() => vi.unstubAllGlobals());
 
