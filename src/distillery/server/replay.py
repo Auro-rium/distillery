@@ -80,7 +80,9 @@ def load_bundles(replay_dir: Path, sample_report: Path | None) -> dict[str, Bund
     return out
 
 
-_ABS_PATH = re.compile(r"(?:^|[\s\"'=(:])(?:/(?:home|tmp|Users|var|root|mnt|opt|usr|etc|srv)/|[A-Za-z]:\\)")
+_ABS_PATH = re.compile(
+    r"(?:^|[\s\"'=(:])(?:/(?:home|tmp|Users|var|root|mnt|opt|usr|etc|srv)/|[A-Za-z]:\\)"
+)
 
 
 def _absolute_paths(obj: Any) -> list[str]:

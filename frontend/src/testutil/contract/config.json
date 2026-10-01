@@ -8,8 +8,24 @@
   "playground": {
     "daily_cap_usd": 1.0,
     "enabled": false,
+    "models": {
+      "base": {
+        "reason": "sandbox-served base/student are switched off on this server (set DISTILLERY_PLAYGROUND_SANDBOX_MODELS=1 to enable; sandbox CPU price is not known, so this is opt-in and rate limited)",
+        "state": "disabled"
+      },
+      "student": {
+        "reason": "sandbox-served base/student are switched off on this server (set DISTILLERY_PLAYGROUND_SANDBOX_MODELS=1 to enable; sandbox CPU price is not known, so this is opt-in and rate limited)",
+        "state": "disabled"
+      },
+      "teacher": {
+        "reason": "teacher is not configured on this server (replay-only mode)",
+        "state": "unavailable"
+      }
+    },
     "per_ip_per_hour": 10,
-    "spent_today_usd": 0.0
+    "spent_today_usd": 0.0,
+    "student_daily_cap": 60,
+    "student_per_ip_per_hour": 3
   },
   "run_cap_usd": 10.0,
   "thresholds": {

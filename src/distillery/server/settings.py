@@ -12,6 +12,9 @@ from urllib.parse import urlsplit
 
 from distillery.config import Config, load_config
 from distillery.llm import LLMClient, make_openai_client
+from distillery.server.local_models import LocalModels
+from distillery.server.local_models import from_env as local_models_from_env
+from distillery.taskpacks.sql import schema as sql_schema
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 SAMPLE_REPORT = _REPO_ROOT / "docs" / "fixtures" / "sample-dry-run-report.json"
@@ -34,6 +37,11 @@ class ServerSettings:
     # (job, log) -> exit code. None = run ``python -m distillery run`` in a subprocess.
     executor: Callable[..., int] | None = None
     playground_per_ip_per_hour: int = 10
+    # Base + student on sandbox CPU (None = not wired). Their price is unknown, so they have their
+    # own caps: questions that use them, per IP per hour and per UTC day (in memory, per process).
+    playground_local: LocalModels | None = None
+    playground_student_per_ip_per_hour: int = 3
+    playground_student_daily_cap: int = 60
     dry_run_per_ip_per_hour: int = 6
     max_body_bytes: int = 16_384
     sse_max_streams: int = 32
@@ -106,6 +114,13 @@ def settings_from_env(
             else e.get("DISTILLERY_DEV_ORIGIN")
         ),
         playground_llm=default_playground_llm(config),
+        playground_local=local_models_from_env(
+            config, e, demo_db=lambda: sql_schema.build_database(0)
+        ),
+        playground_student_per_ip_per_hour=int(
+            e.get("DISTILLERY_PLAYGROUND_STUDENT_PER_IP_PER_HOUR") or 3
+        ),
+        playground_student_daily_cap=int(e.get("DISTILLERY_PLAYGROUND_STUDENT_DAILY_CAP") or 60),
         trusted_proxies=tuple(
             p.strip() for p in (e.get("DISTILLERY_TRUSTED_PROXIES") or "").split(",") if p.strip()
         ),

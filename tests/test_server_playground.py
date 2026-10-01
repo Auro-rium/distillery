@@ -45,7 +45,7 @@ def test_teacher_answer_verified_by_execution_and_unknown_gold_is_null(tmp_path:
         assert t["rows_preview"]["columns"] and t["rows_preview"]["rows"][0][0] > 0
         assert r["results"]["base"]["available"] is False
         assert r["results"]["student"]["available"] is False
-        assert "not served" in r["results"]["base"]["reason"]
+        assert "switched off" in r["results"]["base"]["reason"]
         assert r["cost_usd"] > 0 and transport.calls == 1  # type: ignore[attr-defined]
         assert c.get("/api/config").json()["playground"]["spent_today_usd"] == r["cost_usd"]
 

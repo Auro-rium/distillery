@@ -9,7 +9,7 @@ license = { text = "MIT" }
 dependencies = ["pydantic>=2.7", "openai>=1.50", "contree-sdk>=0.3.6", "fastapi>=0.110", "uvicorn>=0.29"]
 
 [project.optional-dependencies]
-dev = ["pytest>=8", "ruff", "mypy", "httpx>=0.27"]
+dev = ["pytest>=8", "ruff", "mypy", "httpx>=0.27", "jinja2", "tokenizers"]
 
 [tool.ruff]
 extend-exclude = [".claude", ".distillery", "frontend/node_modules"]

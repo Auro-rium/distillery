@@ -9,12 +9,15 @@ from server_helpers import ADMIN, make_settings, seed_finished_run
 
 from distillery import cli
 from distillery.server import create_app
-from distillery.server.replay import ExportError, export_bundle
 from distillery.server.reader import RunReader
+from distillery.server.replay import ExportError, export_bundle
 
 
 def _export(tmp_path: Path, run_id: str) -> None:
-    env = {"DISTILLERY_HOME": str(tmp_path / "data"), "DISTILLERY_REPLAY_DIR": str(tmp_path / "replay")}
+    env = {
+        "DISTILLERY_HOME": str(tmp_path / "data"),
+        "DISTILLERY_REPLAY_DIR": str(tmp_path / "replay"),
+    }
     assert cli.main(["export-replay", run_id], env=env, out=lambda _s: None) == 0
 
 
@@ -74,13 +77,26 @@ def test_export_rewrites_spot_check_path_and_refuses_absolute_paths(tmp_path: Pa
     store.close()
     s = make_settings(tmp_path)
     reader = RunReader(s)
-    dest = export_bundle(reader, "sql-tiny-abs", tmp_path / "replay", allow_dry_run=False,
-                         recorded_at="2026-01-01T00:00:00Z")
-    assert json.loads((dest / "report.json").read_text())["data"]["spot_check_file"] == "spot_check.json"
+    dest = export_bundle(
+        reader,
+        "sql-tiny-abs",
+        tmp_path / "replay",
+        allow_dry_run=False,
+        recorded_at="2026-01-01T00:00:00Z",
+    )
+    assert (
+        json.loads((dest / "report.json").read_text())["data"]["spot_check_file"]
+        == "spot_check.json"
+    )
     rep["config"]["leak"] = "see /tmp/x/y.json"
     rp.write_text(json.dumps(rep))
     with pytest.raises(ExportError, match="absolute path"):
-        export_bundle(reader, "sql-tiny-abs", tmp_path / "replay2", allow_dry_run=False,
-                      recorded_at="2026-01-01T00:00:00Z")
+        export_bundle(
+            reader,
+            "sql-tiny-abs",
+            tmp_path / "replay2",
+            allow_dry_run=False,
+            recorded_at="2026-01-01T00:00:00Z",
+        )
     assert not (tmp_path / "replay2").exists()
     reader.close()
