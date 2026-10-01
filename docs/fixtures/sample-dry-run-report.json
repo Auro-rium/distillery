@@ -1,5 +1,5 @@
 {
-  "candidate_round": 2,
+  "candidate_round": 3,
   "candidate_selection": "best DEV accuracy across rounds (ties: earliest); held-out is scored once, for that candidate only",
   "config": {
     "gate_thresholds": {
@@ -15,6 +15,7 @@
       "triage": "fake-triage"
     },
     "pipeline": {
+      "allow_packing": false,
       "candidates_per_task": 1,
       "chars_per_token": 3,
       "chunk": 50,
@@ -26,21 +27,22 @@
       "finetune_estimate_usd": 0.0,
       "headroom_max_base_acc": 0.8,
       "hyperparameters": {
-        "batch_size": null,
-        "context_length": null,
-        "learning_rate": null,
+        "batch_size": 16,
+        "context_length": 8192,
+        "learning_rate": 0.0001,
         "lora": true,
-        "lora_alpha": null,
-        "lora_dropout": null,
-        "lora_r": null,
-        "max_grad_norm": null,
+        "lora_alpha": 16,
+        "lora_dropout": 0.0,
+        "lora_r": 16,
+        "max_grad_norm": 1.0,
         "n_epochs": 3,
-        "packing": null,
-        "warmup_ratio": null,
-        "weight_decay": null
+        "packing": false,
+        "warmup_ratio": 0.0,
+        "weight_decay": 0.0
       },
       "max_rounds": 3,
-      "oversample": 1.6,
+      "min_planned_steps": 50,
+      "oversample": 1.1,
       "pack": "sql",
       "poll_interval_s": 15.0,
       "poll_timeout_s": 21600.0,
@@ -49,12 +51,19 @@
         "dev": 10,
         "heldout": 20,
         "name": "tiny",
+        "stress": 10,
         "train": 40
       },
       "seed": 1234,
       "selftest_corruptions": 4,
       "selftest_sample": 50,
       "spot_check_n": 30,
+      "student_batch_size": 2,
+      "student_concurrency": 10,
+      "student_endpoint": null,
+      "student_max_new_tokens": 160,
+      "student_sandbox_image": null,
+      "student_serving": "injected",
       "triage_sample": 50,
       "ultra_verifier_authoring": false,
       "use_triage": true
@@ -92,49 +101,78 @@
     }
   },
   "cost": {
+    "basis": "ESTIMATES, not billed amounts. LLM lines: measured token counts x the configured price table (price source: FAKE dry-run price, not a real price); fine-tune: ceiling estimate; sandbox compute: not recorded",
     "cost_per_1k_tasks": {
-      "student": "unavailable: serving path undecided (spike S4)",
+      "student": "unavailable: the student is served in Nebius Sandboxes (CPU) and the sandbox price is unknown",
       "teacher": {
         "basis": "measured tokens x configured prices, from the held-out teacher pass",
         "held_out_tasks": 20,
-        "input_tokens": 20325,
-        "output_tokens": 957,
-        "usd": 0.022239,
-        "usd_per_1k_tasks": 1.11195
+        "input_tokens": 30527,
+        "output_tokens": 1433,
+        "usd": 0.033393,
+        "usd_per_1k_tasks": 1.6696499999999999
       }
     },
-    "finetune_usd": "ESTIMATE from --finetune-estimate-usd (no fine-tune price known); rounds run: 2",
+    "finetune_lines": [
+      {
+        "basis": "ceiling estimate",
+        "kind": "finetune_ceiling",
+        "model": "fake-student-base",
+        "units": 12345,
+        "usd": 0.0
+      },
+      {
+        "basis": "ceiling estimate",
+        "kind": "finetune_ceiling",
+        "model": "fake-student-base",
+        "units": 12345,
+        "usd": 0.0
+      },
+      {
+        "basis": "ceiling estimate",
+        "kind": "finetune_ceiling",
+        "model": "fake-student-base",
+        "units": 12345,
+        "usd": 0.0
+      }
+    ],
+    "finetune_usd": "$0.0000 [ceiling estimate]; rounds run: 3",
     "llm_by_model": {
       "fake-planner": {
-        "calls": 119,
-        "input_tokens": 126142,
-        "output_tokens": 5332,
-        "usd": 0.136806
-      },
-      "fake-student-base": {
-        "calls": 30,
-        "input_tokens": 30490,
-        "output_tokens": 458,
-        "usd": 0.031406
+        "calls": 2,
+        "input_tokens": 1453,
+        "output_tokens": 216,
+        "usd": 0.001885
       },
       "fake-teacher": {
-        "calls": 181,
-        "input_tokens": 189187,
-        "output_tokens": 8369,
-        "usd": 0.205925
+        "calls": 87,
+        "input_tokens": 88520,
+        "output_tokens": 4088,
+        "usd": 0.096696
       },
       "fake-triage": {
-        "calls": 46,
-        "input_tokens": 5425,
-        "output_tokens": 184,
-        "usd": 0.005793
+        "calls": 50,
+        "input_tokens": 5965,
+        "output_tokens": 200,
+        "usd": 0.006365
       }
     },
+    "price_sources": {
+      "fake-planner": "FAKE dry-run price, not a real price",
+      "fake-teacher": "FAKE dry-run price, not a real price",
+      "fake-triage": "FAKE dry-run price, not a real price"
+    },
     "run_cap_usd": 10.0,
-    "run_total_usd": 0.3799300000000002
+    "run_total_usd": 0.10494599999999996,
+    "sandbox_lines": []
   },
   "counters": {
     "analysis_r1": {
+      "analysis_failed": 0,
+      "heldout_families_dropped": 0,
+      "unknown_families_dropped": 0
+    },
+    "analysis_r2": {
       "analysis_failed": 0,
       "heldout_families_dropped": 0,
       "unknown_families_dropped": 0
@@ -145,7 +183,12 @@
       "dev_unparseable": 0
     },
     "dev_eval_r2": {
-      "dev_failures": 1,
+      "dev_failures": 5,
+      "dev_n": 10,
+      "dev_unparseable": 0
+    },
+    "dev_eval_r3": {
+      "dev_failures": 0,
       "dev_n": 10,
       "dev_unparseable": 0
     },
@@ -158,75 +201,103 @@
     "finetune_r1": {
       "orphan_cancel_errors": 0,
       "orphan_jobs_cancelled": 0,
-      "train_rows": 40
+      "train_rows": 37
     },
     "finetune_r2": {
       "orphan_cancel_errors": 0,
       "orphan_jobs_cancelled": 0,
-      "train_rows": 46
+      "train_rows": 43
+    },
+    "finetune_r3": {
+      "orphan_cancel_errors": 0,
+      "orphan_jobs_cancelled": 0,
+      "train_rows": 50
     },
     "gold_crosscheck": {
-      "accepted": 102,
-      "accepted_with_identical_sql_text": 102,
-      "checked": 112,
-      "discard_planner_mismatch_only": 3,
-      "discard_teacher_mismatch_only": 7,
-      "discarded": 10,
-      "suspect_gold": 0
+      "accepted": 77,
+      "checked": 77,
+      "discarded": 0,
+      "stress_accepted": 11,
+      "stress_checked": 11
     },
     "headroom": {
       "base_unparseable": 0,
       "dev_n": 10
     },
     "questions": {
-      "attempts": 125,
-      "dropped_duplicate": 5,
-      "dropped_empty": 8,
+      "attempts": 83,
+      "dropped_duplicate": 1,
+      "dropped_duplicate_question": 0,
+      "dropped_empty": 5,
       "dropped_error": 0,
-      "generated": 112,
-      "requested": 112,
-      "shortfall": 0
+      "dropped_skeleton_cap": 0,
+      "generated": 77,
+      "requested": 77,
+      "shortfall": 0,
+      "stress_generated": 11,
+      "stress_requested": 11
     },
     "sandbox_branch_r1": {
+      "branch_skipped": 0
+    },
+    "sandbox_branch_r2": {
       "branch_skipped": 0
     },
     "schema": {},
     "split": {
       "dev": 10,
       "heldout": 20,
-      "heldout_seen_returned_to_train": 0,
-      "heldout_unseen_family_tasks_discarded": 6,
-      "input_tasks": 102,
+      "heldout_questions_seen_in_train": 0,
+      "heldout_skeleton_in_train": 0,
+      "input_tasks": 77,
       "spot_check_items": 20,
+      "stress": 10,
+      "stress_input_tasks": 11,
       "train": 40,
-      "train_pool_trimmed": 26
+      "train_distinct_skeletons": 39,
+      "train_pool_trimmed": 0
     },
     "targeted_r1": {
-      "candidates": 7,
-      "dropped": 1,
-      "dropped_already_known": 3,
+      "candidates": 9,
+      "dropped": 3,
+      "dropped_already_known": 1,
       "generated": 10,
       "gold_error": 0,
-      "new_tasks": 7,
-      "result_mismatch": 1,
-      "tasks": 7,
+      "new_tasks": 9,
+      "result_mismatch": 3,
+      "tasks": 9,
       "triage_calls": 6,
       "triage_errors": 0,
       "triage_flagged_dirty_format": 0,
       "verified": 6
     },
-    "teacher_data": {
-      "candidates": 40,
-      "dropped": 0,
+    "targeted_r2": {
+      "candidates": 8,
+      "dropped": 1,
+      "dropped_already_known": 2,
+      "generated": 10,
       "gold_error": 0,
-      "tasks": 40,
-      "triage_calls": 40,
+      "new_tasks": 8,
+      "result_mismatch": 1,
+      "tasks": 8,
+      "triage_calls": 7,
       "triage_errors": 0,
       "triage_flagged_dirty_format": 0,
-      "verified": 40
+      "verified": 7
+    },
+    "teacher_data": {
+      "candidates": 40,
+      "dropped": 3,
+      "gold_error": 0,
+      "result_mismatch": 3,
+      "tasks": 40,
+      "triage_calls": 37,
+      "triage_errors": 0,
+      "triage_flagged_dirty_format": 0,
+      "verified": 37
     },
     "verifier_selftest": {
-      "corruptions_tested": 198,
+      "corruptions_tested": 199,
       "tasks_sampled": 50,
       "tasks_without_corruptions": 0
     }
@@ -234,81 +305,217 @@
   "data": {
     "dev_tasks": 10,
     "heldout_class_counts": {
-      "seen": 6,
-      "unseen_family": 12,
-      "unseen_table_combo": 2
+      "in_distribution": 20
     },
-    "heldout_families": [
-      "conditional",
-      "date_math"
-    ],
-    "heldout_sealed_sha256": "c27e0cffe883c4e68f4cd34128bce82620edc235d534536a59848cc74f60bdf8",
+    "heldout_families": [],
+    "heldout_kind": "in-distribution gate set (every family also in train)",
+    "heldout_sealed_sha256": "26555c7c4558d47516d2d11d8352eafab8d3d56708d2b79d2b71afe97bbb78c6",
+    "heldout_skeleton_overlap_rate": 0.0,
     "heldout_tasks": 20,
     "spot_check_file": "spot_check.json",
-    "teacher_verified_rows_round1": 40,
+    "stress_families": [
+      "date_math",
+      "set_ops"
+    ],
+    "stress_sealed_sha256": "1bc76cd3b1dc0793b3c62f5e3a7d65fa73c34c096b20f746370c644d3607eb43",
+    "stress_tasks": 10,
+    "teacher_verified_rows_round1": 37,
+    "train_distinct_skeletons": 39,
     "train_tasks": 40
   },
-  "decision": "REJECT",
+  "decision": "PROMOTE",
   "decision_reasons": [
-    "ratio lower bound 0.500 < 0.85 (point 0.700)",
-    "McNemar exact p=0.0386 < 0.05 (student-only 10, base-only 2)"
+    "ratio lower bound 0.850 >= 0.85 (point 1.000)",
+    "McNemar exact p=0.0215 < 0.05 (student-only 9, base-only 1)"
   ],
   "dry_run": true,
   "evaluation": {
     "accuracy": {
-      "base": 0.3,
-      "student": 0.7,
-      "teacher": 1.0
+      "base": 0.55,
+      "student": 0.95,
+      "teacher": 0.95
     },
     "accuracy_by_class": {
-      "seen": {
-        "base": 0.16666666666666666,
-        "student": 0.8333333333333334,
-        "teacher": 1.0
-      },
-      "unseen_family": {
-        "base": 0.25,
-        "student": 0.6666666666666666,
-        "teacher": 1.0
-      },
-      "unseen_table_combo": {
-        "base": 1.0,
-        "student": 0.5,
-        "teacher": 1.0
+      "in_distribution": {
+        "base": 0.55,
+        "student": 0.95,
+        "teacher": 0.95
       }
     },
     "artifact": {
-      "adapter_sha256": "558d42d5e0a19b519a26d9af25630b6f0a515f07c59a0a1329f74a493f6c2ae1",
-      "checkpoint_id": "ckpt-ftjob-862efb5a41c8",
-      "job_id": "ftjob-862efb5a41c8"
+      "adapter_sha256": "ffaa833a073cfa3a9c8b8d640ac5b87c4155c5828696830c71d3473b2dafce9b",
+      "checkpoint_id": "ckpt-ftjob-2aa99664ebcd",
+      "job_id": "ftjob-2aa99664ebcd",
+      "trained_base_model": "fake-student-base",
+      "trained_checkpoint_name": "fake-ft:distillery-dry-sql-tiny-r3:ftjob-2aa99664ebcd"
     },
     "class_counts": {
-      "seen": 6,
-      "unseen_family": 12,
-      "unseen_table_combo": 2
+      "in_distribution": 20
     },
+    "examples": [
+      {
+        "base_ok": false,
+        "base_sql": "SELECT 1",
+        "family": "subquery_cte",
+        "gold_sql": "WITH c AS (SELECT account_id, COUNT(*) AS n FROM support_tickets WHERE category = 'bug' AND opened_at >= '2024-01-01' GROUP BY account_id) SELECT account_id, n FROM c WHERE n > (SELECT AVG(n) FROM c)",
+        "heldout_class": "in_distribution",
+        "kind": "fixed",
+        "question": "Counting bug tickets opened in or after 2024, which accounts have more tickets than the average count per account (averaged over accounts that have at least one such ticket)? Return account_id and count.",
+        "student_ok": true,
+        "student_sql": "WITH c AS (SELECT account_id, COUNT(*) AS n FROM support_tickets WHERE category = 'bug' AND opened_at >= '2024-01-01' GROUP BY account_id) SELECT account_id, n FROM c WHERE n > (SELECT AVG(n) FROM c)",
+        "task_id": "sql-c4b65ddafe0f",
+        "teacher_ok": true,
+        "teacher_sql": "WITH c AS (SELECT account_id, COUNT(*) AS n FROM support_tickets WHERE category = 'bug' AND opened_at >= '2024-01-01' GROUP BY account_id) SELECT account_id, n FROM c WHERE n > (SELECT AVG(n) FROM c)"
+      },
+      {
+        "base_ok": false,
+        "base_sql": "SELECT 1",
+        "family": "null_handling",
+        "gold_sql": "SELECT COUNT(*) FROM support_tickets WHERE status = 'closed' AND priority = 'urgent' AND csat_score IS NULL",
+        "heldout_class": "in_distribution",
+        "kind": "fixed",
+        "question": "How many closed urgent-priority tickets have no CSAT score?",
+        "student_ok": true,
+        "student_sql": "SELECT COUNT(*) FROM support_tickets WHERE status = 'closed' AND priority = 'urgent' AND csat_score IS NULL",
+        "task_id": "sql-62a2fb286205",
+        "teacher_ok": true,
+        "teacher_sql": "SELECT COUNT(*) FROM support_tickets WHERE status = 'closed' AND priority = 'urgent' AND csat_score IS NULL"
+      },
+      {
+        "base_ok": false,
+        "base_sql": "SELECT 1",
+        "family": "null_handling",
+        "gold_sql": "SELECT COUNT(*) FROM invoices WHERE currency = 'EUR' AND subscription_id IS NULL",
+        "heldout_class": "in_distribution",
+        "kind": "fixed",
+        "question": "How many EUR invoices are not tied to any subscription?",
+        "student_ok": true,
+        "student_sql": "SELECT COUNT(*) FROM invoices WHERE currency = 'EUR' AND subscription_id IS NULL",
+        "task_id": "sql-160c3c688790",
+        "teacher_ok": true,
+        "teacher_sql": "SELECT COUNT(*) FROM invoices WHERE currency = 'EUR' AND subscription_id IS NULL"
+      },
+      {
+        "base_ok": false,
+        "base_sql": "SELECT 1",
+        "family": "subquery_cte",
+        "gold_sql": "SELECT email FROM users WHERE role = 'member' AND account_id IN (SELECT account_id FROM support_tickets WHERE priority = 'urgent' GROUP BY account_id HAVING COUNT(*) >= 2)",
+        "heldout_class": "in_distribution",
+        "kind": "fixed",
+        "question": "Which users with role member belong to accounts that raised 2 or more tickets of priority urgent? Return email.",
+        "student_ok": true,
+        "student_sql": "SELECT email FROM users WHERE role = 'member' AND account_id IN (SELECT account_id FROM support_tickets WHERE priority = 'urgent' GROUP BY account_id HAVING COUNT(*) >= 2)",
+        "task_id": "sql-6d75e99aa44c",
+        "teacher_ok": true,
+        "teacher_sql": "SELECT email FROM users WHERE role = 'member' AND account_id IN (SELECT account_id FROM support_tickets WHERE priority = 'urgent' GROUP BY account_id HAVING COUNT(*) >= 2)"
+      },
+      {
+        "base_ok": false,
+        "base_sql": "SELECT 1",
+        "family": "null_handling",
+        "gold_sql": "SELECT category, SUM(CASE WHEN user_id IS NULL THEN 1 ELSE 0 END), COUNT(*) FROM support_tickets WHERE priority = 'normal' AND opened_at >= '2024-11-17' AND opened_at < '2025-06-06' GROUP BY category",
+        "heldout_class": "in_distribution",
+        "kind": "fixed",
+        "question": "Per ticket category among normal tickets opened 2024-11-17 to 2025-06-06, give the number with no user_id next to the total number of tickets.",
+        "student_ok": true,
+        "student_sql": "SELECT category, SUM(CASE WHEN user_id IS NULL THEN 1 ELSE 0 END), COUNT(*) FROM support_tickets WHERE priority = 'normal' AND opened_at >= '2024-11-17' AND opened_at < '2025-06-06' GROUP BY category",
+        "task_id": "sql-0c7dd8ca4684",
+        "teacher_ok": true,
+        "teacher_sql": "SELECT category, SUM(CASE WHEN user_id IS NULL THEN 1 ELSE 0 END), COUNT(*) FROM support_tickets WHERE priority = 'normal' AND opened_at >= '2024-11-17' AND opened_at < '2025-06-06' GROUP BY category"
+      },
+      {
+        "base_ok": false,
+        "base_sql": "SELECT 1",
+        "family": "filter",
+        "gold_sql": "SELECT invoice_id FROM invoices WHERE amount_cents > 100000",
+        "heldout_class": "in_distribution",
+        "kind": "fixed",
+        "question": "List the ids of invoices with an amount above $1000 (amounts are stored in cents).",
+        "student_ok": true,
+        "student_sql": "SELECT invoice_id FROM invoices WHERE amount_cents > 100000",
+        "task_id": "sql-02620e1a9e3b",
+        "teacher_ok": false,
+        "teacher_sql": "SELECT 1"
+      },
+      {
+        "base_ok": false,
+        "base_sql": "SELECT 1",
+        "family": "subquery_cte",
+        "gold_sql": "WITH c AS (SELECT a.account_id, a.industry, a.status, a.country, a.created_at, COUNT(u.user_id) AS n FROM accounts a LEFT JOIN users u ON u.account_id = a.account_id GROUP BY a.account_id) SELECT account_id, n FROM c WHERE status = 'active' AND country = 'DE' AND created_at < '2023-01-01' AND n > (SELECT AVG(n) FROM c c2 WHERE c2.industry = c.industry)",
+        "heldout_class": "in_distribution",
+        "kind": "fixed",
+        "question": "Which active accounts in DE created in or before 2022 have more users than the average user count of accounts in their industry (over all accounts in that industry)? Return account_id and user count.",
+        "student_ok": true,
+        "student_sql": "WITH c AS (SELECT a.account_id, a.industry, a.status, a.country, a.created_at, COUNT(u.user_id) AS n FROM accounts a LEFT JOIN users u ON u.account_id = a.account_id GROUP BY a.account_id) SELECT account_id, n FROM c WHERE status = 'active' AND country = 'DE' AND created_at < '2023-01-01' AND n > (SELECT AVG(n) FROM c c2 WHERE c2.industry = c.industry)",
+        "task_id": "sql-20209731777f",
+        "teacher_ok": true,
+        "teacher_sql": "WITH c AS (SELECT a.account_id, a.industry, a.status, a.country, a.created_at, COUNT(u.user_id) AS n FROM accounts a LEFT JOIN users u ON u.account_id = a.account_id GROUP BY a.account_id) SELECT account_id, n FROM c WHERE status = 'active' AND country = 'DE' AND created_at < '2023-01-01' AND n > (SELECT AVG(n) FROM c c2 WHERE c2.industry = c.industry)"
+      },
+      {
+        "base_ok": false,
+        "base_sql": "SELECT 1",
+        "family": "null_handling",
+        "gold_sql": "SELECT status, ROUND(AVG(COALESCE(amount_cents, 0)), 2) FROM invoices WHERE currency = 'USD' AND issued_date BETWEEN '2023-03-19' AND '2024-02-12' GROUP BY status",
+        "heldout_class": "in_distribution",
+        "kind": "fixed",
+        "question": "For USD invoices issued between 2023-03-19 and 2024-02-12, what is the average invoice amount in cents per status when a missing amount counts as 0? Round to 2 decimals.",
+        "student_ok": true,
+        "student_sql": "SELECT status, ROUND(AVG(COALESCE(amount_cents, 0)), 2) FROM invoices WHERE currency = 'USD' AND issued_date BETWEEN '2023-03-19' AND '2024-02-12' GROUP BY status",
+        "task_id": "sql-0c2f9f8e19d1",
+        "teacher_ok": true,
+        "teacher_sql": "SELECT status, ROUND(AVG(COALESCE(amount_cents, 0)), 2) FROM invoices WHERE currency = 'USD' AND issued_date BETWEEN '2023-03-19' AND '2024-02-12' GROUP BY status"
+      },
+      {
+        "base_ok": false,
+        "base_sql": "SELECT 1",
+        "family": "window",
+        "gold_sql": "SELECT account_id, invoice_id, issued_date FROM (SELECT account_id, invoice_id, issued_date, ROW_NUMBER() OVER (PARTITION BY account_id ORDER BY issued_date DESC, invoice_id DESC) AS rn FROM invoices WHERE currency = 'USD') WHERE rn = 1",
+        "heldout_class": "in_distribution",
+        "kind": "fixed",
+        "question": "Return the latest USD-currency invoice per account (break date ties with the larger invoice_id): account_id, invoice_id, issued_date.",
+        "student_ok": true,
+        "student_sql": "SELECT account_id, invoice_id, issued_date FROM (SELECT account_id, invoice_id, issued_date, ROW_NUMBER() OVER (PARTITION BY account_id ORDER BY issued_date DESC, invoice_id DESC) AS rn FROM invoices WHERE currency = 'USD') WHERE rn = 1",
+        "task_id": "sql-a3de300e022a",
+        "teacher_ok": true,
+        "teacher_sql": "SELECT account_id, invoice_id, issued_date FROM (SELECT account_id, invoice_id, issued_date, ROW_NUMBER() OVER (PARTITION BY account_id ORDER BY issued_date DESC, invoice_id DESC) AS rn FROM invoices WHERE currency = 'USD') WHERE rn = 1"
+      },
+      {
+        "base_ok": true,
+        "base_sql": "WITH t AS (SELECT i.account_id, SUM(p.amount_cents) AS total FROM payments p JOIN invoices i ON i.invoice_id = p.invoice_id WHERE p.status = 'succeeded' AND p.method = 'card' AND i.currency = 'EUR' GROUP BY i.account_id) SELECT account_id FROM t WHERE total > (SELECT AVG(total) FROM t)",
+        "family": "subquery_cte",
+        "gold_sql": "WITH t AS (SELECT i.account_id, SUM(p.amount_cents) AS total FROM payments p JOIN invoices i ON i.invoice_id = p.invoice_id WHERE p.status = 'succeeded' AND p.method = 'card' AND i.currency = 'EUR' GROUP BY i.account_id) SELECT account_id FROM t WHERE total > (SELECT AVG(total) FROM t)",
+        "heldout_class": "in_distribution",
+        "kind": "regressed",
+        "question": "List account_ids whose succeeded card payment total on EUR invoices exceeds the mean of per-account totals (only accounts with at least one such payment count toward the mean).",
+        "student_ok": false,
+        "student_sql": "SELECT 1",
+        "task_id": "sql-f9e64babddd1",
+        "teacher_ok": true,
+        "teacher_sql": "WITH t AS (SELECT i.account_id, SUM(p.amount_cents) AS total FROM payments p JOIN invoices i ON i.invoice_id = p.invoice_id WHERE p.status = 'succeeded' AND p.method = 'card' AND i.currency = 'EUR' GROUP BY i.account_id) SELECT account_id FROM t WHERE total > (SELECT AVG(total) FROM t)"
+      }
+    ],
     "gate": {
-      "base_acc": 0.3,
-      "base_only_vs_student": 2,
+      "base_acc": 0.55,
+      "base_only_vs_student": 1,
       "bootstrap_resamples_used": 10000,
       "bootstrap_skipped": 0,
-      "decision": "REJECT",
-      "mcnemar_p": 0.03857421875,
+      "decision": "PROMOTE",
+      "mcnemar_p": 0.021484375,
       "n": 20,
-      "ratio_hi": 0.9,
-      "ratio_lo": 0.5,
-      "ratio_point": 0.7,
+      "ratio_hi": 1.1764705882352942,
+      "ratio_lo": 0.85,
+      "ratio_point": 1.0,
       "reasons": [
-        "ratio lower bound 0.500 < 0.85 (point 0.700)",
-        "McNemar exact p=0.0386 < 0.05 (student-only 10, base-only 2)"
+        "ratio lower bound 0.850 >= 0.85 (point 1.000)",
+        "McNemar exact p=0.0215 < 0.05 (student-only 9, base-only 1)"
       ],
-      "student_acc": 0.7,
+      "student_acc": 0.95,
       "student_ci": [
-        0.4810271816464765,
-        0.8545227551323956
+        0.763868806553258,
+        0.9911185511992047
       ],
-      "student_only_vs_base": 10,
-      "teacher_acc": 1.0,
+      "student_only_vs_base": 9,
+      "teacher_acc": 0.95,
       "thresholds": {
         "bootstrap_resamples": 10000,
         "mcnemar_alpha": 0.05,
@@ -316,32 +523,165 @@
         "seed": 1234
       }
     },
-    "heldout_sha256": "c27e0cffe883c4e68f4cd34128bce82620edc235d534536a59848cc74f60bdf8",
+    "heldout_sha256": "26555c7c4558d47516d2d11d8352eafab8d3d56708d2b79d2b71afe97bbb78c6",
     "n": 20,
+    "stress": {
+      "accuracy": {
+        "base": 0.3,
+        "student": 0.8,
+        "teacher": 1.0
+      },
+      "accuracy_by_family": {
+        "date_math": {
+          "base": 0.4,
+          "student": 0.6,
+          "teacher": 1.0
+        },
+        "set_ops": {
+          "base": 0.2,
+          "student": 1.0,
+          "teacher": 1.0
+        }
+      },
+      "families": [
+        "date_math",
+        "set_ops"
+      ],
+      "n": 10,
+      "note": "reserved families, never in train/dev/gate; reported separately, not a gate input",
+      "sha256": "1bc76cd3b1dc0793b3c62f5e3a7d65fa73c34c096b20f746370c644d3607eb43",
+      "unparseable": {
+        "base": 0,
+        "student": 0,
+        "teacher": 0
+      }
+    },
     "unparseable": {
       "base": 0,
       "student": 0,
       "teacher": 0
     }
   },
+  "finetune": [
+    {
+      "base_model": "fake-student-base",
+      "events": [
+        {
+          "created_at": 1,
+          "level": "info",
+          "message": "fake training event"
+        }
+      ],
+      "hyperparameters": {
+        "batch_size": 16,
+        "context_length": 8192,
+        "learning_rate": 0.0001,
+        "lora": true,
+        "lora_alpha": 16,
+        "lora_dropout": 0.0,
+        "lora_r": 16,
+        "max_grad_norm": 1.0,
+        "n_epochs": 3,
+        "packing": false,
+        "warmup_ratio": 0.0,
+        "weight_decay": 0.0
+      },
+      "job_id": "ftjob-f00cd4099c5e",
+      "loss_curve": [
+        {
+          "step": 10,
+          "train_loss": 1.0,
+          "valid_loss": 1.1
+        }
+      ],
+      "round": 1,
+      "total_steps": 30,
+      "trained_steps": 30,
+      "trained_tokens": 12345
+    },
+    {
+      "base_model": "fake-student-base",
+      "events": [
+        {
+          "created_at": 1,
+          "level": "info",
+          "message": "fake training event"
+        }
+      ],
+      "hyperparameters": {
+        "batch_size": 16,
+        "context_length": 8192,
+        "learning_rate": 0.0001,
+        "lora": true,
+        "lora_alpha": 16,
+        "lora_dropout": 0.0,
+        "lora_r": 16,
+        "max_grad_norm": 1.0,
+        "n_epochs": 3,
+        "packing": false,
+        "warmup_ratio": 0.0,
+        "weight_decay": 0.0
+      },
+      "job_id": "ftjob-8408323a7fdb",
+      "loss_curve": [
+        {
+          "step": 10,
+          "train_loss": 1.0,
+          "valid_loss": 1.1
+        }
+      ],
+      "round": 2,
+      "total_steps": 30,
+      "trained_steps": 30,
+      "trained_tokens": 12345
+    },
+    {
+      "base_model": "fake-student-base",
+      "events": [
+        {
+          "created_at": 1,
+          "level": "info",
+          "message": "fake training event"
+        }
+      ],
+      "hyperparameters": {
+        "batch_size": 16,
+        "context_length": 8192,
+        "learning_rate": 0.0001,
+        "lora": true,
+        "lora_alpha": 16,
+        "lora_dropout": 0.0,
+        "lora_r": 16,
+        "max_grad_norm": 1.0,
+        "n_epochs": 3,
+        "packing": false,
+        "warmup_ratio": 0.0,
+        "weight_decay": 0.0
+      },
+      "job_id": "ftjob-2aa99664ebcd",
+      "loss_curve": [
+        {
+          "step": 10,
+          "train_loss": 1.0,
+          "valid_loss": 1.1
+        }
+      ],
+      "round": 3,
+      "total_steps": 30,
+      "trained_steps": 30,
+      "trained_tokens": 12345
+    }
+  ],
   "headroom": {
     "base_dev_acc": 0.1,
     "max_allowed": 0.8
   },
   "label": "DRY RUN — fake models, numbers are NOT results",
   "llm_attempt_counters": {
-    "crosscheck_planner:failed_attempts": 0,
-    "crosscheck_planner:schema_retries": 6,
-    "crosscheck_teacher:failed_attempts": 0,
-    "crosscheck_teacher:schema_retries": 2,
-    "eval_base:failed_attempts": 0,
-    "eval_base:schema_retries": 0,
     "eval_teacher:failed_attempts": 0,
     "eval_teacher:schema_retries": 0,
     "failure_analysis:failed_attempts": 0,
     "failure_analysis:schema_retries": 0,
-    "headroom_base:failed_attempts": 0,
-    "headroom_base:schema_retries": 0,
     "teacher_targeted:failed_attempts": 0,
     "teacher_targeted:schema_retries": 0,
     "teacher_train:failed_attempts": 0,
@@ -353,13 +693,13 @@
   "pack": "sql",
   "rounds": [
     {
-      "adapter_sha256": "0f2c53bb21afbece4d59c0409f17ae36349749ad1dcf7b5527c671365be694c4",
+      "adapter_sha256": "f482fdb7bb1c6645df27ee5072380705bc4bf57d579f2c93669edb1c274c5aa5",
       "clusters": [
         {
-          "description": "student fails 2 dev items in family null_handling (fake analysis)",
-          "name": "null_handling mistakes",
+          "description": "student fails 2 dev items in family soft_delete (fake analysis)",
+          "name": "soft_delete mistakes",
           "target_families": [
-            "null_handling"
+            "soft_delete"
           ]
         },
         {
@@ -370,35 +710,73 @@
           ]
         },
         {
-          "description": "student fails 1 dev items in family subquery_cte (fake analysis)",
-          "name": "subquery_cte mistakes",
+          "description": "student fails 1 dev items in family anti_join (fake analysis)",
+          "name": "anti_join mistakes",
           "target_families": [
-            "subquery_cte"
+            "anti_join"
           ]
         }
       ],
       "dev_acc": 0.6,
       "dev_failures": 4,
       "finetune_stage": "finetune_r1",
-      "job_id": "ftjob-5a3996f57416",
+      "job_id": "ftjob-f00cd4099c5e",
       "round": 1,
       "sandbox_branch": {
         "label": "round-1",
         "parent": "fake-base-image",
-        "uuid": "84bde47238651375322ab30b0e3042ad"
+        "uuid": "5ddad57fa67f19fef5a8c6a5c10c15ef"
       },
       "targeted_new_rows": 6,
-      "train_rows": 40
+      "train_rows": 37
     },
     {
-      "adapter_sha256": "558d42d5e0a19b519a26d9af25630b6f0a515f07c59a0a1329f74a493f6c2ae1",
-      "clusters": [],
-      "dev_acc": 0.9,
-      "dev_failures": 1,
+      "adapter_sha256": "502d8498a0793add3f47dd492368e0e5a64fc19434fd53729cf5dffb49f0dedf",
+      "clusters": [
+        {
+          "description": "student fails 2 dev items in family join (fake analysis)",
+          "name": "join mistakes",
+          "target_families": [
+            "join"
+          ]
+        },
+        {
+          "description": "student fails 2 dev items in family window (fake analysis)",
+          "name": "window mistakes",
+          "target_families": [
+            "window"
+          ]
+        },
+        {
+          "description": "student fails 1 dev items in family filter (fake analysis)",
+          "name": "filter mistakes",
+          "target_families": [
+            "filter"
+          ]
+        }
+      ],
+      "dev_acc": 0.5,
+      "dev_failures": 5,
       "finetune_stage": "finetune_r2",
-      "job_id": "ftjob-862efb5a41c8",
+      "job_id": "ftjob-8408323a7fdb",
       "round": 2,
-      "train_rows": 46
+      "sandbox_branch": {
+        "label": "round-2",
+        "parent": "5ddad57fa67f19fef5a8c6a5c10c15ef",
+        "uuid": "191613dbe693e46e8d31f3dcc63b15ad"
+      },
+      "targeted_new_rows": 7,
+      "train_rows": 43
+    },
+    {
+      "adapter_sha256": "ffaa833a073cfa3a9c8b8d640ac5b87c4155c5828696830c71d3473b2dafce9b",
+      "clusters": [],
+      "dev_acc": 1.0,
+      "dev_failures": 0,
+      "finetune_stage": "finetune_r3",
+      "job_id": "ftjob-2aa99664ebcd",
+      "round": 3,
+      "train_rows": 50
     }
   ],
   "rounds_stop_reason": "dev accuracy >= dev_target_acc=0.9",
@@ -407,7 +785,12 @@
     {
       "label": "round-1",
       "parent": "fake-base-image",
-      "uuid": "84bde47238651375322ab30b0e3042ad"
+      "uuid": "5ddad57fa67f19fef5a8c6a5c10c15ef"
+    },
+    {
+      "label": "round-2",
+      "parent": "5ddad57fa67f19fef5a8c6a5c10c15ef",
+      "uuid": "191613dbe693e46e8d31f3dcc63b15ad"
     }
   ],
   "stages": [
@@ -416,59 +799,79 @@
       "stage": "schema"
     },
     {
-      "output_sha256": "920b1ce87e51731e83f84c92569c8885b9701adc9a0f9ab5037ebb283fba48b8",
+      "output_sha256": "18b7f63ca8b38659210a5024c5b82c392226f8b632ec298d9a17b97e6fd5b2a9",
       "stage": "questions"
     },
     {
-      "output_sha256": "7b462050c0e8924c6a9d5cbc4a17127ca12a33de0246ca34245e6e603505f021",
+      "output_sha256": "b06ac42b5c23f45195fcda5ec8117acc132d7fd48cc74a935c08e3bbf358528b",
       "stage": "gold_crosscheck"
     },
     {
-      "output_sha256": "1dec6c5124a6c31604a059f5a5998550b9e7cd3d0ec97d92653c8c05f1b3ff4a",
+      "output_sha256": "4dd29c27f1e4578a3c5a569187d29a8225246401b5042bcb216d8850be922cd7",
       "stage": "verifier_selftest"
     },
     {
-      "output_sha256": "3cd37e05a549d9151425852a0fd2437e0b97e4c69ae997f75481bb44d98848ff",
+      "output_sha256": "96663173de35acc35dad47127dbfa7e26a790ad4d633ec7fa0201d797e19ff79",
       "stage": "split"
     },
     {
-      "output_sha256": "814c135f827354fc90949298f91a98be6341bab9361dacdb0cb67875fdb25308",
+      "output_sha256": "a1a452aaeb248e309d0d6713efb5d5d1f5c736185ea132606a24d552c3b5c461",
       "stage": "headroom"
     },
     {
-      "output_sha256": "3970c6bc00b6e40a2ecd335e43d76e08fd9df7ea214b1c3c2bc445f46f24b43a",
+      "output_sha256": "afb926797c81fec93934135814c6c8d2edb3a292993dfde98e8cfde5650ce0fc",
       "stage": "teacher_data"
     },
     {
-      "output_sha256": "803272e929aba60751046cda29420e803dc750f254f34e2dae6f850052f24440",
+      "output_sha256": "5d9a6426aad53bd61b78d28629db0986f364d69b7f7f3344299ec1a94b03cafe",
       "stage": "finetune_r1"
     },
     {
-      "output_sha256": "5e0045965f14a10ffdad729a8af31ccc84a26af94e8026dfc87c06a6a1133ca7",
+      "output_sha256": "f713cf293b4cb4cba609e17e91a0d88fce0bedf5a1819bb3b9555ea327af2fe6",
       "stage": "dev_eval_r1"
     },
     {
-      "output_sha256": "12ccd06dbbf8b8a9da91af0659fa14ff517841fc3731a2e09a4642e890c3613f",
+      "output_sha256": "7dcd14e9ed7f9f83cd0a04a7b5788aaf7825697ffedfe15f39e4e518b0b10c22",
       "stage": "analysis_r1"
     },
     {
-      "output_sha256": "a962be764918c6c4c446d2af6c0d32c63a61909e2b3e34d81daf3b29950f4667",
+      "output_sha256": "8f0c6740fcbf5cd804030a71b23eec71636228198450050519682182d2399873",
       "stage": "targeted_r1"
     },
     {
-      "output_sha256": "a5d5fdfeb053216d2eaedd6a579a2f2536be3612f17a3ebdf95d53fe50eadb29",
+      "output_sha256": "33998331028d0839e5d6c33f1b8f58b9a6ea8e5c21287a25ed8934721df3719c",
       "stage": "sandbox_branch_r1"
     },
     {
-      "output_sha256": "57face7b41c38431bf6cb5baf99b183e9215ba75cb39bfb143a2e66102815466",
+      "output_sha256": "96d013bd9a685177a732398294a6a0812b4760cb2efc72ce4da12fa6dbec543c",
       "stage": "finetune_r2"
     },
     {
-      "output_sha256": "908fd218ea53b796d1aed7c526feba16eeb702e8cbcaec252c7d901d10b56b7e",
+      "output_sha256": "e9fbfceb1ba086bf9aaa6765e252e97c7071641d00f584efc9f9af0424447052",
       "stage": "dev_eval_r2"
     },
     {
-      "output_sha256": "c298021cf669f7f49c62719cd4ef3e4d0ed9f393a047302c8fe9bccff6a70ab0",
+      "output_sha256": "701982a071f7dd63237e01cfd02bfe6c9b70d4e8a19e3ceac501d01fc7ecbc7d",
+      "stage": "analysis_r2"
+    },
+    {
+      "output_sha256": "88d36b2cfca0dab11183c32d40386af5d07b9be2c28a574ed8354f499e2bdb6d",
+      "stage": "targeted_r2"
+    },
+    {
+      "output_sha256": "885502285ecfe0563cd9c570aa652e174e35aedaae5902ab5b655cadb0e42dd8",
+      "stage": "sandbox_branch_r2"
+    },
+    {
+      "output_sha256": "3d5bbe2a485747818af26ce0636742425135b7b46a739e4b1d38174fae9280e0",
+      "stage": "finetune_r3"
+    },
+    {
+      "output_sha256": "9984cecc60390df1a74907e7369673188ee0145b6d2df1353606f9cbbc6e476f",
+      "stage": "dev_eval_r3"
+    },
+    {
+      "output_sha256": "7671d71f2063eea6c96c016dc2e1db19f02c32d3d4ab83658b4378bbff5f8f7e",
       "stage": "final_eval"
     }
   ]

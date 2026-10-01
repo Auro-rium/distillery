@@ -17,7 +17,7 @@ describe("summary", () => {
   it("shows the decision, the label, n and the thresholds the gate used, all from the payload", () => {
     view(base);
     const s = screen.getByRole("region", { name: "Gate decision" });
-    expect(within(s).getByText("REJECT")).toBeTruthy();
+    expect(within(s).getByText(base.decision)).toBeTruthy();
     expect(within(s).getByText("dry run")).toBeTruthy();
     const g = base.evaluation.gate;
     expect(s.textContent).toContain(`n=${g.n}`);
@@ -66,23 +66,23 @@ describe("accuracy", () => {
     const acc = base.evaluation.accuracy;
     for (const k of ["base", "student", "teacher"] as const)
       expect(main.querySelector(`.acc-row.${k}`)!.textContent).toContain(`${(acc[k] * 100).toFixed(1)}%`);
-    expect(main.querySelector(".acc-row.student")!.textContent).toContain("CI 48.1% to 85.5%");
+    expect(main.querySelector(".acc-row.student")!.textContent).toContain(`CI ${(base.evaluation.gate.student_ci![0] * 100).toFixed(1)}% to ${(base.evaluation.gate.student_ci![1] * 100).toFixed(1)}%`);
     expect(main.querySelectorAll(".acc-ci")).toHaveLength(1);
     expect(main.textContent).toContain("no CI in report");
-    expect(screen.getAllByRole("list", { name: "Chart key" })).toHaveLength(2); // headline chart and the class split
+    expect(screen.getAllByRole("list", { name: "Chart key" })).toHaveLength(base.evaluation.stress ? 3 : 2); // headline, class split, stress
   });
 
   it("splits by held-out class as small multiples with their own n, marking classes the student did not train on", () => {
     const { container } = view(base);
     const classes = Object.keys(base.evaluation.accuracy_by_class);
-    expect(classes.length).toBeGreaterThan(1);
+    expect(classes.length).toBeGreaterThan(0);
     for (const c of classes) {
       const panel = screen.getByRole("group", { name: c });
       expect(within(panel).getByText(`n=${base.evaluation.class_counts[c]}`)).toBeTruthy();
       expect(panel.querySelectorAll(".acc-row")).toHaveLength(3);
     }
-    expect(screen.getAllByText("not in training").length).toBe(classes.filter((c) => c.startsWith("unseen")).length);
-    expect(container.querySelectorAll(".acc-row")).toHaveLength(3 + 3 * classes.length);
+    expect(screen.queryAllByText("not in training").length).toBe(classes.filter((c) => c.startsWith("unseen")).length);
+    expect(container.querySelectorAll(".acc-row")).toHaveLength(3 + 3 * classes.length + (base.evaluation.stress ? 3 : 0));
     // whiskers exist only on the headline chart: the report has no per-class CI
     expect(container.querySelectorAll(".acc-ci")).toHaveLength(1);
   });
@@ -91,8 +91,8 @@ describe("accuracy", () => {
     view(base);
     const tables = screen.getAllByRole("table", { hidden: true });
     const text = tables.map((t) => t.textContent).join(" ");
-    expect(text).toContain("70.0%");
-    expect(text).toContain("48.1% to 85.5%");
+    expect(text).toContain(`${(Object.values(base.evaluation.accuracy_by_class)[0].base * 100).toFixed(1)}%`);
+    expect(text).toContain(`${(base.evaluation.gate.student_ci![0] * 100).toFixed(1)}% to ${(base.evaluation.gate.student_ci![1] * 100).toFixed(1)}%`);
     for (const c of Object.keys(base.evaluation.accuracy_by_class)) expect(text).toContain(c);
   });
 
@@ -106,9 +106,9 @@ describe("accuracy", () => {
 describe("cost and latency", () => {
   it("shows the backend's own unavailable text verbatim and marks latency not measured", () => {
     view(base);
-    expect(screen.getByText("unavailable: serving path undecided (spike S4)")).toBeTruthy();
+    expect(screen.getByText(base.cost.cost_per_1k_tasks.student as string)).toBeTruthy();
     expect(screen.getByText("the report has no latency data")).toBeTruthy();
-    expect(screen.getByText("$1.11195")).toBeTruthy();
+    expect(screen.getByText(`$${(base.cost.cost_per_1k_tasks.teacher as { usd_per_1k_tasks: number }).usd_per_1k_tasks.toFixed(5)}`)).toBeTruthy();
     expect(screen.getAllByText("not measured").length).toBeGreaterThan(1);
   });
   it("lists spend per model with the payload's calls, tokens and dollars", () => {
@@ -129,8 +129,8 @@ describe("counters", () => {
     expect(within(gc).getByText("discarded")).toBeTruthy();
     const attempts = screen.getByRole("table", { name: "LLM attempts by purpose" });
     // The purpose is split into inline parts so it can wrap after "_"; jsdom joins parts of a name with a space, browsers do not.
-    const row = within(attempts).getByRole("row", { name: /crosscheck_\s?planner/ });
-    expect(row.textContent).toContain(String(base.llm_attempt_counters["crosscheck_planner:schema_retries"]));
+    const row = within(attempts).getByRole("row", { name: /eval_\s?teacher/ });
+    expect(row.textContent).toContain(String(base.llm_attempt_counters["eval_teacher:schema_retries"]));
     expect(screen.getByText(/LLM errors by purpose: none recorded/)).toBeTruthy();
   });
   it("says so when a report has no counters or clusters or class split", () => {
@@ -217,6 +217,10 @@ describe("stress set and in-distribution caveat", () => {
     const o = JSON.parse(JSON.stringify(base)) as Report;
     delete o.evaluation.stress;
     for (const k of ["heldout_skeleton_overlap_rate", "train_distinct_skeletons", "stress_tasks"] as const) delete o.data[k];
+    // a recorded run from before the benchmark rebuild: family-holdout classes
+    const acc = Object.values(o.evaluation.accuracy_by_class)[0];
+    o.evaluation.accuracy_by_class = { seen: acc, unseen_family: acc };
+    o.evaluation.class_counts = { seen: 10, unseen_family: 10 };
     return o;
   })();
 

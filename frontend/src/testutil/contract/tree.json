@@ -17,29 +17,48 @@
       "data_delta": {
         "added_rows": 6,
         "families": [
+          "anti_join",
           "join",
-          "null_handling",
-          "subquery_cte"
+          "soft_delete"
         ]
       },
       "dev_score": 0.6,
-      "hypothesis": "student fails 2 dev items in family null_handling (fake analysis); student fails 1 dev items in family join (fake analysis); student fails 1 dev items in family subquery_cte (fake analysis)",
-      "id": "84bde47238651375322ab30b0e3042ad",
+      "hypothesis": "student fails 2 dev items in family soft_delete (fake analysis); student fails 1 dev items in family join (fake analysis); student fails 1 dev items in family anti_join (fake analysis)",
+      "id": "5ddad57fa67f19fef5a8c6a5c10c15ef",
       "label": "round 1",
       "parent_id": "fake-base-image",
       "round": 1,
-      "sandbox_image": "84bde47238651375322ab30b0e3042ad",
+      "sandbox_image": "5ddad57fa67f19fef5a8c6a5c10c15ef",
+      "selected": false
+    },
+    {
+      "cost_usd": null,
+      "data_delta": {
+        "added_rows": 7,
+        "families": [
+          "filter",
+          "join",
+          "window"
+        ]
+      },
+      "dev_score": 0.5,
+      "hypothesis": "student fails 2 dev items in family join (fake analysis); student fails 2 dev items in family window (fake analysis); student fails 1 dev items in family filter (fake analysis)",
+      "id": "191613dbe693e46e8d31f3dcc63b15ad",
+      "label": "round 2",
+      "parent_id": "5ddad57fa67f19fef5a8c6a5c10c15ef",
+      "round": 2,
+      "sandbox_image": "191613dbe693e46e8d31f3dcc63b15ad",
       "selected": false
     },
     {
       "cost_usd": null,
       "data_delta": null,
-      "dev_score": 0.9,
+      "dev_score": 1.0,
       "hypothesis": null,
-      "id": "round-2",
-      "label": "round 2",
-      "parent_id": "84bde47238651375322ab30b0e3042ad",
-      "round": 2,
+      "id": "round-3",
+      "label": "round 3",
+      "parent_id": "191613dbe693e46e8d31f3dcc63b15ad",
+      "round": 3,
       "sandbox_image": null,
       "selected": true
     }

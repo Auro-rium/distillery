@@ -1,7 +1,7 @@
 [
   {
     "created_at": null,
-    "decision": "REJECT",
+    "decision": "PROMOTE",
     "dry_run": true,
     "recorded": false,
     "recorded_at": null,

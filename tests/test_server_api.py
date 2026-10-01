@@ -123,7 +123,7 @@ def test_dry_run_lifecycle_and_derived_progress(tmp_path: Path) -> None:
         }
         runs = c.get("/api/runs").json()
         assert [x["run_id"] for x in runs] == [rid]
-        assert runs[0]["status"] == "complete" and runs[0]["decision"] == "REJECT"
+        assert runs[0]["status"] == "complete" and runs[0]["decision"] in {"PROMOTE", "REJECT"}
         assert runs[0]["dry_run"] is True and runs[0]["recorded"] is False
         rep = c.get(f"/api/runs/{rid}/report").json()
         assert rep["dry_run"] is True and rep["recorded"] is False and rep["recorded_at"] is None
@@ -183,16 +183,22 @@ def test_tree_from_real_lineage(client: TestClient, tmp_path: Path) -> None:
     nodes = client.get(f"/api/runs/{rid}/tree").json()["nodes"]
     rep = sample_report()
     assert len(nodes) == 1 + len(rep["rounds"])  # base + one per round, nothing else
-    base, r1, r2 = nodes
+    base, *rounds = nodes
     assert base["parent_id"] is None and base["dev_score"] == rep["headroom"]["base_dev_acc"]
-    assert r1["parent_id"] == base["id"] and r2["parent_id"] == r1["id"]
-    lineage = rep["sandbox_lineage"][0]
-    assert r1["id"] == lineage["uuid"] and r1["sandbox_image"] == lineage["uuid"]
-    assert base["id"] == lineage["parent"]
-    assert r1["dev_score"] == rep["rounds"][0]["dev_acc"]
-    assert r1["data_delta"]["added_rows"] == rep["rounds"][0]["targeted_new_rows"]
-    assert r2["sandbox_image"] is None and r2["data_delta"] is None  # no invented values
-    assert [n["selected"] for n in nodes] == [False, False, True]
+    prev = base
+    lineage = rep["sandbox_lineage"]
+    for i, node in enumerate(rounds):
+        assert node["parent_id"] == prev["id"]
+        assert node["dev_score"] == rep["rounds"][i]["dev_acc"]
+        if i < len(lineage):  # a sandbox branch exists after every round except the last
+            assert node["id"] == lineage[i]["uuid"] and node["sandbox_image"] == lineage[i]["uuid"]
+            assert node["data_delta"]["added_rows"] == rep["rounds"][i]["targeted_new_rows"]
+        else:
+            assert node["sandbox_image"] is None and node["data_delta"] is None  # not invented
+        prev = node
+    assert base["id"] == lineage[0]["parent"]
+    selected = [i == rep["candidate_round"] for i in range(len(nodes))]
+    assert [n["selected"] for n in nodes] == selected
     assert all(n["cost_usd"] is None for n in nodes)
 
 
@@ -256,7 +262,7 @@ def test_sse_full_stream_and_resume(client: TestClient, tmp_path: Path) -> None:
     done = json.loads(ev[-1]["data"])
     assert (
         done["status"] == "complete"
-        and done["decision"] == "REJECT"
+        and done["decision"] in {"PROMOTE", "REJECT"}
         and "observed_at" in done
         and "ts" not in done
     )

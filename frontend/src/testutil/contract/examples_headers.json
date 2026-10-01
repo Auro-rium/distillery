@@ -2,8 +2,8 @@
   "available": true,
   "cap_per_kind": 20,
   "totals": {
-    "fixed": 10,
-    "regressed": 2,
-    "still_wrong": 4
+    "fixed": 9,
+    "regressed": 1,
+    "still_wrong": 0
   }
 }

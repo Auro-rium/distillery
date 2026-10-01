@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
-from server_helpers import make_config, make_settings, seed_finished_run
+from server_helpers import make_config, make_settings, sample_report, seed_finished_run
 
 from distillery import cli
 from distillery.server import create_app
@@ -67,7 +67,9 @@ def test_export_real_run_then_served_from_bundle_alone(tmp_path: Path) -> None:
         d = c.get("/api/runs/sql-tiny-real").json()
         assert d["recorded"] is True and d["status"] == "complete"
         assert d["spend"]["by_model"]["fake-t"]["calls"] == 1
-        assert len(c.get("/api/runs/sql-tiny-real/tree").json()["nodes"]) == 3
+        assert len(c.get("/api/runs/sql-tiny-real/tree").json()["nodes"]) == 1 + len(
+            sample_report()["rounds"]
+        )
         assert "event: done" in c.get("/api/runs/sql-tiny-real/events").text
 
 

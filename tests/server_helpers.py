@@ -106,6 +106,8 @@ def seed_finished_run(
     if examples is not None:
         # where the core really writes them (EvalReport.to_json -> report["evaluation"])
         report["evaluation"]["examples"] = examples
+    else:  # the sample now carries examples; "absent" tests need a report without them
+        report["evaluation"].pop("examples", None)
     atomic_write_bytes(store.run_dir(run_id) / "report.json", json.dumps(report).encode("utf-8"))
     return store
 

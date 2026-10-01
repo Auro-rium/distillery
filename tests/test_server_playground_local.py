@@ -10,7 +10,15 @@ from pathlib import Path
 from typing import Any
 
 from fastapi.testclient import TestClient
-from server_helpers import GOLD, QUESTION, fake_llm, make_config, make_settings, seed_finished_run
+from server_helpers import (
+    GOLD,
+    QUESTION,
+    fake_llm,
+    make_config,
+    make_settings,
+    sample_report,
+    seed_finished_run,
+)
 
 from distillery.sandbox_student import prepare_adapter
 from distillery.server import create_app
@@ -39,7 +47,9 @@ def _seed_adapter(root: Path, *, base: str = "fake-s", tamper: bool = False) -> 
         (d / "adapter_model.safetensors").write_bytes(b"CHANGED")
     art = {"job_id": "j", "checkpoint_id": "c", "base_model": base,
            "fine_tuned_model_checkpoint": None, "files": entries, "adapter_sha256": "x"}  # fmt: skip
-    store.get_or_run(RUN, "finetune_r2", {}, lambda: {"artifact": art})  # candidate_round is 2
+    store.get_or_run(
+        RUN, f"finetune_r{sample_report()['candidate_round']}", {}, lambda: {"artifact": art}
+    )
     store.close()
 
 
