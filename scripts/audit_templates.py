@@ -1,3 +1,4 @@
+# ruff: noqa: S608, S311  # offline audit: SQL built from fixed tables, seeded (non-crypto) draws
 """Offline audit of the SQL question templates (no LLM, no network, spends nothing).
 
 For every template, draw many questions and execute the gold SQL, then flag:
