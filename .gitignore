@@ -13,7 +13,6 @@ frontend/dist/
 runs/
 *.sqlite
 *.sqlite3
-spikes/out/
 .DS_Store
 .distillery/
 replay/*.tmp

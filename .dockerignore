@@ -21,6 +21,5 @@ frontend/.env.*
 runs
 *.sqlite
 *.sqlite3
-spikes/out
 tests
 .DS_Store

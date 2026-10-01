@@ -29,8 +29,8 @@ ASSUMED_PRICE = "ASSUMED ceiling price (not a console price)"
 
 
 def price_status(source: str) -> str:
-    """A price is only called real when its recorded source says it came from the console."""
-    return ASSUMED_PRICE if "ASSUMED" in source.upper() else f"console price ({source})"
+    """Say where a price came from; anything marked ASSUMED is never presented as a listed price."""
+    return ASSUMED_PRICE if "ASSUMED" in source.upper() else f"listed price: {source}"
 
 
 @dataclass(frozen=True)

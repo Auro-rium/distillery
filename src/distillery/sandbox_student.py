@@ -1,6 +1,6 @@
 """Student serving path 1: generate on CPU inside a Nebius Sandbox (ConTree).
 
-Measured live (spikes/s4_student_cpu.py, 2026-09-30) for Qwen3-0.6B in bf16: ``pip install`` of the
+Measured live (2026-09-30, see DECISIONS.md) for Qwen3-0.6B in bf16: ``pip install`` of the
 CPU torch wheels + transformers/peft takes ~63 s, the weights download inside the sandbox ~20 s,
 load ~1.3 s, peak RSS ~2.1 GB (a sandbox has 4 CPUs and ~4 GB), ~7.8 s per sample at ~900 prompt
 tokens and ``max_new_tokens=160``. Qwen3-1.7B does NOT fit reliably; do not use it here.

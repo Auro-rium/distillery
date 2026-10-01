@@ -5,7 +5,7 @@ description = "Sandbox-verified distillation autopilot on Nebius Token Factory"
 requires-python = ">=3.12"
 license = { text = "MIT" }
 # Runtime dependencies are added only after the Phase 0 spikes confirm the
-# real SDK/API shapes (see docs/NEBIUS_NOTES.md).
+# real SDK/API shapes (measured live; see DECISIONS.md).
 dependencies = ["pydantic>=2.7", "openai>=1.50", "contree-sdk>=0.3.6", "fastapi>=0.110", "uvicorn>=0.29"]
 
 [project.optional-dependencies]
@@ -21,7 +21,6 @@ select = ["E", "F", "I", "B", "UP", "S", "BLE"]  # BLE: no blind `except Excepti
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["S101", "E501", "S604", "S311", "S608"]
-"spikes/*" = ["S101", "E501", "BLE001", "S604"]
 
 [tool.mypy]
 strict = true

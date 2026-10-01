@@ -59,7 +59,7 @@ def test_estimate_arithmetic_all_priced() -> None:
     assert usd["fine-tune"] == pytest.approx(tokens * 2 / 1e6)
     n_gen = (30 + 60) + (30 * 2 + 60)
     assert usd["sandbox generation"] == pytest.approx(n_gen * 8.0 * 0.01)
-    assert all(ln.status.startswith("console price") for ln in lines)
+    assert all(ln.status.startswith("listed price") for ln in lines)
     assert "TOTAL: $" in est.render(lines)
 
 
@@ -79,7 +79,7 @@ def test_stress_set_is_priced_by_default_and_assumed_prices_are_never_called_rea
     )
     lines = est.build_estimate(sc, assumed, AVGS, row_chars=300.0)
     teacher = next(ln for ln in lines if ln.name == "teacher: train rows")
-    assert teacher.status == est.ASSUMED_PRICE and "console" not in teacher.status.split("(")[0]
+    assert teacher.status == est.ASSUMED_PRICE and "listed" not in teacher.status
     assert "ASSUMED ceiling prices" in est.render(lines)
 
 

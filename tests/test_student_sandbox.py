@@ -1,7 +1,7 @@
 # ruff: noqa: S101, S603
 """SandboxCpuStudent offline: FakeSandbox whose handler runs the REAL generation script locally
 against stub torch/transformers/peft packages. Says nothing about real CPU serving speed; the real
-recipe (bf16, enable_thinking=False, ~7.8 s/sample) was measured live by spikes/s4_student_cpu.py."""
+recipe (bf16, enable_thinking=False, ~7.8 s/sample) was measured live (2026-09-30, DECISIONS.md)."""
 
 from __future__ import annotations
 
