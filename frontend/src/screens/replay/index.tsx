@@ -5,6 +5,8 @@ import type { RunSummary } from "../../api/types";
 import { ApiErrorState, Badge, Card, EmptyState, LabelBanner, Spinner } from "../../components";
 import { LabelTag, labelKey } from "../report/label";
 import { useAsync } from "../report/useAsync";
+import { DemoButton } from "./DemoButton";
+import { LiveRuns } from "./LiveRuns";
 import { Pipeline } from "./Pipeline";
 import "./replay.css";
 
@@ -65,8 +67,11 @@ export default function Replay() {
           evaluation is verified by execution and a fixed gate decides PROMOTE or REJECT. These are stored
           runs you can open without spending anything.
         </p>
+        <DemoButton />
         <Pipeline />
       </section>
+      <LiveRuns />
+      <h2>Stored runs</h2>
       {res.state === "loading" && <Spinner label="Loading replay bundles" />}
       {res.state === "error" && <ApiErrorState error={res.error} onRetry={retry} />}
       {res.state === "ok" && res.data.length === 0 && (
