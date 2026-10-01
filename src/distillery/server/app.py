@@ -21,7 +21,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from distillery.evaluator import EXAMPLES_PER_KIND
 from distillery.orchestrator import DRY_PREFIX, SCALES
-from distillery.server import sse
+from distillery.server import sse, telemetry
 from distillery.server.limits import SlidingWindow
 from distillery.server.playground import (
     MAX_QUESTION_CHARS,
@@ -151,6 +151,19 @@ def create_app(settings: ServerSettings) -> FastAPI:
                   openapi_url=None)  # fmt: skip
     app.state.worker, app.state.reader, app.state.playground = worker, reader, playground
     app.state.stream_limiter = limiter
+
+    def _telemetry_extra() -> dict[str, Any]:
+        runs: dict[str, int] = {}
+        for r in reader.list_runs():
+            runs[r["status"]] = runs.get(r["status"], 0) + 1
+        return {
+            "mode": "live" if settings.config.nebius_api_key is not None else "replay-only",
+            "version": _version(),
+            "runs_by_status": runs,
+            "playground_spent_today_usd": playground.ledger.playground_spent(),
+        }
+
+    tele = telemetry.install(app, _telemetry_extra)
 
     if settings.allowed_origins:
         app.add_middleware(
@@ -418,6 +431,7 @@ def create_app(settings: ServerSettings) -> FastAPI:
             raise ApiError(429, "queue_full", str(exc), {"Retry-After": "30"}) from None
         except RunConflictError as exc:
             raise ApiError(409, "run_conflict", str(exc)) from None
+        tele.incr("runs_started_dry" if body.dry_run else "runs_started_live")
         reader.reset_events(run_id)
         return {"run_id": run_id}
 
@@ -436,12 +450,16 @@ def create_app(settings: ServerSettings) -> FastAPI:
     async def play(request: Request) -> dict[str, Any]:
         retry = playground.ip_limit.hit(_ip(request))
         if retry is not None:
+            tele.incr("playground_rate_limited")
             raise ApiError(429, "rate_limited", "playground rate limit reached",
                            {"Retry-After": str(int(retry) + 1)})  # fmt: skip
         body = _parse(PlaygroundRequest, await _read_body(request, settings.max_body_bytes))
         try:
-            return await playground.answer(body.question, _ip(request))
+            answer = await playground.answer(body.question, _ip(request))
+            tele.incr("playground_answers")
+            return answer
         except DemoBudgetExhaustedError:
+            tele.incr("playground_budget_exhausted")
             raise ApiError(503, "demo_budget_exhausted",
                            "demo budget exhausted, see replay") from None  # fmt: skip
 
