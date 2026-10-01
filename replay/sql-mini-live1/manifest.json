@@ -1,0 +1,100 @@
+{
+  "dry_run": false,
+  "heldout_sha256": "ab5e0cc853b8a6006fe27b4bc5ddd23888da2216858c4b94e31c421d8c64c112",
+  "label": null,
+  "recorded_at": "2026-09-30T14:58:06.055241+00:00",
+  "run_id": "sql-mini-live1",
+  "source_run_id": "sql-mini-live1",
+  "stages": [
+    {
+      "input_hash": "c38d5b21e03137bc35edb39aa133457bff5730378b25b5a5f3b9965bde3d7949",
+      "output_sha256": "1c76c91a819a9ee2b5403b02ecc5a289b4eccfad9d5abc95506429f3ba6c02ae",
+      "stage": "analysis_r1",
+      "updated_at": "2026-09-30T12:55:42.718512+00:00"
+    },
+    {
+      "input_hash": "b3a14f1b76e4d3f1e8fc42f010a044208045ac3241ff47e0de3155517972c952",
+      "output_sha256": "c57850a87c0ae6bc81225d5f30e17895e83b12a3253df7c8739ec4bc69d98f5a",
+      "stage": "dev_eval_r1",
+      "updated_at": "2026-09-30T12:55:29.264002+00:00"
+    },
+    {
+      "input_hash": "92508d049bb1c7b901b641251bc5a41019207f4e3fac67159eee2d14f379195f",
+      "output_sha256": "604f4cf1a65be03ed89ba31571e6f8ab049230c099a6f956a7551d5015e565a3",
+      "stage": "dev_eval_r2",
+      "updated_at": "2026-09-30T13:06:34.319552+00:00"
+    },
+    {
+      "input_hash": "7ecbae81c0a077edd3f4f94308d6348015366c8cffe7435151258a905e9d26e2",
+      "output_sha256": "b4a29ffdc9f7f051bfba2c9a588427ba7216787f626096eade7eb4cf1552bcfc",
+      "stage": "final_eval",
+      "updated_at": "2026-09-30T13:10:40.875320+00:00"
+    },
+    {
+      "input_hash": "5a8fee100a519b8594a19b842a2f7d18a4ad6cf714e267171fe01b69e5acaa7f",
+      "output_sha256": "151bb435132d4e7e6e2f1c2e4fe5d385e5d29d5ef60e363bc825a8547e9da7bb",
+      "stage": "finetune_r1",
+      "updated_at": "2026-09-30T12:53:32.385386+00:00"
+    },
+    {
+      "input_hash": "9bab3ff8c4143270e7edc27ecb5c134e8e0c5ecb5f3a4213d0a0b4489b24e977",
+      "output_sha256": "5497613aa6fd7ad9447fa1a7b1af6c339f96e5c9276e38056d422eb4424ff03f",
+      "stage": "finetune_r2",
+      "updated_at": "2026-09-30T13:05:01.583677+00:00"
+    },
+    {
+      "input_hash": "04811ab9bb26f17a88be9e38404fd9fd8d77b70efdd3feb4031c6ac99c4ffcb2",
+      "output_sha256": "d3615fec14e563c80e2d6d364e327bad02fcb154b0fb811bbf7393baf6abc510",
+      "stage": "gold_crosscheck",
+      "updated_at": "2026-09-30T12:38:18.305151+00:00"
+    },
+    {
+      "input_hash": "aee5fccdd93e7fbc1b99dd95cc2f3a8980d630e4d44d84d679cbf76b78ed0beb",
+      "output_sha256": "0c4e7f691da5a7af31820c83999bbf21dc2fc9ba85cfe98bd5bd6f01478948b6",
+      "stage": "headroom",
+      "updated_at": "2026-09-30T12:44:56.915888+00:00"
+    },
+    {
+      "input_hash": "e9b83b5f74c36f2b8d891b60889fe37fa21f75838cf9d93845473f362b41d8ad",
+      "output_sha256": "3512880fc2508a59f1a6c46a3b1dca0ccf217e8de29601ec7616acdbcab92a27",
+      "stage": "questions",
+      "updated_at": "2026-09-30T12:32:36.512182+00:00"
+    },
+    {
+      "input_hash": "97a4b6da41c0c1e207450a5f3cc4879e745b80920d6d594c821aaedfc84ff993",
+      "output_sha256": "7a0e3274049755b4f12f767120a8577998646ace4083515dedd91fdb1844321a",
+      "stage": "sandbox_branch_r1",
+      "updated_at": "2026-09-30T12:56:01.761430+00:00"
+    },
+    {
+      "input_hash": "b0a7bc7eaf57bfcaa94adad53897f3882b782ade11408994f253c713f5a691ea",
+      "output_sha256": "e646180d497ad7edd10c30ded3f17320bd0edf952990697c7b1780c8af448edd",
+      "stage": "schema",
+      "updated_at": "2026-09-30T12:32:36.135902+00:00"
+    },
+    {
+      "input_hash": "e90b68907cc64615bf78d655801966895cf0cba9ca836fccfcf83e91ca6f1c40",
+      "output_sha256": "4870eff79da69223254adcf62ccc7e983ccd97befc6889b61f54926b79121645",
+      "stage": "split",
+      "updated_at": "2026-09-30T12:42:42.517930+00:00"
+    },
+    {
+      "input_hash": "c8ff3b707e8ab636d6cdc6ed33d7ea57ab9ef49089d7776b8d2fa4db575c1571",
+      "output_sha256": "833187c7edfd4372654f65ba803e885f6cbda222d9371a4a92f11d0da2f02669",
+      "stage": "targeted_r1",
+      "updated_at": "2026-09-30T12:55:58.825383+00:00"
+    },
+    {
+      "input_hash": "34137d7f84eb210e9621875a494926373e2135aa8d92e5d2fd3bae31dbf93176",
+      "output_sha256": "1f1f512d02dfab19eddc564434abe77a7c7d7f569196958e75a82ae693344e83",
+      "stage": "teacher_data",
+      "updated_at": "2026-09-30T12:45:42.692690+00:00"
+    },
+    {
+      "input_hash": "b3fd7435b9b57bb9e31b147e06d6148d3a671537fea0e18067bae7c89f9bb5fd",
+      "output_sha256": "2d1d217569c3b8153d811427edc6beca1c60d73fabe4a1c326bda4795888dec5",
+      "stage": "verifier_selftest",
+      "updated_at": "2026-09-30T12:42:42.415555+00:00"
+    }
+  ]
+}

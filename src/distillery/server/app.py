@@ -249,7 +249,17 @@ def create_app(settings: ServerSettings) -> FastAPI:
 
     @app.get("/api/runs")
     def runs() -> list[dict[str, Any]]:
-        return reader.list_runs()
+        items = reader.list_runs()
+        have = {i["run_id"] for i in items}
+        # Recorded bundles are served like runs; a local run of the same id wins. The built-in
+        # unrecorded sample is not a run and stays on /api/replay only.
+        items += [
+            b.item()
+            for b in load_bundles(settings.replay_dir, settings.sample_report).values()
+            if b.recorded and b.run_id not in have
+        ]
+        items.sort(key=lambda i: i["created_at"] or "", reverse=True)
+        return items
 
     @app.get("/api/runs/{run_id}")
     def run_detail(run_id: str) -> dict[str, Any]:

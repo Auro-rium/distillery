@@ -244,7 +244,7 @@
     ],
     "heldout_sealed_sha256": "c27e0cffe883c4e68f4cd34128bce82620edc235d534536a59848cc74f60bdf8",
     "heldout_tasks": 20,
-    "spot_check_file": "/tmp/ddverify/dry-runs/runs/dry-sql-tiny/spot_check.json",
+    "spot_check_file": "spot_check.json",
     "teacher_verified_rows_round1": 40,
     "train_tasks": 40
   },
