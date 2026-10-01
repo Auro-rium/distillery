@@ -9,6 +9,7 @@
     "build": "tsc --noEmit -p tsconfig.build.json && vite build",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
+    "e2e": "playwright test",
     "contract:update": "cd .. && UPDATE_CONTRACT=1 .venv/bin/python -m pytest -q tests/test_frontend_truth.py"
   },
   "dependencies": {
@@ -20,11 +21,14 @@
     "react-router-dom": "^6.28.0"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
+    "@playwright/test": "^1.63.0",
     "@testing-library/react": "^16.0.1",
     "@types/node": "^22.7.0",
     "@types/react": "^18.3.11",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.3",
+    "chrome-launcher": "^1.2.2",
     "jsdom": "^25.0.1",
     "typescript": "^5.6.3",
     "vite": "^5.4.10",
