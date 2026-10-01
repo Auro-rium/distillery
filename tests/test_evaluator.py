@@ -3,7 +3,9 @@ from __future__ import annotations
 
 import ast
 import dataclasses
+import threading
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -11,6 +13,7 @@ from distillery.config import GateThresholds
 from distillery.evaluator import (
     ArtifactMismatchError,
     ExpectedArtifact,
+    _score_roles,
     evaluate,
     verify_artifact,
 )
@@ -308,3 +311,127 @@ def test_diagnose_with_heldout_loads_each_model_once_and_scores(env) -> None:  #
             store, "r1", {"base": base}, {"heldout": []}, LocalExecutor(),
             db_ref=db, schema_ddl=ddl,
         )  # fmt: skip
+
+
+# ---- stress set + concurrent scoring -------------------------------------------------------
+
+
+class StressBreaker(Lookup):
+    """Correct on everything except stress questions (marked ``[S]``) when ``break_stress``."""
+
+    def __init__(self, answers: dict[str, str], break_stress: bool) -> None:
+        super().__init__(answers)
+        self.break_stress = break_stress
+
+    def generate(self, messages_batch: list[list[dict[str, str]]]) -> list[str]:
+        good = super().generate(messages_batch)
+        if not self.break_stress:
+            return good
+        return [
+            "```sql\nSELECT 1\n```" if "[S]" in m[-1]["content"] else g
+            for m, g in zip(messages_batch, good, strict=True)
+        ]
+
+
+def _stress_items(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [
+        {**it, "task_id": f"s{i}", "family": "stressfam", "question": f"[S] {it['question']}"}
+        for i, it in enumerate(items[:10])
+    ]
+
+
+def _eval(env, gens):  # type: ignore[no-untyped-def]
+    store, db, ddl, _items, _answers = env
+    return evaluate(
+        store, "r1", gens, LocalExecutor(), db_ref=db, schema_ddl=ddl, gate_cfg=GateThresholds()
+    )
+
+
+def test_stress_is_none_without_a_stress_seal(env) -> None:  # type: ignore[no-untyped-def]
+    rep = _eval(env, _gens(env[4]))
+    assert rep.stress is None
+    assert rep.to_json()["stress"] is None
+
+
+def test_stress_scored_from_stress_items_only_and_cannot_move_gate(env) -> None:  # type: ignore[no-untyped-def]
+    store, _db, _ddl, items, answers = env
+    stress = _stress_items(items)
+    store.seal_stress("r1", stress)
+    answers = {**answers, **{str(s["question"]): str(s["gold_sql"]) for s in stress}}
+
+    def gens(break_stress: bool) -> dict[str, Lookup]:
+        return {
+            "base": StressBreaker(answers, break_stress),
+            "student": StressBreaker(answers, break_stress),
+            "teacher": Lookup(answers),
+        }
+
+    good = _eval(env, gens(False))
+    bad = _eval(env, gens(True))
+    assert good.stress is not None and bad.stress is not None
+    assert good.stress["n"] == 10 and good.stress["families"] == ["stressfam"]
+    assert good.stress["accuracy"] == {"base": 1.0, "student": 1.0, "teacher": 1.0}
+    assert bad.stress["accuracy"] == {"base": 0.0, "student": 0.0, "teacher": 1.0}
+    assert bad.stress["accuracy_by_family"]["stressfam"]["student"] == 0.0
+    # the heldout scores and the gate are identical whatever happens on the stress set
+    assert good.n == bad.n == N
+    assert {m: s.correct for m, s in good.scores.items()} == {
+        m: s.correct for m, s in bad.scores.items()
+    }
+    assert good.gate == bad.gate
+
+
+class BarrierGen:
+    def __init__(self, barrier: threading.Barrier, answers: dict[str, str]) -> None:
+        self.barrier = barrier
+        self.inner = Lookup(answers)
+
+    def generate(self, messages_batch: list[list[dict[str, str]]]) -> list[str]:
+        self.barrier.wait()  # BrokenBarrierError after the timeout if the roles run serially
+        return self.inner.generate(messages_batch)
+
+
+class Boom:
+    def generate(self, messages_batch: list[list[dict[str, str]]]) -> list[str]:
+        raise RuntimeError("student exploded")
+
+
+def _gold(env):  # type: ignore[no-untyped-def]
+    _store, db, _ddl, items, _answers = env
+    return LocalExecutor().run_batch(db, [str(it["gold_sql"]) for it in items])
+
+
+def test_score_roles_runs_the_three_models_concurrently(env) -> None:  # type: ignore[no-untyped-def]
+    _store, db, ddl, items, answers = env
+    barrier = threading.Barrier(3, timeout=10)
+    gens = {r: BarrierGen(barrier, answers) for r in ("base", "student", "teacher")}
+    seen: list[str] = []
+    scores = _score_roles(
+        gens,
+        items,
+        _gold(env),
+        LocalExecutor(),
+        db_ref=db,
+        schema_ddl=ddl,
+        on_scores=lambda role, _s: seen.append(role),
+    )
+    assert list(scores) == ["base", "student", "teacher"]  # stable order
+    assert all(s.accuracy == 1.0 for s in scores.values())
+    assert sorted(seen) == ["base", "student", "teacher"]  # once per role
+
+
+def test_score_roles_reraises_a_generator_failure(env) -> None:  # type: ignore[no-untyped-def]
+    _store, db, ddl, items, answers = env
+    gens = {"base": Lookup(answers), "student": Boom(), "teacher": Lookup(answers)}
+    seen: list[str] = []
+    with pytest.raises(RuntimeError, match="student exploded"):
+        _score_roles(
+            gens,
+            items,
+            _gold(env),
+            LocalExecutor(),
+            db_ref=db,
+            schema_ddl=ddl,
+            on_scores=lambda role, _s: seen.append(role),
+        )
+    assert "student" not in seen
