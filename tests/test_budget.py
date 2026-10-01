@@ -1,14 +1,32 @@
 # ruff: noqa: S101, S105, S106
 import logging
+import sqlite3
 from pathlib import Path
 
 import pytest
 
-from distillery.budget import BudgetExceeded, Ledger, UnknownPriceError, paid_resource
-from distillery.config import Price
+from distillery.budget import (
+    BASIS_BILLED,
+    BASIS_CEILING,
+    BudgetExceeded,
+    Ledger,
+    UnknownPriceError,
+    paid_resource,
+    sandbox_seconds,
+    spend_lines,
+)
+from distillery.config import FinetunePrice, Price, SandboxPrice
 from distillery.store import Store
 
 PRICES = {"m": Price(input_per_mtok=2.0, output_per_mtok=8.0, source="test", date="2026-01-01")}
+
+
+def cost_rows(store: Store) -> int:
+    con = sqlite3.connect(store.root / "index.sqlite")
+    try:
+        return int(con.execute("SELECT COUNT(*) FROM llm_calls").fetchone()[0])
+    finally:
+        con.close()
 
 
 def ledger(store: Store | None = None, run: float = 1.0, proj: float = 2.0) -> Ledger:
@@ -101,3 +119,123 @@ def test_create_failure_no_cancel() -> None:
         with paid_resource(create, cancelled.append):
             pass
     assert cancelled == []
+
+
+FT = {"base": FinetunePrice(usd_per_mtok_trained_tokens=4.0, source="console", date="2026-10-01")}
+SB = SandboxPrice(usd_per_cpu_second=0.002, source="console", date="2026-10-01")
+
+
+def priced(store: Store | None = None, *, ft: bool = True, sb: bool = True) -> Ledger:
+    return Ledger(
+        "r1", 5.0, 10.0, 0.5, PRICES, store, finetune_prices=FT if ft else None,
+        sandbox_price=SB if sb else None,
+    )  # fmt: skip
+
+
+def test_finetune_estimate_is_trained_tokens_times_price() -> None:
+    lg = priced()
+    assert lg.estimate_finetune_cost("base", 396_885) == pytest.approx(396_885 * 4.0 / 1e6)
+    assert lg.estimate_finetune_cost("base", 0) == 0.0
+
+
+def test_unknown_finetune_or_sandbox_price_refuses() -> None:
+    lg = priced(ft=False, sb=False)
+    with pytest.raises(UnknownPriceError, match="fine-tune"):
+        lg.estimate_finetune_cost("base", 10)
+    with pytest.raises(UnknownPriceError, match="sandbox"):
+        lg.estimate_sandbox_cost(10.0)
+    with pytest.raises(UnknownPriceError):
+        priced().estimate_finetune_cost("other-model", 10)
+
+
+def test_sandbox_estimate() -> None:
+    assert priced().estimate_sandbox_cost(1000 * 7.8) == pytest.approx(15.6)
+
+
+def test_preflight_finetune_uses_planned_tokens_when_priced() -> None:
+    lg = priced()
+    usd, basis = lg.preflight_finetune("base", 1_000_000, fallback_usd=99.0)
+    assert usd == pytest.approx(4.0)
+    assert basis == BASIS_BILLED
+    with pytest.raises(BudgetExceeded):
+        lg.preflight_finetune("base", 2_000_000, fallback_usd=0.0)  # 8.0 > run cap 5.0
+
+
+def test_preflight_finetune_falls_back_to_ceiling() -> None:
+    lg = priced(ft=False)
+    usd, basis = lg.preflight_finetune("base", 1_000_000, fallback_usd=2.0)
+    assert (usd, basis) == (2.0, BASIS_CEILING)
+    with pytest.raises(UnknownPriceError):
+        lg.preflight_finetune("base", 1_000_000, fallback_usd=None)  # no price, no ceiling
+
+
+def test_record_finetune_uses_actual_trained_tokens(tmp_path: Path) -> None:
+    s = Store(tmp_path)
+    lg = priced(s)
+    usd, basis = lg.record_finetune("base", trained_tokens=115_611, ceiling_usd=2.0)
+    assert usd == pytest.approx(115_611 * 4.0 / 1e6)
+    assert basis == BASIS_BILLED
+    assert lg.spent() == pytest.approx(usd)
+    lines = spend_lines(s, "r1")
+    assert lines == [
+        {
+            "kind": "finetune",
+            "model": "base",
+            "usd": pytest.approx(usd),
+            "units": 115_611,
+            "basis": BASIS_BILLED,
+        }  # fmt: skip
+    ]
+    # a fine-tune is not an LLM call
+    assert cost_rows(s) == 0
+
+
+def test_record_finetune_keeps_ceiling_when_price_or_tokens_missing(tmp_path: Path) -> None:
+    s = Store(tmp_path)
+    lg = priced(s, ft=False)
+    assert lg.record_finetune("base", 100, ceiling_usd=2.0) == (2.0, BASIS_CEILING)
+    lg2 = priced(s)  # priced, but the job reported no trained_tokens
+    assert lg2.record_finetune("base", None, ceiling_usd=1.0) == (1.0, BASIS_CEILING)
+    kinds = [x["kind"] for x in spend_lines(s, "r1")]
+    assert kinds == ["finetune_ceiling", "finetune_ceiling"]
+    with pytest.raises(UnknownPriceError):
+        lg2.record_finetune("base", None, ceiling_usd=None)
+
+
+def test_record_sandbox_priced_and_unpriced(tmp_path: Path) -> None:
+    s = Store(tmp_path)
+    assert priced(s).record_sandbox(10.0, "student", samples=2) == pytest.approx(0.02)
+    assert priced(s, sb=False).record_sandbox(5.0, "student", samples=1) is None
+    lines = spend_lines(s, "r1")
+    assert [(x["kind"], x["usd"]) for x in lines] == [("sandbox", pytest.approx(0.02)),
+                                                       ("sandbox_unpriced", 0.0)]  # fmt: skip
+    assert [x["units"] for x in lines] == [10, 5]  # measured seconds are kept either way
+    assert sandbox_seconds(s, "r1", "student") == (15.0, 3)
+
+
+def test_planned_trained_tokens_is_chars_over_cpt_times_epochs() -> None:
+    from distillery.orchestrator import _planned_trained_tokens
+
+    assert _planned_trained_tokens(b"x" * 300, 3, 4) == 400
+    assert _planned_trained_tokens(b"x" * 10, 3, None) == 4 * 3  # service default assumed: 3
+
+
+def test_bill_sandbox_on_close_records_measured_seconds_once(tmp_path: Path) -> None:
+    from types import SimpleNamespace
+
+    from distillery.orchestrator import Pipeline
+
+    s = Store(tmp_path)
+    lg = priced(s, sb=False)
+    closed: list[int] = []
+    srv = SimpleNamespace(
+        close=lambda: closed.append(1),
+        timings=[{"load_s": 4.0, "gen_s": 12.0, "n": 2}, {"load_s": 1.0, "gen_s": 3.0, "n": 1}],
+    )
+    fake = SimpleNamespace(ledger=lg)
+    Pipeline._bill_sandbox_on_close(fake, srv, "student")  # type: ignore[arg-type]
+    srv.close()
+    srv.close()
+    assert closed == [1, 1]
+    assert sandbox_seconds(s, "r1", "student") == (20.0, 3)  # billed once, unpriced but kept
+    assert [x["kind"] for x in spend_lines(s, "r1")] == ["sandbox_unpriced"]

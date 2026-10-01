@@ -12,6 +12,7 @@ dependencies = ["pydantic>=2.7", "openai>=1.50", "contree-sdk>=0.3.6", "fastapi>
 dev = ["pytest>=8", "ruff", "mypy", "httpx>=0.27"]
 
 [tool.ruff]
+extend-exclude = [".claude", ".distillery", "frontend/node_modules"]
 line-length = 100
 target-version = "py312"
 

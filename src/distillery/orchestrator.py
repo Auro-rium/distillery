@@ -36,7 +36,12 @@ import openai
 from pydantic import BaseModel, ConfigDict, Field
 
 from distillery import evaluator as evaluator_mod
-from distillery.budget import Ledger
+from distillery.budget import (
+    BASIS_CEILING,
+    Ledger,
+    sandbox_seconds,
+    spend_lines,
+)
 from distillery.config import Config, ConfigError
 from distillery.endpoint_student import EndpointBackend, EndpointSpec
 from distillery.evaluator import ExpectedArtifact, ModelScores, score_model
@@ -145,6 +150,17 @@ STUDENT_COST_UNAVAILABLE = (
 )
 DRY_PREFIX = "dry-"
 _SCHEMA_OVERHEAD_TOKENS = 120  # rough prompt overhead of the JSON-schema instruction (estimate)
+
+
+def _planned_trained_tokens(train_jsonl: bytes, chars_per_token: int, n_epochs: int | None) -> int:
+    """Planned trained tokens for the preflight: file characters / chars-per-token, x epochs.
+
+    An ESTIMATE used only to size the pre-spend budget check (the recorded cost uses the job's
+    measured trained_tokens). Epochs default to 3 when the request leaves them to the service.
+    """
+    text = train_jsonl.decode("utf-8")
+    return -(-len(text) // max(chars_per_token, 1)) * (n_epochs or 3)
+
 
 # ---------------------------------------------------------------- errors
 
@@ -798,6 +814,27 @@ class Pipeline:
         }
         atomic_write_bytes(meta_path, json.dumps(meta, indent=2, sort_keys=True).encode("utf-8"))
 
+    def _bill_sandbox_on_close(self, server: Any, purpose: str) -> Any:
+        """Record the measured sandbox seconds (per-batch ``load_s`` + ``gen_s``) when the
+        server is closed. Priced by the ledger only if a sandbox price is configured."""
+        inner_close = server.close
+
+        def close() -> None:
+            try:
+                inner_close()
+            finally:
+                timings = getattr(server, "timings", None) or []
+                secs = sum(
+                    float(t.get("load_s") or 0) + float(t.get("gen_s") or 0) for t in timings
+                )
+                n = sum(int(t.get("n") or 0) for t in timings)
+                if secs > 0:
+                    self.ledger.record_sandbox(secs, purpose, samples=n)
+                server.timings = []  # a second close must not bill the same batches again
+
+        server.close = close
+        return server
+
     def _resolve_serving(self) -> None:
         """Build student/base factories from Deps when ``student_serving`` asks for it."""
         mode, deps = self.cfg.student_serving, self.deps
@@ -825,11 +862,14 @@ class Pipeline:
             }
             self.deps = replace(
                 deps,
-                student_factory=lambda trained: SandboxCpuStudent.for_artifact(
-                    sandbox, image, bridge, trained, base_model=base_model, **kw
+                student_factory=lambda trained: self._bill_sandbox_on_close(
+                    SandboxCpuStudent.for_artifact(
+                        sandbox, image, bridge, trained, base_model=base_model, **kw
+                    ),
+                    "student",
                 ),
-                base_factory=lambda: SandboxCpuStudent(
-                    sandbox, image, bridge, base_model=base_model, **kw
+                base_factory=lambda: self._bill_sandbox_on_close(
+                    SandboxCpuStudent(sandbox, image, bridge, base_model=base_model, **kw), "base"
                 ),
             )  # fmt: skip
         else:
@@ -888,10 +928,11 @@ class Pipeline:
                 "no student/base serving path is available (spike S4 undecided; the base model is "
                 "not on the serverless API either); refusing to start before spending anything"
             )
-        if self.cfg.finetune_estimate_usd is None:
+        student = self.config.require_model("student")
+        if student not in self.config.finetune_prices and self.cfg.finetune_estimate_usd is None:
             raise ConfigRefusal(
-                "finetune_estimate_usd is not set: the docs give no fine-tune price, so the "
-                "budget preflight needs an explicit estimate"
+                f"no fine-tune price for {student!r} in the price file and finetune_estimate_usd "
+                "is not set: refusing to guess a fine-tune cost"
             )
 
     # ---- run -------------------------------------------------------------
@@ -1306,7 +1347,6 @@ class Pipeline:
         self, r: int, rows: Sequence[Mapping[str, Any]], dev: Sequence[SqlTask], upstream: str
     ) -> dict[str, Any]:
         name = f"finetune_r{r}"
-        estimate = float(self.cfg.finetune_estimate_usd or 0.0)
         rows_hash = _digest(list(rows))
 
         def fn() -> dict[str, Any]:
@@ -1324,7 +1364,15 @@ class Pipeline:
             )
             orphans = self._cancel_orphans(r)
             existing = self._adoptable_job(r)  # a paid job an earlier attempt left ambiguous
-            self.ledger.preflight(estimate)  # refuse BEFORE any upload/job
+            # Refuse BEFORE any upload/job: planned tokens x price when the price exists,
+            # else the operator ceiling.
+            planned = _planned_trained_tokens(
+                train_p.read_bytes(), self.cfg.chars_per_token, self.cfg.hyperparameters.n_epochs
+            )
+            pre_usd, pre_basis = self.ledger.preflight_finetune(
+                base_model, planned, self.cfg.finetune_estimate_usd
+            )
+            self.say(f"[finetune r{r}] preflight ${pre_usd:.4f} ({pre_basis})")
             job_ref: list[str] = []
 
             def create() -> str:
@@ -1347,6 +1395,7 @@ class Pipeline:
                 return jid
 
             outcome = "aborted"
+            cost_line: dict[str, Any] = {}
             try:
                 with paid_job(create, ft.cancel) as handle:
                     info = FineTuneClient.require_success(
@@ -1377,7 +1426,15 @@ class Pipeline:
                             "adapter_sha256": art.adapter_sha256,
                         },
                     )
-                    self.ledger.record("finetune", None, estimate)
+                    ft_usd, ft_basis = self.ledger.record_finetune(
+                        base_model, info.trained_tokens, self.cfg.finetune_estimate_usd
+                    )
+                    cost_line = {
+                        "usd": ft_usd,
+                        "basis": ft_basis,
+                        "trained_tokens": info.trained_tokens,
+                    }
+                    self.say(f"[finetune r{r}] cost ${ft_usd:.4f} ({ft_basis})")
                     handle.mark_succeeded()
                     outcome = "succeeded"
             finally:
@@ -1392,6 +1449,7 @@ class Pipeline:
                 "training": training,
                 "train_rows": len(rows),
                 "dev_validation_rows": len(val_rows),
+                "cost": cost_line,
                 "counters": {
                     "orphan_jobs_cancelled": orphans[0],
                     "orphan_cancel_errors": orphans[1],
@@ -1401,7 +1459,8 @@ class Pipeline:
 
         return self._stage(
             name,
-            {"rows": rows_hash, "hp": self.cfg.hyperparameters.to_request(), "est": estimate,
+            {"rows": rows_hash, "hp": self.cfg.hyperparameters.to_request(),
+             "est": float(self.cfg.finetune_estimate_usd or 0.0),
              "student": self.config.model_ids.get("student"), "seed": self.cfg.seed},
             [upstream],
             fn,
@@ -1751,15 +1810,39 @@ class Pipeline:
 
     # ---- report ------------------------------------------------------------
     def _cost_basis(self) -> dict[str, Any]:
-        """Every cost figure here is an estimate; say so, with the price source(s) in use."""
+        """Every cost figure here is an estimate; say so, with the basis of each cost line."""
         used = cost_by_model(self.store, self.run_id)
         sources = {m: self.config.prices[m].source for m in used if m in self.config.prices}
         names = "; ".join(sorted(set(sources.values()))) or "no priced model was used"
+        lines = spend_lines(self.store, self.run_id)
+        ft_bases = sorted({str(x["basis"]) for x in lines if str(x["kind"]).startswith("finetune")})
+        sb_bases = sorted({str(x["basis"]) for x in lines if str(x["kind"]).startswith("sandbox")})
         return {
-            "basis": "ESTIMATES, not billed amounts: measured token counts x the configured "
-            f"price table (price source: {names}); the fine-tune line is the operator-supplied "
-            "ceiling; sandbox compute is not priced",
+            "basis": "ESTIMATES, not billed amounts. LLM lines: measured token counts x the "
+            f"configured price table (price source: {names}); fine-tune: "
+            f"{', '.join(ft_bases) or 'no fine-tune ran'}; sandbox compute: "
+            f"{', '.join(sb_bases) or 'not recorded'}",
             "price_sources": sources,
+            "finetune_lines": [x for x in lines if str(x["kind"]).startswith("finetune")],
+            "sandbox_lines": [x for x in lines if str(x["kind"]).startswith("sandbox")],
+        }
+
+    def _finetune_usd_text(self, rounds_run: int) -> str:
+        lines = [x for x in spend_lines(self.store, self.run_id) if str(x["kind"]).startswith("f")]
+        total = sum(float(x["usd"]) for x in lines)
+        bases = sorted({str(x["basis"]) for x in lines}) or [BASIS_CEILING]
+        return f"${total:.4f} [{', '.join(bases)}]; rounds run: {rounds_run}"
+
+    def _student_cost_per_1k(self) -> Any:
+        """Measured sandbox seconds per student sample x the sandbox price, or 'unavailable'."""
+        secs, n = sandbox_seconds(self.store, self.run_id, "student")
+        if self.ledger.sandbox_price is None or n == 0:
+            return STUDENT_COST_UNAVAILABLE
+        return {
+            "basis": "billed-basis (measured seconds x console price)",
+            "samples": n,
+            "sandbox_seconds": secs,
+            "usd_per_1k_tasks": self.ledger.estimate_sandbox_cost(secs) / n * 1000,
         }
 
     def _build_report(
@@ -1836,11 +1919,10 @@ class Pipeline:
                 "llm_by_model": cost_by_model(self.store, self.run_id),
                 "run_total_usd": self.ledger.spent(),
                 "run_cap_usd": self.ledger.run_cap,
-                "finetune_usd": "ESTIMATE from --finetune-estimate-usd (no fine-tune price known); "
-                f"rounds run: {len(rounds['rounds'])}",
+                "finetune_usd": self._finetune_usd_text(len(rounds["rounds"])),
                 "cost_per_1k_tasks": {
                     "teacher": teacher_cost,
-                    "student": STUDENT_COST_UNAVAILABLE,
+                    "student": self._student_cost_per_1k(),
                 },
             },
             "sandbox_lineage": [

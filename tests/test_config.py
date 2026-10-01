@@ -88,3 +88,53 @@ def test_project_id_for_sandboxes_is_a_secret_and_official_name_wins() -> None:
     assert c.nebius_project_id is not None
     assert c.nebius_project_id.get_secret_value() == "proj-official"
     assert "proj-official" not in repr(c) + str(c) + c.model_dump_json()
+
+
+def _write(tmp_path: Path, obj: object) -> Path:
+    f = tmp_path / "typed.json"
+    f.write_text(json.dumps(obj))
+    return f
+
+
+LLM = {"input_per_mtok": 1, "output_per_mtok": 2, "source": "s", "date": "d"}
+
+
+def test_typed_price_sections(tmp_path: Path) -> None:
+    f = _write(
+        tmp_path,
+        {
+            "m": LLM,
+            "finetune": {
+                "Qwen/Qwen3-0.6B": {"usd_per_mtok_trained_tokens": 1.5, "source": "c", "date": "d"}
+            },
+            "sandbox": {"usd_per_cpu_second": 0.001, "source": "c", "date": "d"},
+        },
+    )
+    c = load_config({"DISTILLERY_PRICES_FILE": str(f)})
+    assert set(c.prices) == {"m"}
+    assert c.finetune_prices["Qwen/Qwen3-0.6B"].usd_per_mtok_trained_tokens == 1.5
+    assert c.sandbox_price is not None
+    assert c.sandbox_price.per_second == 0.001
+
+
+def test_legacy_flat_file_has_no_typed_prices(tmp_path: Path) -> None:
+    c = load_config({"DISTILLERY_PRICES_FILE": str(_write(tmp_path, {"m": LLM}))})
+    assert c.finetune_prices == {}
+    assert c.sandbox_price is None
+
+
+@pytest.mark.parametrize(
+    "section",
+    [
+        {"finetune": {"b": {"usd_per_mtok_trained_tokens": 1, "source": "c"}}},  # no date
+        {"finetune": {"b": {"usd_per_mtok_trained_tokens": 1, "date": "d"}}},  # no source
+        {"finetune": {"b": {"usd_per_mtok_trained_tokens": -1, "source": "c", "date": "d"}}},
+        {"sandbox": {"source": "c", "date": "d"}},  # no rate
+        {"sandbox": {"usd_per_second": 1, "usd_per_cpu_second": 1, "source": "c", "date": "d"}},
+        {"sandbox": {"usd_per_second": 1, "source": "c"}},
+        {"finetune": []},
+    ],
+)
+def test_typed_price_sections_reject_incomplete(tmp_path: Path, section: object) -> None:
+    with pytest.raises(ConfigError):
+        load_config({"DISTILLERY_PRICES_FILE": str(_write(tmp_path, section))})
