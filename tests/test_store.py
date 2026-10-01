@@ -48,9 +48,8 @@ def test_crash_not_marked_complete(tmp_path: Path) -> None:
 
     with pytest.raises(RuntimeError):
         s.get_or_run("r1", "st", {"a": 1}, flaky)
-    assert not s.stage_complete("r1", "st", {"a": 1})
-    assert s.get_or_run("r1", "st", {"a": 1}, flaky) == 42
-    assert s.stage_complete("r1", "st", {"a": 1})
+    assert s.get_or_run("r1", "st", {"a": 1}, flaky) == 42  # crashed stage is not complete
+    assert s.get_or_run("r1", "st", {"a": 1}, flaky) == 42  # now cached: flaky not called again
     assert len(attempts) == 2
 
 
@@ -62,7 +61,7 @@ def test_keyboard_interrupt_not_complete(tmp_path: Path) -> None:
 
     with pytest.raises(KeyboardInterrupt):
         s.get_or_run("r1", "st", {}, fn)
-    assert not s.stage_complete("r1", "st", {})
+    assert s.get_or_run("r1", "st", {}, lambda: 7) == 7  # interrupted stage reruns
 
 
 def test_changed_inputs_rerun(tmp_path: Path) -> None:

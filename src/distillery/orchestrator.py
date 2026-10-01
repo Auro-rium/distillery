@@ -43,7 +43,6 @@ from distillery.budget import (
     spend_lines,
 )
 from distillery.config import Config, ConfigError
-from distillery.endpoint_student import EndpointBackend, EndpointSpec
 from distillery.evaluator import ExpectedArtifact, ModelScores, score_model
 from distillery.finetune import (
     ACTIVE_STATUSES,
@@ -103,22 +102,6 @@ def _close_all(servers: Sequence[StudentServer], *, raise_first: bool = True) ->
         raise first
 
 
-def _check_endpoint_identity(
-    spec: EndpointSpec, trained: TrainedArtifact, student_model: str
-) -> None:
-    """File hashes prove the adapter on disk, not what the endpoint serves; pin what we can."""
-    if trained.base_model is not None and trained.base_model != student_model:
-        raise ConfigRefusal(
-            f"trained base_model {trained.base_model!r} != configured student {student_model!r}"
-        )
-    ckpt = trained.fine_tuned_model_checkpoint
-    if spec.model_name and ckpt and spec.model_name != ckpt:
-        raise ConfigRefusal(
-            f"EndpointSpec.model_name {spec.model_name!r} != trained checkpoint {ckpt!r}: "
-            "the served model would not be the trained artifact"
-        )
-
-
 def _generation_error_counter(name: str, server: Any) -> dict[str, int]:
     """Samples the serving backend failed to generate (scored as wrong, never dropped). Only
     backends that can fail per sample (sandbox CPU) expose ``generation_errors``."""
@@ -126,19 +109,9 @@ def _generation_error_counter(name: str, server: Any) -> dict[str, int]:
     return {} if errors is None else {f"{name}_generation_errors": int(errors)}
 
 
-def _with_serving(
-    artifact: Mapping[str, str], trained: TrainedArtifact, student: Any, base: Any
-) -> dict[str, str]:
-    """Record what was actually served next to the file-hash identity (which only covers disk)."""
+def _with_serving(artifact: Mapping[str, str], trained: TrainedArtifact) -> dict[str, str]:
+    """Record the trained base/checkpoint names next to the file-hash identity."""
     out = dict(artifact)
-    served = getattr(student, "served_model", None)
-    base_served = getattr(base, "served_model", None)
-    if served is not None:
-        out["served_model"] = str(served)
-        if trained.fine_tuned_model_checkpoint and served != trained.fine_tuned_model_checkpoint:
-            out["served_model_note"] = "served name is an explicit override, not the trained ckpt"
-    if base_served is not None:
-        out["served_base_model"] = str(base_served)
     if trained.base_model:
         out["trained_base_model"] = trained.base_model
     if trained.fine_tuned_model_checkpoint:
@@ -236,7 +209,6 @@ class PipelineConfig(BaseModel):
     est_output_tokens: int = 256  # budget estimate only
     chars_per_token: int = 3  # budget estimate only
     candidates_per_task: int = 1
-    use_triage: bool = True
     triage_sample: int = 50
     selftest_sample: int = 50
     selftest_corruptions: int = 4
@@ -250,26 +222,20 @@ class PipelineConfig(BaseModel):
     min_planned_steps: int = Field(default=50, ge=0)
     # packing=True makes the step count unknowable; refuse unless the caller says so explicitly.
     allow_packing: bool = False
-    ultra_verifier_authoring: bool = False  # documented hook, intentionally unimplemented
     # How the student and base are served. "injected" (default) = use Deps.student_factory /
-    # Deps.base_factory as given. The others build both from Deps (UNVERIFIED against real APIs).
-    student_serving: Literal["injected", "sandbox_cpu", "endpoint"] = "injected"
+    # Deps.base_factory as given. "sandbox_cpu" builds both from Deps.sandbox (the live path).
+    student_serving: Literal["injected", "sandbox_cpu"] = "injected"
     student_sandbox_image: str | None = None  # sandbox_cpu: image with pip (default: sandbox_image)
     student_batch_size: int = Field(default=2, ge=1)  # sandbox_cpu: prompts per generation job
     # sandbox_cpu: parallel generation jobs (the beta limit is 50 operations in flight in total)
     student_concurrency: int = Field(default=10, ge=1, le=20)
     student_max_new_tokens: int = Field(default=160, ge=16)  # sandbox_cpu: per sample (S4 recipe)
-    student_endpoint: EndpointSpec | None = None  # endpoint: explicit spec incl. hourly price
 
     def extra_tasks(self) -> int:
         return self.round_extra_tasks or max(10, self.scale.train // 4)
 
 
 # ---------------------------------------------------------------- structured outputs
-
-
-class SqlAnswer(BaseModel):
-    sql: str
 
 
 class Cluster(BaseModel):
@@ -351,7 +317,6 @@ class Deps:
     # task set produced (also when the stage result comes from cache). Real deps leave it None.
     task_observer: Callable[[Sequence[SqlTask]], None] | None = None
     base_factory: BaseFactory | None = None
-    endpoint: EndpointBackend | None = None  # needed only for student_serving="endpoint"
 
 
 # ---------------------------------------------------------------- usage / metrics
@@ -870,61 +835,34 @@ class Pipeline:
         if deps.student_factory is not None or deps.base_factory is not None:
             raise ConfigRefusal(f"student_serving={mode!r} but Deps already has serving factories")
         base_model = self.config.require_model("student")
-        if mode == "sandbox_cpu":
-            from distillery.sandbox_student import SandboxCpuStudent, ServingImages
+        from distillery.sandbox_student import SandboxCpuStudent, ServingImages
 
-            sandbox, bridge = deps.sandbox, deps.bridge
-            image = self.cfg.student_sandbox_image or deps.sandbox_image
-            if sandbox is None:
-                raise ConfigRefusal("student_serving='sandbox_cpu' needs Deps.sandbox")
-            # ONE heavy image (pip + weights) for the base and every student of this run
-            images = ServingImages(
-                sandbox, image, bridge, base_model=base_model, on_image=self._record_serving_image
-            )
-            kw: dict[str, Any] = {
-                "batch_size": self.cfg.student_batch_size,
-                "concurrency": self.cfg.student_concurrency,
-                "max_new_tokens": self.cfg.student_max_new_tokens,
-                "images": images,
-            }
-            self.deps = replace(
-                deps,
-                student_factory=lambda trained: self._bill_sandbox_on_close(
-                    SandboxCpuStudent.for_artifact(
-                        sandbox, image, bridge, trained, base_model=base_model, **kw
-                    ),
-                    "student",
+        sandbox, bridge = deps.sandbox, deps.bridge
+        image = self.cfg.student_sandbox_image or deps.sandbox_image
+        if sandbox is None:
+            raise ConfigRefusal("student_serving='sandbox_cpu' needs Deps.sandbox")
+        # ONE heavy image (pip + weights) for the base and every student of this run
+        images = ServingImages(
+            sandbox, image, bridge, base_model=base_model, on_image=self._record_serving_image
+        )
+        kw: dict[str, Any] = {
+            "batch_size": self.cfg.student_batch_size,
+            "concurrency": self.cfg.student_concurrency,
+            "max_new_tokens": self.cfg.student_max_new_tokens,
+            "images": images,
+        }
+        self.deps = replace(
+            deps,
+            student_factory=lambda trained: self._bill_sandbox_on_close(
+                SandboxCpuStudent.for_artifact(
+                    sandbox, image, bridge, trained, base_model=base_model, **kw
                 ),
-                base_factory=lambda: self._bill_sandbox_on_close(
-                    SandboxCpuStudent(sandbox, image, bridge, base_model=base_model, **kw), "base"
-                ),
-            )  # fmt: skip
-        else:
-            from distillery import endpoint_student
-
-            if deps.endpoint is None or self.cfg.student_endpoint is None:
-                raise ConfigRefusal(
-                    "student_serving='endpoint' needs Deps.endpoint and PipelineConfig."
-                    "student_endpoint (with an explicit hourly price)"
-                )
-            spec = self.cfg.student_endpoint
-            if spec.base_model_name != base_model:
-                raise ConfigRefusal(
-                    f"EndpointSpec.base_model_name={spec.base_model_name!r} must equal the "
-                    f"configured student model {base_model!r}: the endpoint must serve the model "
-                    "that was fine-tuned"
-                )
-            inner_student = endpoint_student.make_student_factory(deps.endpoint, spec, self.ledger)
-
-            def endpoint_student_factory(trained: TrainedArtifact) -> StudentServer:
-                _check_endpoint_identity(spec, trained, base_model)  # before anything is billed
-                return inner_student(trained)
-
-            self.deps = replace(
-                deps,
-                student_factory=endpoint_student_factory,
-                base_factory=endpoint_student.make_base_factory(deps.endpoint, spec, self.ledger),
-            )
+                "student",
+            ),
+            base_factory=lambda: self._bill_sandbox_on_close(
+                SandboxCpuStudent(sandbox, image, bridge, base_model=base_model, **kw), "base"
+            ),
+        )  # fmt: skip
 
     def _record_serving_image(self, kind: str, image: str) -> None:
         """Provenance of every sandbox image built for serving (they are what ran the models)."""
@@ -937,16 +875,10 @@ class Pipeline:
     def _preconditions(self) -> None:
         self._resolve_serving()
         self._check_identity()
-        if self.cfg.ultra_verifier_authoring:
-            raise NotImplementedError(
-                "Ultra-authored verifiers are a documented hook, not built: the SQL pack uses the "
-                "deterministic execution-match verifier (DECISIONS.md 2026-09-29)."
-            )
         if self.cfg.max_rounds < 1:
             raise ConfigRefusal("max_rounds must be >= 1")
         self.config.require_model("student")  # fine-tune base id; served via base_factory, not LLM
-        roles = ["planner", "teacher"] + (["triage"] if self.cfg.use_triage else [])
-        for role in roles:
+        for role in ("planner", "teacher", "triage"):
             model = self.config.require_model(role)
             if model not in self.config.prices:
                 raise ConfigRefusal(f"no price for {role} model {model!r}; refusing to guess")
@@ -1346,7 +1278,7 @@ class Pipeline:
     def _triage(self, raws: Sequence[str]) -> dict[str, int]:
         """Advisory format check by the triage model. Never drops rows (they are execution-
         verified and their completion is the extracted SQL); only counts what it flags."""
-        if not self.cfg.use_triage or not raws:
+        if not raws:
             return {"triage_calls": 0, "triage_flagged_dirty_format": 0, "triage_errors": 0}
         sample = list(raws[: self.cfg.triage_sample])
         msgs = [
@@ -1377,7 +1309,8 @@ class Pipeline:
 
         return self._stage(
             "teacher_data",
-            {"candidates": self.cfg.candidates_per_task, "triage": self.cfg.use_triage,
+            # "triage": True stays in the key so cached teacher_data of existing runs still hits
+            {"candidates": self.cfg.candidates_per_task, "triage": True,
              "triage_sample": self.cfg.triage_sample},
             ["split", "headroom"],
             fn,
@@ -1826,9 +1759,7 @@ class Pipeline:
                     db_ref=pipeline.db_ref, schema_ddl=pipeline.ddl, gate_cfg=pipeline.config.gate,
                     trained=trained, expected=pipeline._expected(r),
                 )  # fmt: skip
-                rep = replace(
-                    rep, artifact=_with_serving(rep.artifact, trained, server, base_server)
-                )
+                rep = replace(rep, artifact=_with_serving(rep.artifact, trained))
             except BaseException:
                 _close_all(opened, raise_first=False)
                 raise

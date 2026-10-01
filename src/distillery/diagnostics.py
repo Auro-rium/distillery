@@ -184,11 +184,6 @@ def read_jsonl(path: Path) -> list[dict[str, Any]]:
     return [json.loads(x) for x in path.read_text(encoding="utf-8").splitlines() if x.strip()]
 
 
-def adapter_round(name: str) -> int | None:
-    m = re.search(r"round(\d+)", name)
-    return int(m.group(1)) if m else None
-
-
 def run_student_diagnosis(
     store: Store,
     run_id: str,

@@ -1,19 +1,8 @@
-"""Student model serving: interface only. The serving path is NOT chosen yet.
+"""Student model serving: interface only.
 
-Phase 0 spike S4 must pick one of three candidate paths for serving the fine-tuned
-Qwen3-1.7B LoRA adapter, based on what the docs/live platform actually allow:
-
-1. Sandbox-CPU with ``peft``: load base model + downloaded LoRA adapter inside a ConTree
-   sandbox and generate on CPU. Cheap and always available, but slow; tests batching.
-2. Dedicated endpoint: deploy via ``POST /v0/dedicated_endpoints`` (billed while >=1 replica
-   runs). Docs say custom fine-tuned weights are beta / on request only
-   (ai-models-inference_dedicated-endpoints_custom-weights.md), so this may need support.
-3. Serverless job: some managed batch/serverless inference for the adapter, if the platform
-   offers one (not found in the saved docs).
-
-Implementations (all UNVERIFIED against the real APIs): ``sandbox_student.SandboxCpuStudent``
-(path 1) and ``endpoint_student.EndpointStudent`` (path 2). Only the interface and the fake
-live here.
+The live path serves the fine-tuned Qwen3-1.7B LoRA adapter (and the un-tuned base) with
+``peft`` on CPU inside Nebius Sandboxes: ``sandbox_student.SandboxCpuStudent``. Only the
+interface and the fake live here.
 """
 
 from __future__ import annotations

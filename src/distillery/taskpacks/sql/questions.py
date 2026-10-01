@@ -1727,7 +1727,6 @@ def skeleton(question: str) -> str:
 # ---- per-template capacity --------------------------------------------------------------------
 
 CAPACITY_PROBE_DRAWS = 200  # draws per template when measuring its distinct-SQL capacity
-TINY_TEMPLATE_MAX_SQL = 4  # a template with at most this many distinct SQL strings is "tiny"
 _CAPACITY_CACHE: dict[tuple[str, int], int] = {}
 
 
@@ -1764,7 +1763,6 @@ class GenerationReport:
     dropped_by_template: Counter[str] = field(default_factory=Counter)
     capped_templates: set[str] = field(default_factory=set)
     capped_families: set[str] = field(default_factory=set)
-    tiny_templates: set[str] = field(default_factory=set)
     template_cap: int = 0
     family_cap: int = 0
     skeleton_cap: int | None = None
@@ -1824,7 +1822,6 @@ def generate_tasks(
         tasks=[], template_cap=tpl_cap, family_cap=fam_cap, skeleton_cap=skeleton_cap
     )
     capacity = {t.name: template_capacity(t) for t in pool}
-    report.tiny_templates = {k for k, v in capacity.items() if v <= TINY_TEMPLATE_MAX_SQL}
     seen: set[str] = set()
     seen_q: set[str] = set()
     dup_streak: Counter[str] = Counter()
