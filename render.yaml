@@ -34,6 +34,3 @@ services:
       # Public playground: a small daily ceiling on teacher calls (ephemeral disk, so it resets on restart).
       - key: DISTILLERY_PLAYGROUND_DAILY_CAP_USD
         value: "0.5"
-      # The Vercel frontend calls this API cross-origin; list its exact origin(s), comma separated.
-      - key: DISTILLERY_ALLOWED_ORIGINS
-        value: https://frontend-one-khaki-34.vercel.app

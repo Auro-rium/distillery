@@ -16,7 +16,6 @@ frontend/dist
 frontend/.env
 frontend/.env.*
 !frontend/.env.example
-.vercel
 .distillery
 runs
 *.sqlite

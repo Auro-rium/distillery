@@ -1,1 +1,0 @@
-{"nodes":[{"id":"base","parent_id":null,"label":"base model","round":null,"hypothesis":null,"data_delta":null,"dev_score":0.1,"cost_usd":null,"sandbox_image":null,"selected":false},{"id":"round-1","parent_id":"base","label":"round 1","round":1,"hypothesis":null,"data_delta":null,"dev_score":0.3,"cost_usd":null,"sandbox_image":null,"selected":true}]}

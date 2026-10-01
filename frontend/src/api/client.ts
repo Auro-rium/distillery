@@ -16,7 +16,7 @@ export class ApiError extends Error {
 }
 
 // API origin. Empty (default) = same origin. Set VITE_API_BASE at build time when the frontend is
-// hosted apart from the API (Vercel + Nebius). It is public: never put a token in it.
+// hosted apart from the API (split deploy). It is public: never put a token in it.
 const API_BASE = ((import.meta.env.VITE_API_BASE as string | undefined) ?? "").trim().replace(/\/+$/, "");
 
 /** Absolute-or-relative URL for an API path that already starts with "/api", e.g. "/api/health".

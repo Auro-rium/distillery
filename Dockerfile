@@ -1,5 +1,5 @@
 # Distillery: API + built frontend in one image (same origin, so VITE_API_BASE stays empty).
-# The frontend alone can be hosted elsewhere (Vercel): see docs/DEPLOY.md.
+# Deployed as one service on Render: see docs/DEPLOY.md and render.yaml.
 
 # ---- stage 1: build the frontend ----
 FROM node:22-slim AS web
