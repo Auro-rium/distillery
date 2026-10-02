@@ -59,6 +59,7 @@ class Result:
 def get_peft_model(model, cfg):
     model.cfg_path = cfg.path
     model.tag = "RANDOM-INIT-ADAPTER"
+    model.merge_and_unload = lambda: model  # the real PeftModel returns the merged base model
     return model
 def set_peft_model_state_dict(model, state):
     got = [k.replace(".weight", ".default.weight") for k in state]
@@ -440,3 +441,11 @@ def test_script_marker_matches_parser() -> None:
     assert f'print("{OUT_MARKER}"' in GEN_SCRIPT
     assert "enable_thinking=False" in GEN_SCRIPT and "bfloat16" in GEN_SCRIPT
     assert "set_peft_model_state_dict" in GEN_SCRIPT  # explicit strict adapter load
+
+
+def test_adapter_is_merged_only_after_the_strict_load_check() -> None:
+    """Merged serving (base speed and memory, measured live) must never merge a half-applied adapter."""
+    from distillery.sandbox_student import GEN_SCRIPT
+
+    strict_check = GEN_SCRIPT.index("adapter weights did not load cleanly")
+    assert GEN_SCRIPT.index("merge_and_unload()") > strict_check

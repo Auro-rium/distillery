@@ -99,7 +99,11 @@ def load_adapter(model, adapter_dir):
             "lora keys; e.g. %s" % (len(state), len(unexpected), len(lora_missing),
                                     (unexpected + lora_missing)[:3])
         )
-    return pm, {"tensors": len(state)}
+    # Serve the MERGED model: an unmerged LoRA ran about 2x slower than the base and, with the
+    # peft wrapper, kept the sandbox at the edge of its 4 GB (measured live, Qwen3-1.7B). Merging
+    # happens only AFTER the strict load above has proven every adapter tensor was applied.
+    merged = pm.merge_and_unload()
+    return merged, {"tensors": len(state), "merged": True}
 
 
 if args.adapter:
