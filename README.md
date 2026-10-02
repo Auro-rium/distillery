@@ -2,7 +2,7 @@
 
 **Sandbox-verified distillation autopilot on Nebius Token Factory.**
 
-Distillery turns a narrow, repetitive job that a big model does well (today: text-to-SQL over a synthetic SQLite database) into a small fine-tuned model that does it for a fraction of the cost. A planner agent (Nemotron 3 Ultra) designs the task set and reads the failures, a teacher (Nemotron 3 Super) writes training answers, a cheap triager (Nemotron 3 Nano) flags dirty output, and a small student (Qwen3-0.6B, LoRA) is fine-tuned on Token Factory. Every training example and every evaluation is verified by executing the SQL in a sandbox, and a pure-Python gate (no LLM anywhere in it) decides PROMOTE or REJECT from a sealed held-out set.
+Distillery turns a narrow, repetitive job that a big model does well (today: text-to-SQL over a synthetic SQLite database) into a small fine-tuned model that does it for a fraction of the cost. A planner agent (Nemotron 3 Ultra) designs the task set and reads the failures, a teacher (Nemotron 3 Super) writes training answers, a cheap triager (Nemotron 3 Nano) flags dirty output, and a small student (Qwen3-1.7B, LoRA) is fine-tuned on Token Factory. Every training example and every evaluation is verified by executing the SQL in a sandbox, and a pure-Python gate (no LLM anywhere in it) decides PROMOTE or REJECT from a sealed held-out set.
 
 > **Status: two small live runs have completed end to end on Nebius (n=20 and n=60 held-out); both were REJECTed by the gate and neither is a result.** The student was barely trained (provider-default hyperparameters, 3 to 9 optimizer steps), which is fixed and guarded. The benchmark was rebuilt and pre-registered in [DECISIONS.md](DECISIONS.md) (template gold, in-distribution gate set, separate stress set); the single properly configured run has not been made yet. Every number in this repo is either absent or labelled. See [STATUS.md](STATUS.md).
 
@@ -51,7 +51,7 @@ More detail, matched to the code: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 | Planner | Nemotron 3 Ultra | `nvidia/Nemotron-3-Ultra-550b-a55b` | clusters dev failures into task families to target (not used to vet gold) |
 | Teacher | Nemotron 3 Super | `nvidia/nemotron-3-super-120b-a12b` | writes SQL for training tasks; scored as the ceiling on held-out |
 | Triage | Nemotron 3 Nano | `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B` | advisory format check on teacher output; never drops verified rows |
-| Student | Qwen3-0.6B + LoRA | `Qwen/Qwen3-0.6B` (fine-tuned on Token Factory; served on Nebius Sandbox CPU) | the small model we are distilling into |
+| Student | Qwen3-1.7B + LoRA | `Qwen/Qwen3-1.7B` (fine-tuned on Token Factory; served on Nebius Sandbox CPU; the live spike showed it fits a 4 GB sandbox with about 93% RAM use) | the small model we are distilling into |
 
 Roles map to IDs through `DISTILLERY_MODEL_PLANNER|TEACHER|TRIAGE|STUDENT`; nothing else in the code names a model. All three Nemotron models returned valid JSON with `response_format` `json_schema` (`strict: true`) on the first live try, and `usage` includes reasoning tokens.
 
@@ -60,7 +60,7 @@ Roles map to IDs through `DISTILLERY_MODEL_PLANNER|TEACHER|TRIAGE|STUDENT`; noth
 Only things we actually observed. Anything not run yet says so.
 
 - **Structured output (measured, live):** `json_schema` mode worked on Nano, Super and Ultra with the `{name, schema, strict}` wrapper. The planner and triager return parsed, schema-checked objects, which is what lets the orchestrator stay a plain state machine. Reasoning text comes back in a separate field (`reasoning` / `reasoning_content`) so `content` is the final answer only.
-- **Fine-tuning API (run live, 3 jobs):** OpenAI-compatible files and jobs endpoints, LoRA on Qwen3-0.6B, checkpoint download, cancel and resume-by-adoption all worked. Jobs expose resolved hyperparameters, trained tokens and per-step loss, which is how we found that the provider defaults had trained the student for only 3 to 9 steps.
+- **Fine-tuning API (run live, 3 jobs):** OpenAI-compatible files and jobs endpoints, LoRA on Qwen3-0.6B (earlier smoke runs; the gated run uses 1.7B), checkpoint download, cancel and resume-by-adoption all worked. Jobs expose resolved hyperparameters, trained tokens and per-step loss, which is how we found that the provider defaults had trained the student for only 3 to 9 steps.
 - **Sandboxes (run live):** every gold, training row and evaluation is executed in a Nebius Sandbox (4 CPU, about 4 GB); 40 in parallel worked, branching produced a real experiment-tree node, and the 0.6B student plus base run on sandbox CPU (about 7.8 s per sample). Friction is logged in [FEEDBACK.md](FEEDBACK.md).
 - **Friction we hit (real):** Sandboxes need a project id that the getting-started page does not mention; prices are not exposed in the API; the fine-tunable Qwen3-1.7B cannot be served serverless. Details in [FEEDBACK.md](FEEDBACK.md).
 
@@ -69,17 +69,17 @@ Only things we actually observed. Anything not run yet says so.
 | Service | Use | Status |
 |---|---|---|
 | Token Factory inference (Nemotron 3 Ultra, Super, Nano) | planner, teacher, triage | live-verified for structured output and usage |
-| Token Factory fine-tuning (LoRA, Qwen3-0.6B) | train the student | live-verified (3 jobs); undertrained at provider defaults, now pinned |
+| Token Factory fine-tuning (LoRA, Qwen3-1.7B for the gated run; 0.6B in the earlier smoke runs) | train the student | live-verified (3 jobs); undertrained at provider defaults, now pinned |
 | Sandboxes (Contree) | execute and verify SQL, serve base and student on CPU, branch experiments | live-verified |
 | Dedicated endpoints / serverless endpoint | serve the fine-tuned student and this app | not used for the student (it runs in Sandboxes); backend deploy on Nebius pending |
 
-The whole system is intended to run on Nebius only; the base model weights are never downloaded locally. The small LoRA adapter checkpoint that fine-tuning produces IS downloaded to the run directory (`run_dir/round*/checkpoints`) so its SHA-256 can be verified, and is then loaded inside Nebius for serving.
+Inference, fine-tuning and sandbox work run on Nebius Token Factory; the web app itself is hosted on Render (see [docs/DEPLOY.md](docs/DEPLOY.md)). The base model weights are never downloaded locally. The small LoRA adapter checkpoint that fine-tuning produces IS downloaded to the run directory (`run_dir/round*/checkpoints`) so its SHA-256 can be verified, and is then loaded inside Nebius for serving.
 
 ## Results
 
 No gated run has been made on the pre-registered benchmark. The two earlier smoke runs (REJECT, student undertrained) are in [STATUS.md](STATUS.md). Nothing below is measured.
 
-| Metric | Base Qwen3-0.6B | Fine-tuned student | Teacher (Nemotron 3 Super) |
+| Metric | Base Qwen3-1.7B | Fine-tuned student | Teacher (Nemotron 3 Super) |
 |---|---|---|---|
 | Held-out execution accuracy | TBD: no real run yet | TBD: no real run yet | TBD: no real run yet |
 | Student / teacher accuracy ratio, 95% lower bound | n/a | TBD: no real run yet | n/a |
@@ -122,7 +122,7 @@ That uses FAKE models and FAKE prices and takes about 9 s. It proves the plumbin
 
 ## Deploy
 
-Everything in this section is **UNVERIFIED**: no image has been built or deployed by us yet.
+The app is deployed as one Render web service (see [docs/DEPLOY.md](docs/DEPLOY.md) for the settings and the free-plan limits); the Docker image below is the same one. Live check: `python scripts/smoke_live.py <url>` (18/18 passed on the deployed service).
 
 The `Dockerfile` builds the frontend, installs the backend, and serves the API plus `frontend/dist` with uvicorn on `$PORT` (default 8000) as a non-root user, with a healthcheck on `/api/health`. No secrets are baked in.
 
@@ -139,7 +139,7 @@ Without `NEBIUS_API_KEY` the server starts in `replay-only` mode and serves the 
 ## Limitations
 
 - **No gated run on the final benchmark yet.** Two small live smoke runs exist (REJECT, undertrained student, n=20 and n=60). Results on the pre-registered benchmark are TBD.
-- **Student serving is slow.** Base and student run on Nebius Sandbox CPU (about 7.8 s per sample, 4 CPU / 4 GB), because Qwen3-0.6B is not on the serverless inference API. Sandbox pricing is unknown, so cost per 1k tasks for the student is reported as unavailable.
+- **Student serving is slow.** Base and student run on Nebius Sandbox CPU (measured about 10 to 29 s per sample for Qwen3-1.7B depending on concurrency, 0.6B about 7.8 s; 4 CPU / 4 GB, with 1.7B using about 93% of the RAM), because neither is on the serverless inference API. Sandbox pricing is unknown, so cost per 1k tasks for the student is reported as unavailable.
 - **The gate set shares question wording with training.** Phrasings are hand-written templates; most gate questions reuse a training question skeleton with different literals. The report states the measured rate; the stress set is the only unseen-structure signal.
 - **Toy database.** A synthetic schema with 89 templates in 12 families. Results say little about real-world text-to-SQL.
 - **Small held-out.** The full scale holds 300 items and tiny holds 20, so confidence intervals are wide; the gate accounts for this by using a lower bound, but a small win can still be REJECTed.

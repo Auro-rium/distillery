@@ -137,3 +137,26 @@ wherever gate results are shown. The stress set is the only unseen-structure sig
 the default caps starve the pool. (3) One anchor training task per family is placed in train first, so every gate family is covered by training by
 construction. (4) Teacher yield: a train row exists only if the teacher's SQL matches template gold, so verified rows = 1,800 x teacher accuracy;
 if that falls below 1,500 the pre-registered range is missed and this is reported, not worked around.
+
+## 2026-10-03: PRE-REGISTRATION for the single paid run, version 2 (student Qwen3-1.7B, human gate). Written BEFORE any paid run, any human-gold drafting, and any result.
+This entry supersedes the 2026-09-30 pre-registration where they differ; everything not mentioned here stays as pre-registered then.
+
+**Why this run exists.** The template-only gate cannot support the product claim (97.3% of its questions share a skeleton with training). This run adds a human-written held-out set (Gate B) and paraphrase-augmented training. Nothing here is changed after seeing results; a REJECT is reported as the result.
+
+**Student: Qwen/Qwen3-1.7B (user decision, 2026-10-03), LoRA, served on Nebius Sandbox CPU for base and student.** Basis: live spike (STATUS.md, `docs/spikes/s5-qwen3-1_7b.json`): the base model fits a 4 vCPU / 4 GB sandbox with peak RSS about 3.8 GB (93%, almost no headroom), 10.6 to 28.8 s per sample depending on concurrency, best throughput 0.22 samples/s at concurrency 20. Accepted risk: a LoRA adapter adds memory, so the student may OOM where the base did not; an untrained-adapter memory pre-flight runs before the paid fine-tune (and an OOM there is reported and stops the run). Qwen3-0.6B is not used for this run.
+
+**Gates (same thresholds for both, unchanged from the original spec).**
+- Gate A (pipeline validation): the existing template gate, sealed in-distribution set n = 300.
+- Gate B (the product claim): the human-written set, confirmed item by item by the user; same rule: PROMOTE iff the paired-bootstrap lower bound of student/teacher accuracy >= 0.85 AND exact McNemar p < 0.05 against base; 10,000 resamples, seed 1234.
+- The stress set (n about 100, `date_math` and `set_ops`) is reported separately and is never a gate input. The student is not required to beat the teacher: the gate asks for at least 85% of teacher accuracy (lower bound) and a significant win over base. Beating the teacher outright is not a gate condition and would be reported as such if it happened.
+- Gate B size: N_human is the number of confirmed items in the user's file. It is recorded here (count and sha256 of `human_confirmed.json`) by amendment BEFORE the paid run starts; if N_human is small the 0.85 lower bound is hard to reach, and that is accepted in advance, not adjusted for.
+
+**Human set procedure.** The user supplies the questions (no LLM writes or edits them). Gold is drafted by the teacher at temperature 0.8, k = 3 samples, kept only if all three execute OK to the same non-empty result (multiset comparison; ordered only if all three have a top-level ORDER BY); discards are counted by reason. The user then marks each draft correct or incorrect; only confirmed items are sealed (own sha256, evaluator-only access). Disclosed bias: only questions the teacher can solve survive drafting, so teacher accuracy on Gate B is high by construction and hard questions are under-represented; discard and rejection counts are reported.
+
+**Training data.** Scale `gated`: 650 template train tasks, dev 150, gate 300, stress 100, oversample 1.1. Teacher rows as before (kept only if execution equals template gold). Paraphrase augmentation: Nano writes up to 3 paraphrases per verified train question (it sees train question text only); a paraphrase is kept only if the teacher's SQL for it executes to the original template gold. Verified originals are always kept; paraphrases are sampled with seed 1234 to fill the cap `train_row_cap = 2000`. Target total 1,500 to 2,000 rows; if verified rows fall below 1,500 that is reported, not worked around. The paraphraser never sees any sealed-set content (tests enforce it).
+
+**Training configuration (no sweep).** LoRA r 16, alpha 16, learning rate 1e-4, 3 epochs, batch 16, packing off, warmup 0.0, weight decay 0.0, max grad norm 1.0, lora dropout 0.0, context 8192. Planned steps = ceil(rows/16) x 3, about 280 to 375; the pipeline refuses below 50. `max_rounds = 1`. Seeds: db 0, task 1234, paraphrase 1234, bootstrap 1234. The run id is fresh (the human set changes the cache key of `split` and everything after it).
+
+**Money.** No paid call before the pre-flight estimate is shown and approved by the user. The fine-tune and sandbox prices are not available from the API; they are derived from console balance deltas and recorded in config with source and date, and the report cost block is recomputed from them (`distillery reprice`). Until then the fine-tune line is an explicitly assumed ceiling.
+
+**What would change the plan.** Only a failure of the pipeline itself (for example the adapter OOM pre-flight, or a refused preflight). Model quality is not a reason to change thresholds, sets, templates or hyperparameters.

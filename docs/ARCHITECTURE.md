@@ -73,7 +73,8 @@ flowchart TD
     split --> headroom
     split --> teacher_data
     headroom --> teacher_data
-    teacher_data --> finetune_r1
+    teacher_data --> paraphrase
+    paraphrase --> finetune_r1
     finetune_r1 --> dev_eval_r1
     dev_eval_r1 --> analysis_r1 --> targeted_r1 --> sandbox_branch_r1
     sandbox_branch_r1 --> finetune_r2
@@ -84,10 +85,12 @@ flowchart TD
     final_eval --> report[report.json + gate decision]
 ```
 
-- `split` seals the held-out set; the store refuses to hand it out except to `evaluator.py`.
+- `gold_crosscheck` no longer involves any model: it executes every template gold in the executor and accepts a task if it runs and returns rows (the name and the `accepted` key are kept for later stages and the UI).
+- `split` seals the in-distribution gate set (Gate A), the separate stress set and, when `--human-set` is given, the human-written set (Gate B); the store refuses to hand any of them out except to `evaluator.py`. The human set is drafted and confirmed offline (`draft-heldout`, `confirm-heldout`), never by the pipeline.
+- `paraphrase` has Nano paraphrase verified train questions (train text only); a paraphrase becomes a training row only if the teacher's SQL executes to the original template gold. Verified originals are kept first and paraphrases fill up to `train_row_cap` (2,000).
 - `headroom` scores the base student on dev and raises `TaskTooEasyError` if accuracy is at or above the threshold (default 0.80).
-- `final_eval` evaluates only the round with the best DEV accuracy, verifies the adapter SHA-256 against the fine-tune job's, scores base, student and teacher on the same held-out items in the same order, and calls the gate.
-- Later rounds repeat `analysis`, `targeted`, `sandbox_branch` and `finetune` up to `max_rounds` (default 3).
+- `final_eval` evaluates only the round with the best DEV accuracy, verifies the adapter SHA-256 against the fine-tune job's, scores base, student and teacher on the same held-out items in the same order, and calls the gate twice with the same thresholds (Gate A on the template set, Gate B on the human set). The stress set is scored afterwards and is never a gate input.
+- Later rounds repeat `analysis`, `targeted`, `sandbox_branch` and `finetune` up to `max_rounds` (CLI default 3; the pre-registered gated run uses `--max-rounds 1`, so those stages do not run in it).
 
 ## Sandbox branching tree
 
@@ -114,4 +117,4 @@ flowchart LR
 
 ## Deploy
 
-One container: the API plus `frontend/dist` (see `Dockerfile`). The deploy path to Nebius Serverless Endpoints is UNVERIFIED.
+One container: the API plus `frontend/dist` (see `Dockerfile`), deployed as a single Render web service (`render.yaml`, see `docs/DEPLOY.md`); inference, fine-tuning and sandbox work run on Nebius Token Factory. Nebius Serverless Endpoints were not used (the hackathon credit covers Token Factory only).
