@@ -382,6 +382,32 @@ def _score_human(
     }
 
 
+def score_sealed_human(
+    store: Store,
+    run_id: str,
+    generators: Mapping[str, Generator],
+    executor: Executor,
+    *,
+    db_ref: str,
+    schema_ddl: str,
+    gate_cfg: GateThresholds,
+    trained: TrainedArtifact,
+    expected: ExpectedArtifact,
+) -> dict[str, Any]:
+    """Gate B for an ALREADY finished run: verify the adapter on disk is still the trained one,
+    then score the sealed human set once with the same gate rule as ``evaluate``. Raises if no
+    human set is sealed for the run."""
+    if set(generators) != set(MODEL_ROLES):
+        raise ValueError(f"generators must be exactly {MODEL_ROLES}")
+    verify_artifact(trained, expected)
+    block = _score_human(
+        store, run_id, generators, executor, db_ref=db_ref, schema_ddl=schema_ddl, gate_cfg=gate_cfg
+    )
+    if block is None:
+        raise HumanSetError("no human set is sealed for this run")
+    return block
+
+
 def human_set_fingerprint(path: Path | str) -> str:
     """sha256 of the confirmed-file bytes, for the split stage's cache key. Only a digest leaves
     this module; the orchestrator never sees the contents."""

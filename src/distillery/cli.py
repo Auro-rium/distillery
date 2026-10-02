@@ -105,6 +105,14 @@ def _parser() -> argparse.ArgumentParser:
         "--set", default=None, metavar="ID", help="humanset/<id> (default: the only one)"
     )
     ch.add_argument("--finalize", action="store_true", help="write human_confirmed.json and stop")
+    sh = sub.add_parser(
+        "score-human",
+        help="score a confirmed human set (Gate B) against a finished run's trained adapter",
+    )
+    sh.add_argument("run")
+    sh.add_argument("--human-set", required=True, metavar="FILE", help="human_confirmed.json")
+    sh.add_argument("--budget-usd", type=float, default=None, help="per-run spend cap")
+    sh.add_argument("--i-approve-spend", action="store_true")
     ex = sub.add_parser("export-replay", help="bundle a finished run into replay/")
     ex.add_argument("run")
     ex.add_argument("--replay-dir", default=None, help="default: $DISTILLERY_REPLAY_DIR or replay")
@@ -536,6 +544,77 @@ def _cmd_confirm_heldout(
     return EXIT_OK
 
 
+def _cmd_score_human(
+    args: argparse.Namespace,
+    env: Mapping[str, str],
+    deps_factory: DepsFactory | None,
+    out: Callable[[str], None],
+    token_prompt: Callable[[], str] | None,
+) -> int:
+    from distillery.humanscore import HumanScoreRefusal, load_report, score_human_run
+    from distillery.orchestrator import Scale
+
+    root = _root(args, env)
+    run_id = args.run
+    dry = run_id.startswith(DRY_PREFIX)
+    human_set = Path(args.human_set)
+    if not human_set.is_file():
+        out(f"refused: human set file not found: {human_set}")
+        return EXIT_REFUSED
+    try:
+        config = load_config(env)
+    except ConfigError as exc:
+        out(f"configuration error: {exc}")
+        return EXIT_REFUSED
+    if not dry:
+        # a paid pass over the teacher and the sandboxes: token and explicit approval every time
+        if not config.verify_admin_token(_supplied_token(env, token_prompt)):
+            out("refused: score-human spends; it requires the admin token; none/incorrect supplied")
+            return EXIT_REFUSED
+        if not args.i_approve_spend:
+            out("refused: score-human spends; it requires --i-approve-spend")
+            return EXIT_REFUSED
+        if args.budget_usd is not None:
+            config = config.model_copy(update={"run_cap_usd": args.budget_usd})
+    elif args.budget_usd is not None:
+        out("note: --budget-usd is ignored in a dry run (no spend)")
+    store = _store_for(root, run_id)
+    try:
+        report = load_report(store, run_id)
+        pcfg = PipelineConfig.model_validate(report["config"]["pipeline"])
+        with AsyncBridge() as bridge:
+            if dry:
+                dr = build_dry_run(
+                    Scale.model_validate(report["config"]["pipeline"]["scale"]), bridge,
+                    seed=pcfg.seed, human_set_path=human_set,
+                )  # fmt: skip
+                config, deps = dr.config, dr.deps
+            elif deps_factory is not None:
+                deps = deps_factory(config, pcfg, bridge)
+            else:
+                deps = make_live_deps(config, pcfg, bridge, env=env)
+            with driving(store.run_dir(run_id)):
+                block = score_human_run(store, run_id, human_set, config, deps, say=out)
+    except (HumanScoreRefusal, ConfigRefusal, ConfigError, humanset.HumanSetError) as exc:
+        out(f"refused: {exc}")
+        return EXIT_REFUSED
+    except (PipelineError, BudgetExceeded) as exc:
+        out(f"FAILED: {type(exc).__name__}: {exc}")
+        return EXIT_FAIL
+    finally:
+        store.close()
+    acc = block["accuracy"]
+    out(
+        f"human held-out (Gate B) decision: {block['gate']['decision']} n={block['n']} "
+        f"accuracy base={acc['base']:.3f} student={acc['student']:.3f} teacher={acc['teacher']:.3f}"
+    )
+    for reason in block["gate"]["reasons"]:
+        out(f"  - {reason}")
+    out(f"dropped exact overlap: {json.dumps(block['dropped_exact_overlap'], sort_keys=True)}")
+    out(f"report: {store.run_dir(run_id) / 'report_human.json'}")
+    return EXIT_OK
+
+
 def _cmd_export_replay(
     args: argparse.Namespace, env: Mapping[str, str], out: Callable[[str], None]
 ) -> int:
@@ -585,6 +664,8 @@ def main(
         return _cmd_draft_heldout(args, e, deps_factory, out, token_prompt)
     if args.cmd == "confirm-heldout":
         return _cmd_confirm_heldout(args, e, out, ask)
+    if args.cmd == "score-human":
+        return _cmd_score_human(args, e, deps_factory, out, token_prompt)
     if args.cmd == "serve":
         return _cmd_serve(args, e)
     if args.cmd == "export-replay":
