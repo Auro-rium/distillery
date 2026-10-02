@@ -5,8 +5,8 @@ depends on plus the output hashes of its upstream stages, so a rerun skips finis
 changed input recomputes only what depends on it):
 
   schema -> questions -> gold_crosscheck -> verifier_selftest -> split (seals held-out)
-  -> headroom -> teacher_data -> [finetune_rN -> dev_eval_rN -> analysis_rN -> targeted_rN
-  -> sandbox_branch_rN]* -> final_eval (held-out, once) -> report.json
+  -> headroom -> teacher_data -> paraphrase -> [finetune_rN -> dev_eval_rN -> analysis_rN
+  -> targeted_rN -> sandbox_branch_rN]* -> final_eval (held-out, once) -> report.json
 
 Deviations from the written order, on purpose (see DECISIONS.md 2026-09-29): the split happens
 before teacher data so the teacher only ever sees train tasks, and the headroom check runs
@@ -36,6 +36,7 @@ import openai
 from pydantic import BaseModel, ConfigDict, Field
 
 from distillery import evaluator as evaluator_mod
+from distillery import paraphrase as paraphrase_mod
 from distillery.budget import (
     BASIS_CEILING,
     Ledger,
@@ -230,6 +231,11 @@ class PipelineConfig(BaseModel):
     # sandbox_cpu: parallel generation jobs (the beta limit is 50 operations in flight in total)
     student_concurrency: int = Field(default=10, ge=1, le=20)
     student_max_new_tokens: int = Field(default=160, ge=16)  # sandbox_cpu: per sample (S4 recipe)
+    # Paraphrase augmentation (train questions only; 0 disables). Rows = verified originals plus
+    # verified paraphrases, down-sampled by paraphrase_seed to at most train_row_cap.
+    paraphrases_per_task: int = Field(default=3, ge=0)
+    train_row_cap: int = Field(default=2000, ge=1)
+    paraphrase_seed: int = 1234
 
     def extra_tasks(self) -> int:
         return self.round_extra_tasks or max(10, self.scale.train // 4)
@@ -907,9 +913,10 @@ class Pipeline:
         split = self._stage_split()
         self._stage_headroom(split)
         data = self._stage_teacher_data(split)
-        rounds = self._run_rounds(split, data)
+        para = self._stage_paraphrase(split, data)
+        rounds = self._run_rounds(split, para)
         final = self._stage_final_eval(rounds)
-        report = self._build_report(split, data, rounds, final)
+        report = self._build_report(split, data, para, rounds, final)
         atomic_write_bytes(
             self.run_dir / "report.json",
             _pretty(report).encode("utf-8"),
@@ -1316,6 +1323,100 @@ class Pipeline:
             fn,
         )  # fmt: skip
 
+    # ---- stage 6: paraphrase augmentation (train only) ---------------------
+    def _stage_paraphrase(
+        self, split: Mapping[str, Any], data: Mapping[str, Any]
+    ) -> dict[str, Any]:
+        def fn() -> dict[str, Any]:
+            # Isolation: only train-split tasks are read here; no sealed or dev text is in scope.
+            verified = set(data["task_ids"])
+            originals = [_task_from(d) for d in split["train"] if d["task_id"] in verified]
+            n = self.cfg.paraphrases_per_task
+            discards: Counter[str] = Counter()
+            fam: dict[str, Counter[str]] = {}
+            pseudo: list[SqlTask] = []
+            asked = failed = generated = 0
+            if n > 0 and originals:
+                msgs = [paraphrase_mod.paraphrase_messages(t.question, n) for t in originals]
+                res = self.runner.map(
+                    "triage", msgs, purpose=paraphrase_mod.PURPOSE, stage="paraphrase",
+                    schema=paraphrase_mod.Paraphrases, temperature=0.7,
+                )  # fmt: skip
+                for t, r in zip(originals, res, strict=True):
+                    if r is None or r.parsed is None:
+                        failed += 1
+                        continue
+                    asked += 1
+                    kept, dis = paraphrase_mod.clean_candidates(t.question, r.parsed.items, limit=n)
+                    discards.update(dis)
+                    generated += len(r.parsed.items)
+                    f = fam.setdefault(t.family, Counter())
+                    f["questions"] += 1
+                    f["generated"] += len(r.parsed.items)
+                    pseudo += [paraphrase_mod.pseudo_task(t, k, q) for k, q in enumerate(kept, 1)]
+            fam_of = {t.task_id: t.family for t in originals}
+            teacher: dict[str, Any] = {"counters": {}, "rows": [], "task_ids": []}
+            if pseudo:
+                teacher = self._teacher_rows(pseudo, "teacher_paraphrase", "paraphrase")
+            for tid in teacher["task_ids"]:
+                fam[fam_of[tid.rsplit(":p", 1)[0]]]["verified"] += 1
+            ok = len(teacher["task_ids"])
+            extras = list(zip(teacher["task_ids"], teacher["rows"], strict=True))
+            orig = list(zip(data["task_ids"], data["rows"], strict=True))
+            chosen = paraphrase_mod.select_rows(
+                orig, extras, cap=self.cfg.train_row_cap, seed=self.cfg.paraphrase_seed
+            )
+            added = sum(1 for tid, _ in chosen if ":p" in tid)
+            failed_verify = len(pseudo) - ok
+            section: dict[str, Any] = {
+                "questions_paraphrased": asked,
+                "questions_failed": failed,
+                "generated": generated,
+                "after_dedup": len(pseudo),
+                "verified": ok,
+                "yield": ok / generated if generated else None,
+                "yield_by_family": {
+                    k: {
+                        "questions": v["questions"],
+                        "generated": v["generated"],
+                        "verified": v["verified"],
+                        "yield": v["verified"] / v["generated"] if v["generated"] else None,
+                    }
+                    for k, v in sorted(fam.items())
+                },
+                "discards": {**discards, "failed_verification": failed_verify},
+                "teacher_attempt_counters": {
+                    k: int(v) for k, v in teacher["counters"].items() if not k.startswith("triage")
+                },
+                "originals": len(chosen) - added,
+                "rows_added": added,
+                "trimmed_by_cap": len(orig) + ok - len(chosen),
+                "final_train_rows": len(chosen),
+                "row_cap": self.cfg.train_row_cap,
+                "per_task": n,
+                "seed": self.cfg.paraphrase_seed,
+            }
+            counters = {
+                "questions_paraphrased": asked, "questions_failed": failed,
+                "generated": generated, "verified": ok, "rows_added": added,
+                "final_train_rows": len(chosen), "failed_verification": failed_verify,
+                **{f"discard_{k}": int(v) for k, v in discards.items()},
+            }  # fmt: skip
+            return {
+                "rows": [row for _, row in chosen],
+                "task_ids": [tid for tid, _ in chosen],
+                "report": section,
+                "counters": counters,
+            }
+
+        return self._stage(
+            "paraphrase",
+            {"n": self.cfg.paraphrases_per_task, "cap": self.cfg.train_row_cap,
+             "seed": self.cfg.paraphrase_seed, "candidates": self.cfg.candidates_per_task},
+            ["split", "teacher_data"],
+            fn,
+        )  # fmt: skip
+
     # ---- stage 7: fine-tune ----------------------------------------------
     def _stage_finetune(
         self, r: int, rows: Sequence[Mapping[str, Any]], dev: Sequence[SqlTask], upstream: str
@@ -1679,12 +1780,12 @@ class Pipeline:
         return self._stage(f"sandbox_branch_r{r}", {"parent": parent}, [f"targeted_r{r}"], fn)
 
     # ---- rounds ------------------------------------------------------------
-    def _run_rounds(self, split: Mapping[str, Any], data: Mapping[str, Any]) -> dict[str, Any]:
+    def _run_rounds(self, split: Mapping[str, Any], para: Mapping[str, Any]) -> dict[str, Any]:
         dev = [_task_from(d) for d in split["dev"]]
         train_fams = sorted({d["family"] for d in split["train"]})
-        rows: list[dict[str, Any]] = list(data["rows"])
+        rows: list[dict[str, Any]] = list(para["rows"])  # originals + verified paraphrases
         rounds: list[dict[str, Any]] = []
-        upstream = "teacher_data"
+        upstream = "paraphrase"
         parent_image = self.deps.sandbox_image
         stop = f"reached max_rounds={self.cfg.max_rounds}"
         for r in range(1, self.cfg.max_rounds + 1):
@@ -1821,6 +1922,7 @@ class Pipeline:
         self,
         split: Mapping[str, Any],
         data: Mapping[str, Any],
+        para: Mapping[str, Any],
         rounds: Mapping[str, Any],
         final: Mapping[str, Any],
     ) -> dict[str, Any]:
@@ -1882,6 +1984,7 @@ class Pipeline:
                 "teacher_verified_rows_round1": len(data["rows"]),
                 "spot_check_file": "spot_check.json",
             },
+            "paraphrase": para["report"],
             "headroom": {
                 "base_dev_acc": self._results["headroom"]["base_dev_acc"],
                 "max_allowed": self.cfg.headroom_max_base_acc,

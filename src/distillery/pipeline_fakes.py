@@ -82,6 +82,10 @@ class GoldOracle:
         for t in tasks:
             self._gold[t.question] = t.gold_sql
 
+    def alias(self, new_question: str, original: str) -> None:
+        """A paraphrase has the same gold as the question it rewrites (fakes need the answer)."""
+        self._gold.setdefault(new_question, self.gold(original))
+
     def gold(self, question: str) -> str:
         try:
             return self._gold[question]
@@ -151,6 +155,8 @@ class FakeTransport:
         question = question_of(messages)
         if question is None:
             raise AssertionError("FakeTransport: unrecognised prompt (no question found)")
+        if schema == "Paraphrases":
+            return self._paraphrases(question)
         retrying = any("did not validate" in str(m.get("content", "")) for m in messages)
         if (
             schema is not None
@@ -161,6 +167,23 @@ class FakeTransport:
         wrong = _unit(self.salt, model, question, temperature) < self.error_rates.get(model, 0.0)
         sql = _WRONG_SQL if wrong else self.oracle.gold(question)
         return f"```sql\n{sql}\n```"
+
+    def _paraphrases(self, question: str) -> str:
+        """Deterministic fake paraphrases (a fixed set of wrappers). Some answers repeat the
+        original or each other so the dedupe path runs; the oracle learns each new wording."""
+        items = [
+            f"Please answer this: {question}",
+            f"{question} (rephrased)",
+            f"Could you tell me the following? {question}",
+        ]
+        roll = _unit(self.salt, question, "para")
+        if roll < 0.15:
+            items.append(question.upper())  # same question once normalised
+        elif roll < 0.30:
+            items[1] = items[0]  # exact repeat
+        for p in items:
+            self.oracle.alias(p, question)
+        return json.dumps({"items": items})
 
     @staticmethod
     def _clusters(messages: Sequence[Mapping[str, Any]]) -> str:
