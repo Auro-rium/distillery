@@ -433,7 +433,7 @@ class ContreeSandbox(_SandboxBase):
         return self._sdk
 
     def _backoff(self, attempt: int) -> float:
-        return min(self._retry_backoff_s * 2**attempt, _BACKOFF_CAP_S)
+        return float(min(self._retry_backoff_s * 2.0**attempt, _BACKOFF_CAP_S))
 
     def _harden_polling(self, sdk: Any) -> None:
         """Make the SDK's operation poll tolerate transient transport errors.

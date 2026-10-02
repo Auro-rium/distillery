@@ -98,7 +98,12 @@ def test_cli_reprice(store: Store, tmp_path: Path) -> None:
     pf.write_text(
         json.dumps(
             {
-                "teacher-m": {"input_per_mtok": 1, "output_per_mtok": 3, "source": "a", "date": "d"},
+                "teacher-m": {
+                    "input_per_mtok": 1,
+                    "output_per_mtok": 3,
+                    "source": "a",
+                    "date": "d",
+                },
                 "finetune": {
                     STUDENT: {"usd_per_mtok_trained_tokens": 2, "source": "c", "as_of": "d"}
                 },
