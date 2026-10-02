@@ -1,0 +1,101 @@
+{
+  "model": "Qwen/Qwen3-1.7B",
+  "adapter": null,
+  "sandbox": {
+    "vcpu": 4,
+    "ram_gb": 4
+  },
+  "n_prompts": 40,
+  "max_generations": 60,
+  "max_wall_s": 3600.0,
+  "build_s": 87.07,
+  "phases": [
+    {
+      "name": "batch1_load",
+      "batch_size": 1,
+      "concurrency": 1,
+      "n": 1,
+      "jobs": 1,
+      "wall_s": 29.19,
+      "samples_per_s": 0.0343,
+      "load_s": 1.65,
+      "per_sample_s": 14.55,
+      "peak_rss_mb": 3784.0,
+      "status": "ok"
+    },
+    {
+      "name": "batch2",
+      "batch_size": 2,
+      "concurrency": 1,
+      "n": 2,
+      "jobs": 1,
+      "wall_s": 32.63,
+      "samples_per_s": 0.0613,
+      "load_s": 1.73,
+      "per_sample_s": 10.57,
+      "peak_rss_mb": 3798.0,
+      "status": "ok"
+    },
+    {
+      "name": "concurrency_1",
+      "batch_size": 1,
+      "concurrency": 1,
+      "n": 2,
+      "jobs": 2,
+      "wall_s": 46.31,
+      "samples_per_s": 0.0432,
+      "load_s": 1.73,
+      "per_sample_s": 11.46,
+      "peak_rss_mb": 3789.0,
+      "status": "ok"
+    },
+    {
+      "name": "concurrency_5",
+      "batch_size": 1,
+      "concurrency": 5,
+      "n": 10,
+      "jobs": 10,
+      "wall_s": 65.97,
+      "samples_per_s": 0.1516,
+      "load_s": 1.78,
+      "per_sample_s": 18.05,
+      "peak_rss_mb": 3803.0,
+      "status": "ok"
+    },
+    {
+      "name": "concurrency_10",
+      "batch_size": 1,
+      "concurrency": 10,
+      "n": 20,
+      "jobs": 20,
+      "wall_s": 141.95,
+      "samples_per_s": 0.1409,
+      "load_s": 1.85,
+      "per_sample_s": 28.84,
+      "peak_rss_mb": 3803.0,
+      "status": "ok"
+    },
+    {
+      "name": "concurrency_20",
+      "batch_size": 1,
+      "concurrency": 20,
+      "n": 25,
+      "jobs": 25,
+      "wall_s": 113.81,
+      "samples_per_s": 0.2197,
+      "load_s": 2.28,
+      "per_sample_s": 25.49,
+      "peak_rss_mb": 3807.0,
+      "status": "ok"
+    }
+  ],
+  "outcome": "completed",
+  "failure": null,
+  "baseline": {
+    "model": "Qwen/Qwen3-0.6B",
+    "s_per_sample": 7.8,
+    "peak_rss_mb": 2140
+  },
+  "total_generations": 60,
+  "fake": false
+}
