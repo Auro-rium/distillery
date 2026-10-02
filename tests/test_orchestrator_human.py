@@ -198,3 +198,16 @@ def test_orchestrator_never_reads_the_confirmed_file() -> None:
     # nothing in the orchestrator opens or reads the human set path itself
     text = (SRC / "orchestrator.py").read_text()
     assert "human_set_path.read" not in text and "open(self.cfg.human_set_path" not in text
+
+
+def test_paraphraser_requests_never_contain_human_set_text(human_run: dict[str, Any]) -> None:
+    """Merge-point check: the paraphraser (train questions only) must not see the sealed human set."""
+    dr, store = human_run["dr"], human_run["store"]
+    sealed = store.load_human("dry-h")
+    assert sealed
+    calls = [c for c in dr.transport.calls if c["schema"] == "Paraphrases"]
+    assert calls
+    for c in calls:
+        text = "\n".join(m["content"] for m in c["messages"])
+        for it in sealed:
+            assert it["question"] not in text and it["gold_sql"] not in text
