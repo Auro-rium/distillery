@@ -7,7 +7,7 @@ import json
 import os
 from collections.abc import Mapping
 from pathlib import Path
-from typing import Literal, get_args
+from typing import Any, Literal, get_args
 
 from pydantic import (
     BaseModel,
@@ -24,6 +24,25 @@ ROLES: tuple[str, ...] = get_args(Role)
 
 class ConfigError(RuntimeError):
     """Raised for missing or invalid configuration."""
+
+
+def _provenance(data: Any) -> Any:
+    """``date`` and ``as_of`` are the same fact (when the price was read); a price file may use
+    either name and both are filled, so older files (``date`` only) stay valid."""
+    if isinstance(data, dict):
+        d, a = data.get("date"), data.get("as_of")
+        if d is None and a is not None:
+            data = {**data, "date": a}
+        elif a is None and d is not None:
+            data = {**data, "as_of": d}
+    return data
+
+
+def _check_provenance(source: str, date: str, as_of: str) -> None:
+    if not source.strip() or not date.strip() or not as_of.strip():
+        raise ValueError("price entries need non-blank source and as_of/date provenance")
+    if date != as_of:
+        raise ValueError(f"price entry has conflicting date {date!r} and as_of {as_of!r}")
 
 
 class Price(BaseModel):
@@ -45,6 +64,17 @@ class FinetunePrice(BaseModel):
     usd_per_mtok_trained_tokens: float = Field(ge=0)
     source: str = Field(min_length=1)
     date: str = Field(min_length=1)
+    as_of: str = Field(min_length=1)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _fill_provenance(cls, data: Any) -> Any:
+        return _provenance(data)
+
+    @model_validator(mode="after")
+    def _provenance_ok(self) -> FinetunePrice:
+        _check_provenance(self.source, self.date, self.as_of)
+        return self
 
 
 class SandboxPrice(BaseModel):
@@ -56,6 +86,17 @@ class SandboxPrice(BaseModel):
     usd_per_second: float | None = Field(default=None, ge=0)
     source: str = Field(min_length=1)
     date: str = Field(min_length=1)
+    as_of: str = Field(min_length=1)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _fill_provenance(cls, data: Any) -> Any:
+        return _provenance(data)
+
+    @model_validator(mode="after")
+    def _provenance_ok(self) -> SandboxPrice:
+        _check_provenance(self.source, self.date, self.as_of)
+        return self
 
     @model_validator(mode="after")
     def _exactly_one_rate(self) -> SandboxPrice:
