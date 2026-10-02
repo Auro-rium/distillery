@@ -1,0 +1,106 @@
+{
+  "model": "Qwen/Qwen3-1.7B",
+  "adapter": {
+    "kind": "dummy_untrained",
+    "r": 16,
+    "alpha": 16,
+    "target_modules": "all-linear"
+  },
+  "sandbox": {
+    "vcpu": 4,
+    "ram_gb": 4
+  },
+  "n_prompts": 40,
+  "max_generations": 60,
+  "max_wall_s": 3000.0,
+  "build_s": 100.12,
+  "phases": [
+    {
+      "name": "batch1_load",
+      "batch_size": 1,
+      "concurrency": 1,
+      "n": 1,
+      "jobs": 1,
+      "wall_s": 27.48,
+      "samples_per_s": 0.0364,
+      "load_s": 8.32,
+      "per_sample_s": 8.64,
+      "peak_rss_mb": 3805.0,
+      "status": "ok"
+    },
+    {
+      "name": "batch2",
+      "batch_size": 2,
+      "concurrency": 1,
+      "n": 2,
+      "jobs": 1,
+      "wall_s": 35.99,
+      "samples_per_s": 0.0556,
+      "load_s": 8.83,
+      "per_sample_s": 7.93,
+      "peak_rss_mb": 3805.0,
+      "status": "ok"
+    },
+    {
+      "name": "concurrency_1",
+      "batch_size": 1,
+      "concurrency": 1,
+      "n": 2,
+      "jobs": 2,
+      "wall_s": 49.51,
+      "samples_per_s": 0.0404,
+      "load_s": 8.54,
+      "per_sample_s": 7.62,
+      "peak_rss_mb": 3804.0,
+      "status": "ok"
+    },
+    {
+      "name": "concurrency_5",
+      "batch_size": 1,
+      "concurrency": 5,
+      "n": 10,
+      "jobs": 10,
+      "wall_s": 71.44,
+      "samples_per_s": 0.14,
+      "load_s": 9.09,
+      "per_sample_s": 12.35,
+      "peak_rss_mb": 3807.0,
+      "status": "ok"
+    },
+    {
+      "name": "concurrency_10",
+      "batch_size": 1,
+      "concurrency": 10,
+      "n": 20,
+      "jobs": 20,
+      "wall_s": 87.15,
+      "samples_per_s": 0.2295,
+      "load_s": 9.45,
+      "per_sample_s": 15.7,
+      "peak_rss_mb": 3807.0,
+      "status": "ok"
+    },
+    {
+      "name": "concurrency_20",
+      "batch_size": 1,
+      "concurrency": 20,
+      "n": 25,
+      "jobs": 25,
+      "wall_s": 72.5,
+      "samples_per_s": 0.3448,
+      "load_s": 10.44,
+      "per_sample_s": 15.27,
+      "peak_rss_mb": 3806.0,
+      "status": "ok"
+    }
+  ],
+  "outcome": "completed",
+  "failure": null,
+  "baseline": {
+    "model": "Qwen/Qwen3-0.6B",
+    "s_per_sample": 7.8,
+    "peak_rss_mb": 2140
+  },
+  "total_generations": 60,
+  "fake": false
+}

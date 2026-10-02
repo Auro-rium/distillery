@@ -1,0 +1,90 @@
+{
+  "model": "Qwen/Qwen3-1.7B",
+  "adapter": {
+    "kind": "dummy_untrained",
+    "r": 16,
+    "alpha": 16,
+    "target_modules": "all-linear"
+  },
+  "sandbox": {
+    "vcpu": 4,
+    "ram_gb": 4
+  },
+  "n_prompts": 40,
+  "max_generations": 30,
+  "max_wall_s": 2400.0,
+  "build_s": 100.6,
+  "phases": [
+    {
+      "name": "batch1_load",
+      "batch_size": 1,
+      "concurrency": 1,
+      "n": 1,
+      "jobs": 1,
+      "wall_s": 41.54,
+      "samples_per_s": 0.0241,
+      "load_s": 2.09,
+      "per_sample_s": 29.56,
+      "peak_rss_mb": 3780.0,
+      "status": "ok"
+    },
+    {
+      "name": "batch2",
+      "batch_size": 2,
+      "concurrency": 1,
+      "n": 2,
+      "jobs": 1,
+      "wall_s": 66.17,
+      "samples_per_s": 0.0302,
+      "load_s": 2.22,
+      "per_sample_s": 25.2,
+      "peak_rss_mb": 3804.0,
+      "status": "ok"
+    },
+    {
+      "name": "concurrency_1",
+      "batch_size": 1,
+      "concurrency": 1,
+      "n": 2,
+      "jobs": 2,
+      "wall_s": 70.18,
+      "samples_per_s": 0.0285,
+      "load_s": 2.24,
+      "per_sample_s": 22.81,
+      "peak_rss_mb": 3806.0,
+      "status": "ok"
+    },
+    {
+      "name": "concurrency_5",
+      "batch_size": 1,
+      "concurrency": 5,
+      "n": 10,
+      "jobs": 10,
+      "wall_s": 161.36,
+      "samples_per_s": 0.062,
+      "load_s": 2.26,
+      "per_sample_s": 51.51,
+      "peak_rss_mb": 3806.0,
+      "status": "ok"
+    },
+    {
+      "name": "concurrency_10",
+      "batch_size": 1,
+      "concurrency": 10,
+      "n": 15,
+      "status": "failed_error"
+    }
+  ],
+  "outcome": "aborted_error",
+  "failure": {
+    "phase": "concurrency_10",
+    "reason": "generation batch failed (exit=-1, timed_out=False, error=None): \"cated! Use `dtype` instead!\\n\\rLoading weights:   0%|          | 0/311 [00:00<?, ?it/s]\\rLoading weights:  50%|\u2588\u2588\u2588\u2588\u2588     | 156/311 [00:00<00:00, 1536.63it/s]\\rLoading weights: 100%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588| 311/311 [00:00<00:00, 1652.34it/s]\\n/usr/local/lib/python3.12/site-packages/peft/mapping_func.py:154: UserWarning: The PEFT config's `base_model_name_or_path` was renamed from 'Qwen/Qwen3-1.7B' to '/models/base'. Please ensure that the correct base model is loaded when loading this checkpoint.\\n  warnings.warn(\\n\""
+  },
+  "baseline": {
+    "model": "Qwen/Qwen3-0.6B",
+    "s_per_sample": 7.8,
+    "peak_rss_mb": 2140
+  },
+  "total_generations": 30,
+  "fake": false
+}
