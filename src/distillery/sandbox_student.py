@@ -140,6 +140,81 @@ print("DISTILLERY_OUT:" + json.dumps(res))
 """
 
 
+DUMMY_ADAPTER_SCRIPT_PATH = "/work/make_dummy_adapter.py"
+DEFAULT_TARGET_MODULES = "all-linear"
+
+# Builds an UNTRAINED LoRA inside the sandbox, shaped like a Token Factory checkpoint (tensor keys
+# WITHOUT the 'base_model.model.' prefix, bf16, init_lora_weights false), so the generation script's
+# strict adapter loader and peak-RSS measurement run on a realistic adapter. The base model is built
+# on the meta device (no weights are loaded: only module shapes are needed), so this step is cheap
+# in memory even for a model that barely fits at inference time. Values are irrelevant to memory.
+DUMMY_ADAPTER_SCRIPT = """\
+import argparse
+import json
+import os
+
+ap = argparse.ArgumentParser()
+ap.add_argument("--base", required=True)
+ap.add_argument("--base-id", required=True)
+ap.add_argument("--out", required=True)
+ap.add_argument("--r", type=int, default=16)
+ap.add_argument("--alpha", type=int, default=16)
+ap.add_argument("--target-modules", default="all-linear")
+args = ap.parse_args()
+
+import torch
+from accelerate import init_empty_weights
+from peft import LoraConfig, get_peft_model
+from safetensors.torch import save_file
+from transformers import AutoConfig, AutoModelForCausalLM
+
+tm = args.target_modules
+target = tm if tm == "all-linear" else [m for m in tm.split(",") if m]
+lcfg = LoraConfig(r=args.r, lora_alpha=args.alpha, target_modules=target, lora_dropout=0.0,
+                  task_type="CAUSAL_LM")
+cfg = AutoConfig.from_pretrained(args.base)
+with init_empty_weights():
+    model = AutoModelForCausalLM.from_config(cfg, torch_dtype=torch.bfloat16)
+    pm = get_peft_model(model, lcfg)
+gen = torch.Generator().manual_seed(0)
+prefix = "base_model.model."
+state = {}
+for name, p in pm.named_parameters():
+    if "lora_" not in name:
+        continue
+    key = name.replace(".default.", ".", 1)
+    key = key[len(prefix):] if key.startswith(prefix) else key
+    if "lora_A" in key:
+        t = torch.randn(tuple(p.shape), generator=gen) * 0.01
+    else:
+        t = torch.zeros(tuple(p.shape))
+    state[key] = t.to(torch.bfloat16).contiguous()
+os.makedirs(args.out, exist_ok=True)
+save_file(state, os.path.join(args.out, "adapter_model.safetensors"), metadata={"format": "pt"})
+c = pm.peft_config["default"]
+c.base_model_name_or_path = args.base_id
+c.init_lora_weights = False
+c.save_pretrained(args.out)
+tmods = c.target_modules
+size = os.path.getsize(os.path.join(args.out, "adapter_model.safetensors"))
+print("DISTILLERY_DUMMY_ADAPTER:" + json.dumps({
+    "tensors": len(state), "bytes": size, "r": args.r, "alpha": args.alpha,
+    "target_modules": sorted(tmods) if isinstance(tmods, (set, list, tuple)) else tmods,
+}))
+"""
+
+
+def dummy_adapter_shell(
+    base_model: str, *, r: int = 16, alpha: int = 16, target_modules: str = DEFAULT_TARGET_MODULES
+) -> str:
+    """Shell that runs ``DUMMY_ADAPTER_SCRIPT`` and leaves the adapter in ``ADAPTER_DIR``."""
+    return (
+        f"python {DUMMY_ADAPTER_SCRIPT_PATH} --base {BASE_DIR} --base-id {shlex.quote(base_model)}"
+        f" --out {ADAPTER_DIR} --r {int(r)} --alpha {int(alpha)}"
+        f" --target-modules {shlex.quote(target_modules)}"
+    )
+
+
 def setup_shell(base_model: str) -> str:
     """Shell that prepares the heavy image: the measured recipe (CPU-only torch wheels, then the
     HF stack; base weights baked into the image, downloaded inside the sandbox)."""
@@ -286,6 +361,30 @@ class ServingImages:
                     self._on_image("deps", self._deps)
             return self._deps
 
+    def dummy_adapter_image(
+        self, *, r: int = 16, alpha: int = 16, target_modules: str = DEFAULT_TARGET_MODULES
+    ) -> str:
+        """Deps image plus an UNTRAINED adapter built inside the sandbox (memory pre-flight)."""
+        deps = self.deps_image()
+        key = f"dummy:{r}:{alpha}:{target_modules}"
+        with self._lock:
+            uuid = self._adapters.get(key)
+            if uuid is None:
+                uuid = self._bridge.run(
+                    self._sandbox.branch(
+                        deps,
+                        dummy_adapter_shell(
+                            self._base_model, r=r, alpha=alpha, target_modules=target_modules
+                        ),
+                        files={DUMMY_ADAPTER_SCRIPT_PATH: DUMMY_ADAPTER_SCRIPT.encode()},
+                        timeout=self._timeout_s,
+                    )
+                )
+                self._adapters[key] = uuid
+                if self._on_image is not None:
+                    self._on_image("dummy_adapter", uuid)
+            return uuid
+
     def adapter_image(self, adapter: PreparedAdapter) -> str:
         deps = self.deps_image()
         with self._lock:
@@ -332,6 +431,7 @@ class SandboxCpuStudent:
         job_per_sample_timeout_s: float = 45.0,
         max_sample_failure_fraction: float = 0.25,
         images: ServingImages | None = None,
+        prebuilt_adapter_image: str | None = None,
     ) -> None:
         if batch_size < 1:
             raise ValueError("batch_size must be >= 1")
@@ -341,6 +441,10 @@ class SandboxCpuStudent:
         # validated here, before any sandbox call: a wrong adapter must not cost anything
         self._adapter_files = tuple(Path(p) for p in adapter_files)
         self._adapter = prepare_adapter(adapter_files, base_model) if adapter_files else None
+        # an image that already holds an adapter at ADAPTER_DIR (the dummy-adapter pre-flight)
+        self._prebuilt = prebuilt_adapter_image
+        if prebuilt_adapter_image is not None and adapter_files:
+            raise ValueError("give adapter_files or prebuilt_adapter_image, not both")
         self._batch_size = batch_size
         self._concurrency = concurrency
         self._max_new_tokens = max_new_tokens
@@ -374,6 +478,8 @@ class SandboxCpuStudent:
         )  # fmt: skip
 
     def _ensure_image(self) -> str:
+        if self._image is None and self._prebuilt is not None:
+            self._image = self._prebuilt
         if self._image is None:
             self._image = (
                 self._images.adapter_image(self._adapter)
@@ -384,7 +490,8 @@ class SandboxCpuStudent:
 
     def _command(self) -> str:
         cmd = f"python {SCRIPT_PATH} --base {BASE_DIR} --max-new-tokens {self._max_new_tokens}"
-        return cmd + (f" --adapter {ADAPTER_DIR}" if self._adapter is not None else "")
+        has_adapter = self._adapter is not None or self._prebuilt is not None
+        return cmd + (f" --adapter {ADAPTER_DIR}" if has_adapter else "")
 
     def _job_timeout(self, n: int) -> float:
         return min(self._timeout_s, self._job_base_s + self._job_per_sample_s * n)
