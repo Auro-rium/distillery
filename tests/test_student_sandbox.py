@@ -449,3 +449,57 @@ def test_adapter_is_merged_only_after_the_strict_load_check() -> None:
 
     strict_check = GEN_SCRIPT.index("adapter weights did not load cleanly")
     assert GEN_SCRIPT.index("merge_and_unload()") > strict_check
+
+
+class FlakyJobs(FakeSandbox):
+    """Loses the first N generation jobs the way the live sandbox once did (timed out, idle)."""
+
+    def __init__(self, inner: FakeSandbox, lose: int, *, exit_code: int = -1) -> None:
+        self._inner, self._lose, self._exit = inner, lose, exit_code
+        self.batches = 0
+
+    def __getattr__(self, name: str):  # type: ignore[no-untyped-def]
+        return getattr(self._inner, name)
+
+    async def run_batch(self, image_ref, jobs, concurrency=10):  # type: ignore[no-untyped-def]
+        from distillery.sandbox import RunResult
+
+        self.batches += 1
+        real = await self._inner.run_batch(image_ref, jobs, concurrency=concurrency)
+        out = []
+        for r in real:
+            if self._lose > 0:
+                self._lose -= 1
+                out.append(
+                    RunResult("", "", self._exit, None, timed_out=self._exit == -1, error="lost")
+                )
+            else:
+                out.append(r)
+        return out
+
+
+def test_a_lost_generation_job_is_resubmitted_and_counted(
+    stubs: Path, tmp_path: Path, bridge: AsyncBridge
+) -> None:
+    flaky = FlakyJobs(make_sandbox(stubs, tmp_path, Log()), lose=1)
+    s = SandboxCpuStudent(flaky, "img", bridge, base_model=MODEL, batch_size=2)
+    assert s.generate(msgs(4)) == [f"base|q{i}" for i in range(4)]
+    assert s.job_retries == 1 and flaky.batches == 2
+
+
+def test_a_job_that_really_failed_is_not_retried(
+    stubs: Path, tmp_path: Path, bridge: AsyncBridge
+) -> None:
+    flaky = FlakyJobs(make_sandbox(stubs, tmp_path, Log()), lose=1, exit_code=137)  # OOM kill
+    s = SandboxCpuStudent(flaky, "img", bridge, base_model=MODEL, batch_size=2)
+    with pytest.raises(StudentServingError):
+        s.generate(msgs(4))
+    assert s.job_retries == 0 and flaky.batches == 1
+
+
+def test_retries_are_bounded(stubs: Path, tmp_path: Path, bridge: AsyncBridge) -> None:
+    flaky = FlakyJobs(make_sandbox(stubs, tmp_path, Log()), lose=99)
+    s = SandboxCpuStudent(flaky, "img", bridge, base_model=MODEL, batch_size=2)
+    with pytest.raises(StudentServingError):
+        s.generate(msgs(2))
+    assert flaky.batches == 3  # one attempt plus GENERATION_JOB_RETRIES

@@ -33,7 +33,7 @@ from pathlib import Path
 from typing import Any
 
 from distillery.finetune import TrainedArtifact
-from distillery.sandbox import Job, Sandbox
+from distillery.sandbox import Job, RunResult, Sandbox
 from distillery.sandbox_executor import AsyncBridge
 from distillery.student import ChatMessages, StudentServingError
 
@@ -42,6 +42,7 @@ BASE_DIR = "/models/base"
 ADAPTER_DIR = "/work/adapter"
 SCRIPT_PATH = "/work/gen.py"
 DEFAULT_MAX_NEW_TOKENS = 160  # what the S4 spike measured
+GENERATION_JOB_RETRIES = 2  # re-submissions of a generation job that hit a sandbox-level failure
 ADAPTER_CONFIG = "adapter_config.json"
 ADAPTER_WEIGHTS = ("adapter_model.safetensors", "adapter_model.bin")  # the names peft loads
 
@@ -410,6 +411,11 @@ class ServingImages:
 # ---------------------------------------------------------------- the server
 
 
+def _transient_job_failure(res: RunResult) -> bool:
+    """A job the sandbox itself lost (timed out, or killed with exit -1): safe to run again."""
+    return not res.ok and (res.timed_out or res.exit_code == -1)
+
+
 class SandboxCpuStudent:
     """``StudentServer`` that runs ``transformers`` (+ ``peft``) on sandbox CPU.
 
@@ -462,6 +468,7 @@ class SandboxCpuStudent:
         self._image: str | None = None
         self._closed = False
         self.generation_errors = 0
+        self.job_retries = 0  # generation jobs re-submitted after a sandbox-level failure
         self.error_samples: list[str] = []
         self.timings: list[dict[str, object]] = []  # per batch: load_s, gen_s, n, failed, ...
 
@@ -519,6 +526,22 @@ class SandboxCpuStudent:
         results = self._bridge.run(
             self._sandbox.run_batch(image, jobs, concurrency=self._concurrency)
         )
+        # A generation job is idempotent and disposable, so a sandbox-level failure (timeout, or
+        # exit -1 with no script error: seen live, an operation that sat idle until its timeout)
+        # is re-submitted a bounded number of times instead of killing a multi-hour run. A job
+        # that really ran and failed (script error, OOM exit code) is never retried here.
+        for _ in range(GENERATION_JOB_RETRIES):
+            redo = [i for i, r in enumerate(results) if _transient_job_failure(r)]
+            if not redo:
+                break
+            self.job_retries += len(redo)
+            again = self._bridge.run(
+                self._sandbox.run_batch(
+                    image, [jobs[i] for i in redo], concurrency=self._concurrency
+                )
+            )
+            for i, r in zip(redo, again, strict=True):
+                results[i] = r
         outputs: list[str] = []
         failed = 0
         for chunk, res in zip(chunks, results, strict=True):
