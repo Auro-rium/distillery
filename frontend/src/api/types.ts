@@ -174,6 +174,57 @@ export interface StressEval {
   unparseable?: Partial<Record<"base" | "student" | "teacher", number>>;
 }
 
+/** Gate B: the human held-out set, scored with the same thresholds as the gate. */
+export interface HumanEval {
+  accuracy: AccTriple;
+  gate: Gate;
+  n: number;
+  note?: string;
+  sha256: string;
+  unparseable?: Partial<Record<"base" | "student" | "teacher", number>>;
+}
+
+export interface HumanCounts {
+  confirmed: number;
+  discarded: number;
+  discarded_by_reason: Record<string, number>;
+  duplicates_dropped: number;
+  kept: number;
+  questions: number;
+  rejected: number;
+  skipped: number;
+  undecided: number;
+}
+
+export interface HumanData {
+  counts: HumanCounts;
+  dropped_exact_overlap: { dev: number; gate: number; total: number; train: number };
+  n: number;
+  note: string;
+  sha256: string;
+  skeleton_in_train: number;
+  teacher_model?: string;
+}
+
+export interface HumansetItem {
+  decision: "confirm" | "reject" | "skip" | null;
+  gold_sql: string;
+  preview: { columns: string[]; row_count: number; rows: (string | number | null)[][] };
+  question: string;
+  requires_order: boolean;
+  task_id: string;
+}
+
+export interface HumansetDrafts {
+  discarded_by_reason: Record<string, number>;
+  items: HumansetItem[];
+  n_questions: number;
+  set: string;
+  sets: string[];
+  tally: { confirmed: number; rejected: number; skipped: number; undecided: number };
+  teacher_model: string;
+}
+
 export interface Report {
   candidate_round: number;
   candidate_selection: string;
@@ -212,6 +263,8 @@ export interface Report {
     stress_families?: string[];
     stress_sealed_sha256?: string;
     stress_tasks?: number;
+    // null when no human set was sealed; absent in older runs
+    human?: HumanData | null;
     train_distinct_skeletons?: number;
     spot_check_file?: string;
     teacher_verified_rows_round1: number;
@@ -219,6 +272,8 @@ export interface Report {
   };
   decision: Decision;
   decision_reasons: string[];
+  // Gate B decision; null (or absent in older runs) when no human set was sealed
+  decision_human?: Decision | null;
   dry_run: boolean;
   evaluation: {
     accuracy: AccTriple;
@@ -230,6 +285,8 @@ export interface Report {
     n: number;
     // null (or absent in older runs) when no stress set was evaluated
     stress?: StressEval | null;
+    // Gate B; null (or absent in older runs) when no human set was sealed
+    human?: HumanEval | null;
     unparseable: { base: number; student: number; teacher: number };
   };
   headroom: { base_dev_acc: number; max_allowed: number };

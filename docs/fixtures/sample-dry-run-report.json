@@ -60,13 +60,10 @@
       "spot_check_n": 30,
       "student_batch_size": 2,
       "student_concurrency": 10,
-      "student_endpoint": null,
       "student_max_new_tokens": 160,
       "student_sandbox_image": null,
       "student_serving": "injected",
-      "triage_sample": 50,
-      "ultra_verifier_authoring": false,
-      "use_triage": true
+      "triage_sample": 50
     },
     "prices": {
       "fake-planner": {
@@ -107,10 +104,10 @@
       "teacher": {
         "basis": "measured tokens x configured prices, from the held-out teacher pass",
         "held_out_tasks": 20,
-        "input_tokens": 30527,
-        "output_tokens": 1433,
-        "usd": 0.033393,
-        "usd_per_1k_tasks": 1.6696499999999999
+        "input_tokens": 36533,
+        "output_tokens": 1498,
+        "usd": 0.039529,
+        "usd_per_1k_tasks": 1.9764500000000003
       }
     },
     "finetune_lines": [
@@ -145,10 +142,10 @@
         "usd": 0.001885
       },
       "fake-teacher": {
-        "calls": 87,
-        "input_tokens": 88520,
-        "output_tokens": 4088,
-        "usd": 0.096696
+        "calls": 93,
+        "input_tokens": 94526,
+        "output_tokens": 4153,
+        "usd": 0.102832
       },
       "fake-triage": {
         "calls": 50,
@@ -163,7 +160,7 @@
       "fake-triage": "FAKE dry-run price, not a real price"
     },
     "run_cap_usd": 10.0,
-    "run_total_usd": 0.10494599999999996,
+    "run_total_usd": 0.11108199999999993,
     "sandbox_lines": []
   },
   "counters": {
@@ -312,6 +309,39 @@
     "heldout_sealed_sha256": "26555c7c4558d47516d2d11d8352eafab8d3d56708d2b79d2b71afe97bbb78c6",
     "heldout_skeleton_overlap_rate": 0.0,
     "heldout_tasks": 20,
+    "human": {
+      "counts": {
+        "confirmed": 6,
+        "discarded": 1,
+        "discarded_by_reason": {
+          "disagree": 1,
+          "empty": 0,
+          "exec_error": 0,
+          "llm_error": 0,
+          "no_sql": 0
+        },
+        "duplicates_dropped": 0,
+        "kept": 8,
+        "questions": 9,
+        "rejected": 2,
+        "skipped": 0,
+        "undecided": 0
+      },
+      "db_sha256": "03864579a97c4336039620d125c6811ee513dce2b9ceb3796d282354cc96d02c",
+      "dropped_exact_overlap": {
+        "dev": 0,
+        "gate": 0,
+        "total": 0,
+        "train": 0
+      },
+      "file_sha256": "5d9ef11047cd23ddef1850694b98d5b79ddfb2377c3063b67a3490d724294579",
+      "n": 6,
+      "note": "Selection bias, disclosed: gold SQL was drafted by the teacher and kept only when every drafted sample executed, was non-empty and agreed with the others, then confirmed by a human. Only teacher-solvable questions survive, so teacher accuracy here is high by construction and hard questions are under-represented. Discard and rejection counts are reported.",
+      "question_file_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "sha256": "808987ac136c221378f1303148a3b9988412e6b5b9eebcc962dedc4b45c660d2",
+      "skeleton_in_train": 0,
+      "teacher_model": "SYNTHETIC-FIXTURE (not a real draft)"
+    },
     "spot_check_file": "spot_check.json",
     "stress_families": [
       "date_math",
@@ -324,6 +354,7 @@
     "train_tasks": 40
   },
   "decision": "PROMOTE",
+  "decision_human": "REJECT",
   "decision_reasons": [
     "ratio lower bound 0.850 >= 0.85 (point 1.000)",
     "McNemar exact p=0.0215 < 0.05 (student-only 9, base-only 1)"
@@ -524,6 +555,108 @@
       }
     },
     "heldout_sha256": "26555c7c4558d47516d2d11d8352eafab8d3d56708d2b79d2b71afe97bbb78c6",
+    "human": {
+      "accuracy": {
+        "base": 0.3333333333333333,
+        "student": 0.8333333333333334,
+        "teacher": 1.0
+      },
+      "examples": [
+        {
+          "base_ok": false,
+          "base_sql": "SELECT 1",
+          "family": "human",
+          "gold_sql": "SELECT COUNT(*) FROM accounts",
+          "heldout_class": "human",
+          "kind": "fixed",
+          "question": "[synthetic] How many accounts are there in total?",
+          "student_ok": true,
+          "student_sql": "SELECT COUNT(*) FROM accounts",
+          "task_id": "h-0-synthetic",
+          "teacher_ok": true,
+          "teacher_sql": "SELECT COUNT(*) FROM accounts"
+        },
+        {
+          "base_ok": false,
+          "base_sql": "SELECT 1",
+          "family": "human",
+          "gold_sql": "SELECT COUNT(*) FROM payments",
+          "heldout_class": "human",
+          "kind": "fixed",
+          "question": "[synthetic] How many payments are there in total?",
+          "student_ok": true,
+          "student_sql": "SELECT COUNT(*) FROM payments",
+          "task_id": "h-4-synthetic",
+          "teacher_ok": true,
+          "teacher_sql": "SELECT COUNT(*) FROM payments"
+        },
+        {
+          "base_ok": false,
+          "base_sql": "SELECT 1",
+          "family": "human",
+          "gold_sql": "SELECT COUNT(*) FROM support_tickets",
+          "heldout_class": "human",
+          "kind": "fixed",
+          "question": "[synthetic] How many support tickets are there in total?",
+          "student_ok": true,
+          "student_sql": "SELECT COUNT(*) FROM support_tickets",
+          "task_id": "h-5-synthetic",
+          "teacher_ok": true,
+          "teacher_sql": "SELECT COUNT(*) FROM support_tickets"
+        },
+        {
+          "base_ok": false,
+          "base_sql": "SELECT 1",
+          "family": "human",
+          "gold_sql": "SELECT COUNT(*) FROM users",
+          "heldout_class": "human",
+          "kind": "still_wrong",
+          "question": "[synthetic] How many users are there in total?",
+          "student_ok": false,
+          "student_sql": "SELECT 1",
+          "task_id": "h-1-synthetic",
+          "teacher_ok": true,
+          "teacher_sql": "SELECT COUNT(*) FROM users"
+        }
+      ],
+      "gate": {
+        "base_acc": 0.3333333333333333,
+        "base_only_vs_student": 0,
+        "bootstrap_resamples_used": 10000,
+        "bootstrap_skipped": 0,
+        "decision": "REJECT",
+        "mcnemar_p": 0.25,
+        "n": 6,
+        "ratio_hi": 1.0,
+        "ratio_lo": 0.5,
+        "ratio_point": 0.8333333333333334,
+        "reasons": [
+          "ratio lower bound 0.500 < 0.85 (point 0.833)",
+          "McNemar exact p=0.2500 >= 0.05 (student-only 3, base-only 0)"
+        ],
+        "student_acc": 0.8333333333333334,
+        "student_ci": [
+          0.43649717781352987,
+          0.9699466302516935
+        ],
+        "student_only_vs_base": 3,
+        "teacher_acc": 1.0,
+        "thresholds": {
+          "bootstrap_resamples": 10000,
+          "mcnemar_alpha": 0.05,
+          "ratio_lower_bound_min": 0.85,
+          "seed": 1234
+        }
+      },
+      "n": 6,
+      "note": "Selection bias, disclosed: gold SQL was drafted by the teacher and kept only when every drafted sample executed, was non-empty and agreed with the others, then confirmed by a human. Only teacher-solvable questions survive, so teacher accuracy here is high by construction and hard questions are under-represented. Discard and rejection counts are reported.",
+      "sha256": "808987ac136c221378f1303148a3b9988412e6b5b9eebcc962dedc4b45c660d2",
+      "unparseable": {
+        "base": 0,
+        "student": 0,
+        "teacher": 0
+      }
+    },
     "n": 20,
     "stress": {
       "accuracy": {
@@ -811,7 +944,7 @@
       "stage": "verifier_selftest"
     },
     {
-      "output_sha256": "96663173de35acc35dad47127dbfa7e26a790ad4d633ec7fa0201d797e19ff79",
+      "output_sha256": "53b0fc91bcf80997ff0b2153ca93477a157a988e3cd03dd300a5a413b41d7555",
       "stage": "split"
     },
     {
@@ -871,7 +1004,7 @@
       "stage": "dev_eval_r3"
     },
     {
-      "output_sha256": "7671d71f2063eea6c96c016dc2e1db19f02c32d3d4ab83658b4378bbff5f8f7e",
+      "output_sha256": "89adf5e0200dce93876e38aa6147a6c61a2bc90a166a9a3dc48a28d362b1d6e0",
       "stage": "final_eval"
     }
   ]

@@ -169,6 +169,30 @@ def test_manifest_has_stress_sha_only_when_sealed(tmp_path: Path) -> None:
     assert m["heldout_sha256"] != h
 
 
+def test_human_seal_round_trip_tamper_and_reseal(tmp_path: Path) -> None:
+    s = Store(tmp_path)
+    assert s.load_human("nope") is None
+    items = [{"task_id": "h-0-aaaa", "question": "q?"}]
+    digest = s.seal_human("r1", items)
+    assert s.seal_human("r1", items) == digest  # idempotent
+    assert Store(tmp_path).load_human("r1") == items
+    assert s.load_stress("r1") is None
+    with pytest.raises(HeldoutIntegrityError):
+        s.seal_human("r1", [{"task_id": "other"}])
+    s._human_path("r1").write_bytes(b"[]")
+    with pytest.raises(HeldoutIntegrityError):
+        s.load_human("r1")
+
+
+def test_manifest_has_human_sha_only_when_sealed(tmp_path: Path) -> None:
+    s = Store(tmp_path)
+    manifest = tmp_path / "runs" / "r1" / "manifest.json"
+    s.seal_heldout("r1", [{"q": 1}])
+    assert "human_sha256" not in json.loads(manifest.read_text())
+    h = s.seal_human("r1", [{"q": 2}])
+    assert json.loads(manifest.read_text())["human_sha256"] == h
+
+
 def test_old_db_without_seals_table_opens(tmp_path: Path) -> None:
     s = Store(tmp_path)
     s.seal_heldout("r1", [{"q": 1}])

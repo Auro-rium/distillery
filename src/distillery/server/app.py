@@ -19,6 +19,7 @@ from starlette.background import BackgroundTask
 from starlette.concurrency import run_in_threadpool
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from distillery import humanset
 from distillery.evaluator import EXAMPLES_PER_KIND
 from distillery.orchestrator import DRY_PREFIX, SCALES
 from distillery.server import sse, telemetry
@@ -75,6 +76,14 @@ class PlaygroundRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     question: str = Field(min_length=1, max_length=MAX_QUESTION_CHARS)
+
+
+class HumansetDecision(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    set: str
+    task_id: str = Field(min_length=1, max_length=128)
+    decision: Literal["confirm", "reject", "skip"]
 
 
 def client_ip(request: Request, trusted_proxies: tuple[str, ...]) -> str:
@@ -462,6 +471,64 @@ def create_app(settings: ServerSettings) -> FastAPI:
             tele.incr("playground_budget_exhausted")
             raise ApiError(503, "demo_budget_exhausted",
                            "demo budget exhausted, see replay") from None  # fmt: skip
+
+    # ---- human held-out set (admin only; never part of a replay bundle) ---
+    def humanset_pick(requested: str | None) -> str:
+        if requested is not None:
+            if not humanset.valid_set_id(requested):
+                raise ApiError(422, "invalid_request", "set must be 8 lowercase hex characters")
+            return requested
+        sets = humanset.list_sets(settings.root)
+        if not sets:
+            raise ApiError(404, "not_found", "no human set has been drafted")
+        return sets[-1]
+
+    def humanset_drafts_or_404(set_id: str) -> dict[str, Any]:
+        try:
+            return humanset.read_drafts(settings.root, set_id)
+        except humanset.HumanSetError:
+            raise ApiError(404, "not_found", "no such human set") from None
+
+    @app.get("/api/humanset/drafts")
+    def humanset_drafts(request: Request, set: str | None = None) -> dict[str, Any]:  # noqa: A002
+        require_admin(request)
+        set_id = humanset_pick(set)
+        drafts = humanset_drafts_or_404(set_id)
+        decisions = humanset.read_decisions(settings.root, set_id)
+        return {
+            "sets": humanset.list_sets(settings.root),
+            "set": set_id,
+            "teacher_model": drafts["teacher_model"],
+            "db_sha256": drafts["db_sha256"],
+            "question_file_sha256": drafts["question_file_sha256"],
+            "n_questions": drafts["n_questions"],
+            "discarded_by_reason": drafts["discarded_by_reason"],
+            "tally": humanset.tally(drafts, decisions),
+            "items": [
+                {
+                    "task_id": k["task_id"],
+                    "question": k["question"],
+                    "gold_sql": k["gold_sql"],
+                    "requires_order": k["requires_order"],
+                    "preview": k["preview"],
+                    "decision": decisions.get(k["task_id"]),
+                }
+                for k in drafts["kept"]
+            ],
+        }
+
+    @app.post("/api/humanset/decide")
+    async def humanset_decide(request: Request) -> dict[str, Any]:
+        require_admin(request)
+        body = _parse(HumansetDecision, await _read_body(request, settings.max_body_bytes))
+        if not humanset.valid_set_id(body.set):
+            raise ApiError(422, "invalid_request", "set must be 8 lowercase hex characters")
+        drafts = humanset_drafts_or_404(body.set)
+        if body.task_id not in {k["task_id"] for k in drafts["kept"]}:
+            raise ApiError(422, "invalid_request", "unknown draft id")
+        humanset.decide(settings.root, body.set, body.task_id, body.decision)
+        tally = humanset.tally(drafts, humanset.read_decisions(settings.root, body.set))
+        return {"decision": body.decision, "tally": tally}
 
     @app.api_route("/api/{rest:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH"])
     def api_not_found(rest: str) -> Response:

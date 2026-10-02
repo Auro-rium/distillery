@@ -1,4 +1,5 @@
-"""Sealed held-out evaluation. The ONLY module allowed to call ``Store.load_heldout``.
+"""Sealed held-out evaluation. The ONLY module allowed to call ``Store.load_heldout`` (and the
+stress and human siblings).
 
 Scores base, student and teacher on the same held-out items in the same order, verifies the
 evaluated adapter is the trained one, and hands the per-item outcomes to the pure gate.
@@ -6,17 +7,21 @@ evaluated adapter is the trained one, and hands the per-item outcomes to the pur
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Protocol
 
 from distillery.config import GateThresholds
 from distillery.finetune import TrainedArtifact, sha256_file
 from distillery.gate import GateResult, evaluate_gate
+from distillery.humanset import SELECTION_BIAS_NOTE, HumanSetError, read_confirmed
 from distillery.prompts import build_messages, extract_sql
 from distillery.store import Store, canonical_json, sha256_hex
 from distillery.taskpacks.sql.executor import Executor
+from distillery.taskpacks.sql.human import normalise_question
+from distillery.taskpacks.sql.questions import skeleton
 from distillery.taskpacks.sql.runner import ExecOutcome
 from distillery.taskpacks.sql.verifier import compare_outcomes
 
@@ -68,6 +73,9 @@ class EvalReport:
     # Stress set (reserved families, never in train/dev/gate): scored after the gate, reported
     # separately, never an input of evaluate_gate. None = no stress set was sealed for this run.
     stress: dict[str, Any] | None = None
+    # Human held-out set (Gate B): scored with the SAME thresholds as the gate, reported beside it,
+    # never an input of Gate A. None = no human set was sealed for this run.
+    human: dict[str, Any] | None = None
 
     def to_json(self) -> dict[str, Any]:
         return {
@@ -81,6 +89,7 @@ class EvalReport:
             "gate": self.gate.model_dump(mode="json"),
             "examples": self.examples,
             "stress": self.stress,
+            "human": self.human,
         }
 
 
@@ -251,7 +260,11 @@ def evaluate(
         stress=_score_stress(
             store, run_id, generators, executor, db_ref=db_ref, schema_ddl=schema_ddl
         ),
-    )
+        human=_score_human(
+            store, run_id, generators, executor,
+            db_ref=db_ref, schema_ddl=schema_ddl, gate_cfg=gate_cfg,
+        ),
+    )  # fmt: skip
 
 
 def _score_roles(
@@ -329,6 +342,102 @@ def _score_stress(
         "accuracy_by_family": by_family,
         "unparseable": {m: s.unparseable for m, s in scores.items()},
         "note": "reserved families, never in train/dev/gate; reported separately, not a gate input",
+    }
+
+
+def _score_human(
+    store: Store,
+    run_id: str,
+    generators: Mapping[str, Generator],
+    executor: Executor,
+    *,
+    db_ref: str,
+    schema_ddl: str,
+    gate_cfg: GateThresholds,
+) -> dict[str, Any] | None:
+    """Gate B: every model on the sealed human set, then ``evaluate_gate`` a second time with the
+    SAME thresholds object as Gate A. Shares nothing with Gate A or the stress set, so neither can
+    move it. Examples follow the same capped, post-evaluation rule as the gate set's."""
+    items = store.load_human(run_id)
+    if items is None:
+        return None
+    gold = executor.run_batch(db_ref, [str(it["gold_sql"]) for it in items])
+    for it, g in zip(items, gold, strict=True):
+        if not g.ok:
+            raise RuntimeError(f"gold SQL failed for human item {it.get('task_id')}: {g.error}")
+    scores = _score_roles(
+        generators, items, gold, executor, db_ref=db_ref, schema_ddl=schema_ddl, on_scores=None
+    )
+    gate = evaluate_gate(
+        scores["base"].correct, scores["student"].correct, scores["teacher"].correct, gate_cfg
+    )
+    return {
+        "sha256": sha256_hex(canonical_json(items).encode("utf-8")),
+        "n": len(items),
+        "accuracy": {m: s.accuracy for m, s in scores.items()},
+        "unparseable": {m: s.unparseable for m, s in scores.items()},
+        "gate": gate.model_dump(mode="json"),
+        "examples": build_examples(items, scores),
+        "note": SELECTION_BIAS_NOTE,
+    }
+
+
+def human_set_fingerprint(path: Path | str) -> str:
+    """sha256 of the confirmed-file bytes, for the split stage's cache key. Only a digest leaves
+    this module; the orchestrator never sees the contents."""
+    try:
+        return sha256_hex(Path(path).read_bytes())
+    except OSError as exc:
+        raise HumanSetError(f"cannot read human set file: {exc}") from None
+
+
+def seal_human_set(
+    store: Store,
+    run_id: str,
+    path: Path | str,
+    db_sha: str,
+    *,
+    train_questions: Iterable[str],
+    dev_questions: Iterable[str],
+) -> dict[str, Any]:
+    """Verify the confirmed human set against this run's database, drop every question that exactly
+    matches (whitespace-normalised) a train, dev or gate question, and seal the rest. Returns hash
+    and counts ONLY: no question or gold SQL leaves this function."""
+    confirmed = read_confirmed(path)
+    if confirmed.db_sha256 != db_sha:
+        raise HumanSetError(
+            "human set was drafted against a different database "
+            f"({confirmed.db_sha256[:12]} != this run's {db_sha[:12]})"
+        )
+    train = {normalise_question(x) for x in train_questions}
+    dev = {normalise_question(x) for x in dev_questions}
+    gate = {normalise_question(str(it["question"])) for it in store.load_heldout(run_id)}
+    dropped = {"train": 0, "dev": 0, "gate": 0}
+    kept: list[dict[str, Any]] = []
+    for it in confirmed.items:
+        norm = normalise_question(str(it["question"]))
+        hit = (
+            "train" if norm in train else "dev" if norm in dev else "gate" if norm in gate else None
+        )
+        if hit is not None:
+            dropped[hit] += 1
+        else:
+            kept.append(dict(it))
+    if not kept:
+        raise HumanSetError("every human question matches a train, dev or gate question")
+    train_skeletons = {skeleton(x) for x in train}
+    digest = store.seal_human(run_id, kept)
+    return {
+        "sha256": digest,
+        "file_sha256": confirmed.file_sha256,
+        "n": len(kept),
+        "dropped_exact_overlap": {**dropped, "total": sum(dropped.values())},
+        "skeleton_in_train": sum(skeleton(str(it["question"])) in train_skeletons for it in kept),
+        "counts": confirmed.counts,
+        "db_sha256": confirmed.db_sha256,
+        "question_file_sha256": confirmed.question_file_sha256,
+        "teacher_model": confirmed.teacher_model,
+        "note": SELECTION_BIAS_NOTE,
     }
 
 

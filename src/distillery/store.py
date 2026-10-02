@@ -138,6 +138,9 @@ class Store:
         stress = self._query("SELECT sha256 FROM seals WHERE run_id=? AND name='stress'", (run_id,))
         if stress:
             manifest["stress_sha256"] = stress[0][0]
+        human = self._query("SELECT sha256 FROM seals WHERE run_id=? AND name='human'", (run_id,))
+        if human:
+            manifest["human_sha256"] = human[0][0]
         atomic_write_bytes(
             self.run_dir(run_id) / "manifest.json",
             json.dumps(manifest, indent=2, sort_keys=True).encode("utf-8"),
@@ -239,6 +242,37 @@ class Store:
         data = self._stress_path(run_id).read_bytes()
         if sha256_hex(data) != rows[0][0]:
             raise HeldoutIntegrityError("stress set does not match its sealed sha256")
+        items: list[dict[str, Any]] = json.loads(data)
+        return items
+
+    # ---- human held-out set (sealed like stress; Gate B, never a gate-A input) -----
+    def _human_path(self, run_id: str) -> Path:
+        return self.run_dir(run_id) / "heldout" / "human.json"
+
+    def seal_human(self, run_id: str, items: list[dict[str, Any]]) -> str:
+        self.create_run(run_id)
+        payload = canonical_json(items).encode("utf-8")
+        digest = sha256_hex(payload)
+        rows = self._query("SELECT sha256 FROM seals WHERE run_id=? AND name='human'", (run_id,))
+        if rows and rows[0][0] != digest:
+            raise HeldoutIntegrityError("human set already sealed with different content")
+        atomic_write_bytes(self._human_path(run_id), payload)
+        self._exec(
+            "INSERT OR REPLACE INTO seals(run_id, name, sha256) VALUES (?, 'human', ?)",
+            (run_id, digest),
+        )
+        self._write_manifest(run_id)
+        return digest
+
+    def load_human(self, run_id: str) -> list[dict[str, Any]] | None:
+        """Only evaluator.py may call this (enforced by an AST scan in tests). None = no human
+        set was sealed for this run."""
+        rows = self._query("SELECT sha256 FROM seals WHERE run_id=? AND name='human'", (run_id,))
+        if not rows:
+            return None
+        data = self._human_path(run_id).read_bytes()
+        if sha256_hex(data) != rows[0][0]:
+            raise HeldoutIntegrityError("human set does not match its sealed sha256")
         items: list[dict[str, Any]] = json.loads(data)
         return items
 

@@ -34,6 +34,7 @@ from distillery.finetune import (
     require_explicit_hyperparameters,
     sha256_file,
 )
+from distillery.humanset import read_confirmed
 from distillery.orchestrator import DRY_PREFIX, Deps, PipelineConfig, Scale
 from distillery.sandbox import FakeSandbox
 from distillery.sandbox_executor import AsyncBridge
@@ -81,6 +82,11 @@ class GoldOracle:
     def observe(self, tasks: Sequence[SqlTask]) -> None:
         for t in tasks:
             self._gold[t.question] = t.gold_sql
+
+    def observe_gold(self, pairs: Mapping[str, str]) -> None:
+        """Register question -> gold SQL pairs that did not come from task generation (the
+        human set). FAKE models only: real models never see gold."""
+        self._gold.update(pairs)
 
     def gold(self, question: str) -> str:
         try:
@@ -397,6 +403,10 @@ def build_dry_run(
     **pipeline_overrides: Any,
 ) -> DryRun:
     oracle = GoldOracle()
+    human_path = pipeline_overrides.get("human_set_path")
+    if human_path is not None:  # fakes must know the human gold, like every other task set
+        confirmed = read_confirmed(human_path)
+        oracle.observe_gold({str(it["question"]): str(it["gold_sql"]) for it in confirmed.items})
     transport = FakeTransport(oracle, error_rates)
     ft = FakeFineTune(fail_rounds=fail_rounds)
     base = FakeBaseFactory(

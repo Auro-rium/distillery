@@ -1,6 +1,6 @@
 [
   {
-    "created_at": "2026-10-01T04:23:44.838463+00:00",
+    "created_at": "2026-10-02T15:41:36.329129+00:00",
     "decision": "PROMOTE",
     "dry_run": true,
     "recorded": false,
@@ -9,12 +9,12 @@
     "status": "complete"
   },
   {
-    "created_at": "2026-10-01T04:23:44.805376+00:00",
+    "created_at": "2026-10-02T15:41:36.299368+00:00",
     "decision": "PROMOTE",
     "dry_run": true,
     "recorded": false,
     "recorded_at": null,
-    "run_id": "dry-sql-tiny-83069418",
+    "run_id": "dry-sql-tiny-9a932046",
     "status": "complete"
   }
 ]

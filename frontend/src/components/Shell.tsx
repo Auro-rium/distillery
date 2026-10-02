@@ -18,6 +18,7 @@ export function pageTitle(pathname: string): string {
   if (pathname === "/") return "Replay";
   if (pathname === "/new") return "New run";
   if (pathname === "/playground") return "Playground";
+  if (pathname === "/humanset") return "Human set";
   const m = /^\/runs\/([^/]+)(?:\/(report|tree))?\/?$/.exec(pathname);
   if (m) {
     let id = m[1];

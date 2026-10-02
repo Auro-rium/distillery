@@ -20,15 +20,19 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from distillery.budget import spend_lines
+from distillery import humanset
+from distillery.budget import BudgetExceeded, Ledger, spend_lines
 from distillery.config import Config, ConfigError, load_config
 from distillery.driver import driving
+from distillery.llm import LLMClient
 from distillery.orchestrator import (
     DRY_PREFIX,
     DRY_RUN_LABEL,
     SCALES,
     ConfigRefusal,
     Deps,
+    LedgerSink,
+    LLMRunner,
     Pipeline,
     PipelineConfig,
     PipelineError,
@@ -38,7 +42,9 @@ from distillery.orchestrator import (
 from distillery.pipeline_fakes import build_dry_run, dry_run_id
 from distillery.sandbox import Sandbox
 from distillery.sandbox_executor import AsyncBridge, SandboxExecutor
-from distillery.store import Store, atomic_write_bytes
+from distillery.store import Store, atomic_write_bytes, sha256_hex
+from distillery.taskpacks.sql import schema as sql_schema
+from distillery.taskpacks.sql.human import QuestionFileError, load_question_file
 
 DepsFactory = Callable[[Config, PipelineConfig, AsyncBridge], Deps]
 EXIT_OK, EXIT_FAIL, EXIT_REFUSED = 0, 1, 2
@@ -65,6 +71,10 @@ def _parser() -> argparse.ArgumentParser:
     r.add_argument("--max-rounds", type=int, default=3)
     r.add_argument("--max-base-acc", type=float, default=0.80, help="headroom threshold on dev")
     r.add_argument("--seed", type=int, default=1234)
+    r.add_argument(
+        "--human-set", default=None, metavar="FILE",
+        help="human_confirmed.json from confirm-heldout --finalize: sealed as Gate B",
+    )  # fmt: skip
     s = sub.add_parser("status", help="show stages and spend of a run")
     s.add_argument("run")
     g = sub.add_parser("report", help="print the report of a finished run")
@@ -73,6 +83,20 @@ def _parser() -> argparse.ArgumentParser:
     sv = sub.add_parser("serve", help="run the HTTP API server (docs/API_CONTRACT.md)")
     sv.add_argument("--host", default="127.0.0.1")
     sv.add_argument("--port", type=int, default=8000)
+    dh = sub.add_parser(
+        "draft-heldout", help="teacher drafts gold SQL for a human question file (spends)"
+    )
+    dh.add_argument("--questions", required=True, metavar="FILE", help="one question per line")
+    dh.add_argument("--budget-usd", type=float, default=None, help="spend cap for this drafting")
+    dh.add_argument("--i-approve-spend", action="store_true")
+    dh.add_argument("--db-seed", type=int, default=0)
+    ch = sub.add_parser(
+        "confirm-heldout", help="review drafted gold SQL, then --finalize human_confirmed.json"
+    )
+    ch.add_argument(
+        "--set", default=None, metavar="ID", help="humanset/<id> (default: the only one)"
+    )
+    ch.add_argument("--finalize", action="store_true", help="write human_confirmed.json and stop")
     ex = sub.add_parser("export-replay", help="bundle a finished run into replay/")
     ex.add_argument("run")
     ex.add_argument("--replay-dir", default=None, help="default: $DISTILLERY_REPLAY_DIR or replay")
@@ -175,6 +199,16 @@ def _summary(report: Mapping[str, Any], out: Callable[[str], None]) -> None:
         f"teacher={acc['teacher']:.3f}"
     )
     out(f"held-out sealed sha256: {report['data']['heldout_sealed_sha256']}")
+    human = ev.get("human")
+    if human:
+        hacc = human["accuracy"]
+        out(
+            f"human held-out (Gate B) decision: {report.get('decision_human')} n={human['n']} "
+            f"accuracy base={hacc['base']:.3f} student={hacc['student']:.3f} "
+            f"teacher={hacc['teacher']:.3f}"
+        )
+        for reason in human["gate"]["reasons"]:
+            out(f"  - {reason}")
     for rd in report["rounds"]:
         out(
             f"round {rd['round']}: train_rows={rd['train_rows']} dev_acc={rd['dev_acc']:.3f} "
@@ -242,7 +276,12 @@ def _cmd_run(
     elif args.budget_usd is not None:
         out("note: --budget-usd is ignored in a dry run (no spend)")
 
+    human_set = Path(args.human_set) if args.human_set else None
+    if human_set is not None and not human_set.is_file():
+        out(f"refused: human set file not found: {human_set}")
+        return EXIT_REFUSED
     pcfg = PipelineConfig(
+        human_set_path=human_set,
         scale=SCALES[args.scale],
         dry_run=dry,
         # the real live path serves base and student on sandbox CPU; a dry run or a caller-supplied
@@ -260,7 +299,7 @@ def _cmd_run(
             if dry:
                 dr = build_dry_run(
                     pcfg.scale, bridge, seed=args.seed, max_rounds=args.max_rounds,
-                    headroom_max_base_acc=args.max_base_acc,
+                    headroom_max_base_acc=args.max_base_acc, human_set_path=human_set,
                 )  # fmt: skip
                 config, pcfg, deps = dr.config, dr.pipeline_cfg, dr.deps
             elif deps_factory is not None:
@@ -269,7 +308,7 @@ def _cmd_run(
                 deps = make_live_deps(config, pcfg, bridge, env=env)
             with driving(store.run_dir(run_id)):
                 report = Pipeline(pcfg, config, deps, store, run_id, say=out).run()
-    except (ConfigRefusal, ConfigError) as exc:
+    except (ConfigRefusal, ConfigError, humanset.HumanSetError) as exc:
         out(f"refused: {exc}")
         return EXIT_REFUSED
     except PipelineError as exc:
@@ -340,6 +379,126 @@ def _cmd_serve(args: argparse.Namespace, env: Mapping[str, str]) -> int:
     return EXIT_OK
 
 
+def _cmd_draft_heldout(
+    args: argparse.Namespace,
+    env: Mapping[str, str],
+    deps_factory: DepsFactory | None,
+    out: Callable[[str], None],
+    token_prompt: Callable[[], str] | None,
+) -> int:
+    """Teacher drafts gold SQL for the human questions. Spends, so: admin token plus
+    --i-approve-spend every time, a ledger cap, and spend recorded under ``humanset-<sha8>``."""
+    root = _root(args, env)
+    try:
+        config = load_config(env)
+        teacher = config.require_model("teacher")
+    except ConfigError as exc:
+        out(f"configuration error: {exc}")
+        return EXIT_REFUSED
+    if not config.verify_admin_token(_supplied_token(env, token_prompt)):
+        out("refused: drafting spends money and requires the admin token; none/incorrect supplied")
+        return EXIT_REFUSED
+    if not args.i_approve_spend:
+        out("refused: drafting requires --i-approve-spend")
+        return EXIT_REFUSED
+    try:
+        qf = load_question_file(args.questions)
+    except QuestionFileError as exc:
+        out(f"refused: {exc}")
+        return EXIT_REFUSED
+    if args.budget_usd is not None:
+        config = config.model_copy(update={"run_cap_usd": args.budget_usd})
+    set_id = qf.file_sha256[:8]
+    run_id = f"{humanset.RUN_PREFIX}{set_id}"
+    db = sql_schema.build_database(args.db_seed)
+    db_path = humanset.set_dir(root, set_id) / "db.sqlite"
+    atomic_write_bytes(db_path, db)
+    pcfg = PipelineConfig(student_serving="injected" if deps_factory is not None else "sandbox_cpu")
+    store = Store(root)
+    try:
+        with AsyncBridge() as bridge:
+            deps = (
+                deps_factory(config, pcfg, bridge)
+                if deps_factory is not None
+                else make_live_deps(config, pcfg, bridge, env=env)
+            )
+            ledger = Ledger.from_config(run_id, config, store)
+            llm_kwargs: dict[str, Any] = {}
+            if deps.llm_sleep is not None:
+                llm_kwargs["sleep"] = deps.llm_sleep
+            llm = LLMClient(
+                deps.transport, config.model_ids, sink=LedgerSink(ledger),
+                pricing=ledger.estimate_llm_cost, **llm_kwargs,
+            )  # fmt: skip
+            runner = LLMRunner(llm, ledger, bridge, pcfg)
+            out(
+                f"drafting {len(qf.questions)} questions x {humanset.K_CANDIDATES} "
+                f"(teacher {teacher})"
+            )
+            drafts = humanset.draft_questions(
+                qf, runner=runner, executor=deps.executor, db_ref=str(db_path),
+                schema_ddl=sql_schema.schema_ddl(args.db_seed), db_sha256=sha256_hex(db),
+                teacher_model=teacher,
+            )  # fmt: skip
+            spent = ledger.spent()
+    except BudgetExceeded as exc:
+        out(f"refused: budget exceeded before drafting finished: {exc}")
+        return EXIT_REFUSED
+    except (ConfigRefusal, ConfigError) as exc:
+        out(f"refused: {exc}")
+        return EXIT_REFUSED
+    finally:
+        store.close()
+    path = humanset.write_drafts(root, drafts)
+    out(f"set {set_id}: {len(drafts['kept'])} kept, {len(drafts['discarded'])} discarded")
+    out("discarded by reason: " + json.dumps(drafts["discarded_by_reason"], sort_keys=True))
+    out(f"spend usd (ESTIMATE, run {run_id}): {spent:.6f}")
+    out(f"drafts: {path}")
+    out(f"next: python -m distillery confirm-heldout --set {set_id}")
+    return EXIT_OK
+
+
+def _cmd_confirm_heldout(
+    args: argparse.Namespace,
+    env: Mapping[str, str],
+    out: Callable[[str], None],
+    ask: Callable[[str], str],
+) -> int:
+    root = _root(args, env)
+    try:
+        set_id = args.set
+        if set_id is None:
+            sets = humanset.list_sets(root)
+            if not sets:
+                out("no human sets found: run draft-heldout first")
+                return EXIT_FAIL
+            if len(sets) > 1:
+                out(f"several human sets, pick one with --set: {', '.join(sets)}")
+                return EXIT_FAIL
+            set_id = sets[0]
+        if args.finalize:
+            path = humanset.finalize(root, set_id)
+            counts = json.loads(path.read_text(encoding="utf-8"))["counts"]
+            out(
+                f"confirmed: {counts['confirmed']}, rejected: {counts['rejected']}, "
+                f"skipped: {counts['skipped']}, undecided: {counts['undecided']}, "
+                f"kept: {counts['kept']}, discarded: {counts['discarded']}"
+            )
+            out(f"wrote {path}")
+            out(f"use it with: python -m distillery run --human-set {path} ...")
+            return EXIT_OK
+        summary = humanset.confirm_drafts(root, set_id, ask=ask, out=out)
+    except humanset.HumanSetError as exc:
+        out(f"error: {exc}")
+        return EXIT_FAIL
+    out(
+        f"confirmed: {summary['confirmed']}, rejected: {summary['rejected']}, "
+        f"skipped: {summary['skipped']}, undecided: {summary['undecided']}"
+        + (" (quit early; rerun to resume)" if summary["quit"] else "")
+    )
+    return EXIT_OK
+
+
 def _cmd_export_replay(
     args: argparse.Namespace, env: Mapping[str, str], out: Callable[[str], None]
 ) -> int:
@@ -379,11 +538,16 @@ def main(
     deps_factory: DepsFactory | None = None,
     out: Callable[[str], None] = print,
     token_prompt: Callable[[], str] | None = None,
+    ask: Callable[[str], str] = input,
 ) -> int:
     e: Mapping[str, str] = os.environ if env is None else env
     args = _parser().parse_args(argv)
     if args.cmd == "run":
         return _cmd_run(args, e, deps_factory, out, token_prompt)
+    if args.cmd == "draft-heldout":
+        return _cmd_draft_heldout(args, e, deps_factory, out, token_prompt)
+    if args.cmd == "confirm-heldout":
+        return _cmd_confirm_heldout(args, e, out, ask)
     if args.cmd == "serve":
         return _cmd_serve(args, e)
     if args.cmd == "export-replay":

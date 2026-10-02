@@ -42,7 +42,8 @@ NULLABLE: dict[str, set[str]] = {
         "verifier.code",
         "verifier.selftest",
     },
-    "report": {"recorded_at"},
+    # Gate B fields are null when the run had no human set
+    "report": {"recorded_at", "decision_human", "evaluation.human", "data.human"},
     "tree": {
         "nodes[].parent_id",
         "nodes[].round",

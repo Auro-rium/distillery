@@ -1,0 +1,91 @@
+{
+  "counts": {
+    "confirmed": 6,
+    "discarded": 1,
+    "discarded_by_reason": {
+      "disagree": 1,
+      "empty": 0,
+      "exec_error": 0,
+      "llm_error": 0,
+      "no_sql": 0
+    },
+    "duplicates_dropped": 0,
+    "kept": 8,
+    "questions": 9,
+    "rejected": 2,
+    "skipped": 0,
+    "undecided": 0
+  },
+  "db_sha256": "03864579a97c4336039620d125c6811ee513dce2b9ceb3796d282354cc96d02c",
+  "format": "distillery-human-confirmed-v1",
+  "items": [
+    {
+      "family": "human",
+      "gold_sql": "SELECT COUNT(*) FROM accounts",
+      "heldout_class": "human",
+      "question": "[synthetic] How many accounts are there in total?",
+      "requires_order": false,
+      "source": "human",
+      "tables": [],
+      "task_id": "h-0-synthetic",
+      "template": ""
+    },
+    {
+      "family": "human",
+      "gold_sql": "SELECT COUNT(*) FROM users",
+      "heldout_class": "human",
+      "question": "[synthetic] How many users are there in total?",
+      "requires_order": false,
+      "source": "human",
+      "tables": [],
+      "task_id": "h-1-synthetic",
+      "template": ""
+    },
+    {
+      "family": "human",
+      "gold_sql": "SELECT COUNT(*) FROM plans",
+      "heldout_class": "human",
+      "question": "[synthetic] How many plans are there in total?",
+      "requires_order": false,
+      "source": "human",
+      "tables": [],
+      "task_id": "h-2-synthetic",
+      "template": ""
+    },
+    {
+      "family": "human",
+      "gold_sql": "SELECT COUNT(*) FROM invoices",
+      "heldout_class": "human",
+      "question": "[synthetic] How many invoices are there in total?",
+      "requires_order": false,
+      "source": "human",
+      "tables": [],
+      "task_id": "h-3-synthetic",
+      "template": ""
+    },
+    {
+      "family": "human",
+      "gold_sql": "SELECT COUNT(*) FROM payments",
+      "heldout_class": "human",
+      "question": "[synthetic] How many payments are there in total?",
+      "requires_order": false,
+      "source": "human",
+      "tables": [],
+      "task_id": "h-4-synthetic",
+      "template": ""
+    },
+    {
+      "family": "human",
+      "gold_sql": "SELECT COUNT(*) FROM support_tickets",
+      "heldout_class": "human",
+      "question": "[synthetic] How many support tickets are there in total?",
+      "requires_order": false,
+      "source": "human",
+      "tables": [],
+      "task_id": "h-5-synthetic",
+      "template": ""
+    }
+  ],
+  "question_file_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "teacher_model": "SYNTHETIC-FIXTURE (not a real draft)"
+}

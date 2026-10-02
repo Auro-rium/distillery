@@ -1,6 +1,6 @@
 import type {
-  Config, ExampleKind, ExamplesResult, Health, NewRunBody, PlaygroundResponse, Report, RunDetail,
-  RunSummary, Tree,
+  Config, ExampleKind, ExamplesResult, Health, HumansetDrafts, NewRunBody, PlaygroundResponse, Report,
+  RunDetail, RunSummary, Tree,
 } from "./types";
 
 export class ApiError extends Error {
@@ -104,6 +104,10 @@ export const api = {
   createRun: (body: NewRunBody) => request<{ run_id: string }>("/runs", post(body), true),
   cancelRun: (id: string) =>
     request<{ status: string }>(`/runs/${encodeURIComponent(id)}/cancel`, { method: "POST" }, true),
+  humansetDrafts: (set?: string) =>
+    request<HumansetDrafts>(`/humanset/drafts${set ? `?set=${encodeURIComponent(set)}` : ""}`, {}, true),
+  humansetDecide: (body: { set: string; task_id: string; decision: "confirm" | "reject" | "skip" }) =>
+    request<{ decision: string; tally: HumansetDrafts["tally"] }>("/humanset/decide", post(body), true),
   playground: (question: string) =>
     request<PlaygroundResponse>("/playground", post({ question })),
 };

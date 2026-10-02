@@ -249,6 +249,40 @@ export function GateCaveat({ r }: { r: Report }) {
   );
 }
 
+/** Gate B. Rendered only when the report has a human block; every figure comes from the payload. */
+export function HumanSet({ r }: { r: Report }) {
+  const h = r.evaluation.human;
+  if (!h) return null;
+  const d = r.data.human;
+  const rows = modelRows(h.accuracy, h.gate.student_ci);
+  return (
+    <Card title="Human held-out set (Gate B)" className="rp-human">
+      <p className="muted rp-note">
+        Same thresholds as the gate above; reported separately and never mixed with it or the stress set.
+      </p>
+      <dl className="rp-kv">
+        <div><dt>Gate B decision</dt><dd>{r.decision_human ?? NOT_MEASURED}</dd></div>
+        <div><dt>Human n</dt><dd>{fmtInt(h.n)}</dd></div>
+        {d && (
+          <>
+            <div><dt>Questions in file</dt><dd>{fmtInt(d.counts.questions)}</dd></div>
+            <div><dt>Drafts kept</dt><dd>{fmtInt(d.counts.kept)}</dd></div>
+            <div><dt>Discarded</dt><dd>{fmtInt(d.counts.discarded)} ({Object.entries(d.counts.discarded_by_reason).map(([k, v]) => `${k} ${fmtInt(v)}`).join(", ")})</dd></div>
+            <div><dt>Rejected by the human</dt><dd>{fmtInt(d.counts.rejected)}</dd></div>
+            <div><dt>Dropped as exact overlap</dt><dd>{fmtInt(d.dropped_exact_overlap.total)}</dd></div>
+            <div><dt>Skeleton shared with training</dt><dd>{fmtInt(d.skeleton_in_train)}</dd></div>
+          </>
+        )}
+      </dl>
+      <ul className="rp-reasons">{h.gate.reasons.map((x) => <li key={x}>{x}</li>)}</ul>
+      <ul className="rp-reasons" aria-label="Human set accuracy">
+        {rows.map((m) => <li key={m.key}>{m.label} accuracy {m.value === null ? NOT_MEASURED : fmtPercent(m.value, 1)}</li>)}
+      </ul>
+      {(h.note ?? d?.note) && <p className="muted rp-note">{h.note ?? d?.note}</p>}
+    </Card>
+  );
+}
+
 /** Rendered only when the report has a stress block; nothing is invented otherwise. */
 export function Stress({ r }: { r: Report }) {
   const s = r.evaluation.stress;

@@ -230,6 +230,9 @@ class PipelineConfig(BaseModel):
     # sandbox_cpu: parallel generation jobs (the beta limit is 50 operations in flight in total)
     student_concurrency: int = Field(default=10, ge=1, le=20)
     student_max_new_tokens: int = Field(default=160, ge=16)  # sandbox_cpu: per sample (S4 recipe)
+    # Confirmed human held-out file (humanset.py). Only the PATH lives here: the evaluator alone
+    # reads it. Excluded from model_dump so a report never carries a machine-local path.
+    human_set_path: Path | None = Field(default=None, exclude=True)
 
     def extra_tasks(self) -> int:
         return self.round_extra_tasks or max(10, self.scale.train // 4)
@@ -1124,6 +1127,15 @@ class Pipeline:
             stress_sealed = (
                 self.store.seal_stress(self.run_id, stress_items) if stress_items else ""
             )
+            human_sealed: dict[str, Any] | None = None
+            if self.cfg.human_set_path is not None:
+                # the evaluator reads and seals the file; only a hash and counts come back
+                human_sealed = evaluator_mod.seal_human_set(
+                    self.store, self.run_id, self.cfg.human_set_path,
+                    str(self._results["schema"]["db_sha256"]),
+                    train_questions=[t.question for t in plan.train],
+                    dev_questions=[t.question for t in plan.dev],
+                )  # fmt: skip
             rng = random.Random(self.cfg.seed + 6)  # noqa: S311
             spot = rng.sample(items, min(self.cfg.spot_check_n, len(items)))
             atomic_write_bytes(
@@ -1159,6 +1171,7 @@ class Pipeline:
                 "stress_sealed_sha256": stress_sealed,
                 "stress_task_ids": sorted(t.task_id for t in plan.stress),
                 "stress_families": sorted({t.family for t in plan.stress}),
+                "human": human_sealed,
                 "counters": {
                     **plan.counters,
                     "train": len(plan.train),
@@ -1169,16 +1182,14 @@ class Pipeline:
                 },
             }
 
-        res = self._stage(
-            "split",
-            {
-                "scale": self.cfg.scale.model_dump(),
-                "n_spot": self.cfg.spot_check_n,
-                "gate": "in_distribution",
-            },
-            ["gold_crosscheck"],
-            fn,
-        )
+        split_inputs: dict[str, Any] = {
+            "scale": self.cfg.scale.model_dump(),
+            "n_spot": self.cfg.spot_check_n,
+            "gate": "in_distribution",
+        }
+        if self.cfg.human_set_path is not None:  # keyed only when set: old cache keys unchanged
+            split_inputs["human"] = evaluator_mod.human_set_fingerprint(self.cfg.human_set_path)
+        res = self._stage("split", split_inputs, ["gold_crosscheck"], fn)
         self.sealed_sha = str(res["sealed_sha256"])
         self.say(f"[held-out] sealed sha256={self.sealed_sha} n={res['counters']['heldout']}")
         for d in (*res["train"], *res["dev"]):
@@ -1860,6 +1871,8 @@ class Pipeline:
             "pack": self.cfg.pack,
             "decision": ev["gate"]["decision"],
             "decision_reasons": ev["gate"]["reasons"],
+            # Gate B (human set, same thresholds). None = no human set sealed for this run.
+            "decision_human": (ev.get("human") or {}).get("gate", {}).get("decision"),
             "evaluation": ev,
             "candidate_round": final["candidate_round"],
             "candidate_selection": "best DEV accuracy across rounds (ties: earliest); held-out "
@@ -1875,6 +1888,7 @@ class Pipeline:
                 "stress_tasks": len(split["stress_task_ids"]),
                 "stress_families": split["stress_families"],
                 "stress_sealed_sha256": split["stress_sealed_sha256"],
+                "human": split.get("human"),
                 "heldout_skeleton_overlap_rate": _rate(
                     split["counters"]["heldout_skeleton_in_train"], len(split["heldout_task_ids"])
                 ),

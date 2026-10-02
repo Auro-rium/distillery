@@ -6,7 +6,7 @@ import { ApiErrorState, EmptyState, LabelBanner, Spinner } from "../../component
 import { RunShell } from "../../components/RunShell";
 import { ExamplesCard } from "./Examples";
 import { Summary } from "./Summary";
-import { Accuracy, ByClass, GateCaveat, Stress, Clusters, Counters, CostLatency, GateDetails } from "./sections";
+import { Accuracy, ByClass, GateCaveat, HumanSet, Stress, Clusters, Counters, CostLatency, GateDetails } from "./sections";
 import { useAsync } from "./useAsync";
 import "./report.css";
 
@@ -22,6 +22,7 @@ export function ReportView({ r }: { r: Report }) {
         <Accuracy r={r} />
         <GateDetails r={r} />
         <ByClass r={r} />
+        <HumanSet r={r} />
         <Stress r={r} />
         <ExamplesCard id={r.run_id} />
         <CostLatency r={r} />

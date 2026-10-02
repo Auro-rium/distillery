@@ -1,0 +1,8 @@
+# SYNTHETIC FIXTURE for tests only. Not a real human question set.
+How many accounts are there?
+
+How many   users are there?
+How many plans are there?
+# a duplicate (after whitespace normalisation) of the first question
+How many accounts   are there?
+How many invoices are there?

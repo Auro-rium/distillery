@@ -12,6 +12,7 @@ import Tree from "./screens/tree";
 import ReportScreen from "./screens/report";
 import NewRun from "./screens/new";
 import Playground from "./screens/playground";
+import Humanset from "./screens/humanset";
 
 type Doc = Document & { startViewTransition?: (cb: () => void) => unknown };
 
@@ -44,6 +45,7 @@ function RouteStage() {
         <Route path="/runs/:id/report" element={<ReportScreen />} />
         <Route path="/new" element={<NewRun />} />
         <Route path="/playground" element={<Playground />} />
+        <Route path="/humanset" element={<Humanset />} />
         <Route path="*" element={<EmptyState title="Page not found"><Link to="/">Back to Replay</Link></EmptyState>} />
       </Routes>
     </div>

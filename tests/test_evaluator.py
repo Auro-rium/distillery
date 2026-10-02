@@ -270,7 +270,7 @@ def test_only_evaluator_loads_heldout() -> None:
                 name = node.attr
             elif isinstance(node, ast.Name):
                 name = node.id
-            if name in {"load_heldout", "load_stress"}:
+            if name in {"load_heldout", "load_stress", "load_human"}:
                 offenders.append(f"{path.relative_to(SRC)}:{node.lineno}")
     assert offenders == []
 
