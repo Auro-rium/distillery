@@ -186,6 +186,9 @@ SCALES: dict[str, Scale] = {
     "mini": Scale(name="mini", train=120, dev=30, heldout=60, stress=20),  # CLI-only
     "small": Scale(name="small", train=300, dev=50, heldout=100, stress=30),
     "full": Scale(name="full", train=1800, dev=150, heldout=300, stress=100),
+    # "gated": train ORIGINALS only; verified originals plus verified paraphrases are capped at
+    # 2000 rows by train_row_cap. Pool need = ceil(1100 x oversample) = 1210 of ~2.8k available.
+    "gated": Scale(name="gated", train=650, dev=150, heldout=300, stress=100),
 }
 
 
@@ -1940,13 +1943,27 @@ class Pipeline:
         ev = final["report"]
         n = int(ev["n"])
         teacher_use = final["metrics"]["usage"].get("eval_teacher", {})
+        # the teacher scores every sealed set (gate, stress, human when present), so its spend is
+        # divided by all items it scored, not by the gate n alone
+        scored: dict[str, int] = {"gate": n}
+        for key in ("stress", "human"):
+            sec = ev.get(key)
+            if isinstance(sec, Mapping) and sec.get("n"):
+                scored[key] = int(sec["n"])
+        n_scored = sum(scored.values())
+        teacher_usd = teacher_use.get("usd_nano", 0) / 1e9
         teacher_cost: dict[str, Any] = {
-            "basis": "measured tokens x configured prices, from the held-out teacher pass",
+            "basis": "measured tokens x configured prices, from the teacher pass over "
+            f"{' + '.join(scored)} items",
             "held_out_tasks": n,
+            "items_scored": n_scored,
+            "items_scored_breakdown": scored,
             "input_tokens": teacher_use.get("input_tokens", 0),
             "output_tokens": teacher_use.get("output_tokens", 0),
-            "usd": teacher_use.get("usd_nano", 0) / 1e9,
-            "usd_per_1k_tasks": (teacher_use.get("usd_nano", 0) / 1e9) / n * 1000 if n else None,
+            "usd": teacher_usd,
+            "usd_per_1k_tasks": teacher_usd / n_scored * 1000 if n_scored else None,
+            "usd_per_1k_tasks_basis": f"teacher usd / {n_scored} items scored "
+            f"({', '.join(f'{k} {v}' for k, v in scored.items())})",
         }
         manifest_stages = [
             {"stage": s["stage"], "output_sha256": s["output_sha256"]}

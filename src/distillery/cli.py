@@ -80,6 +80,14 @@ def _parser() -> argparse.ArgumentParser:
     g = sub.add_parser("report", help="print the report of a finished run")
     g.add_argument("run")
     g.add_argument("--json", action="store_true", help="print the raw report.json")
+    rp = sub.add_parser(
+        "reprice", help="recompute a finished run's cost at a price file into cost_repriced"
+    )
+    rp.add_argument("run")
+    rp.add_argument("--prices", required=True, help="price file (finetune/sandbox/llm sections)")
+    rp.add_argument("--balance-before", type=float, default=None, help="console balance, USD")
+    rp.add_argument("--balance-after", type=float, default=None, help="console balance, USD")
+    rp.add_argument("--no-write", action="store_true", help="print only; leave report.json alone")
     sv = sub.add_parser("serve", help="run the HTTP API server (docs/API_CONTRACT.md)")
     sv.add_argument("--host", default="127.0.0.1")
     sv.add_argument("--port", type=int, default=8000)
@@ -369,6 +377,35 @@ def _cmd_report(
     return EXIT_OK
 
 
+def _cmd_reprice(
+    args: argparse.Namespace, env: Mapping[str, str], out: Callable[[str], None]
+) -> int:
+    from distillery.config import load_price_file
+    from distillery.reprice import RepriceError, render, reprice_run
+
+    root = _root(args, env)
+    store = _store_for(root, args.run)
+    try:
+        prices = load_price_file(args.prices)
+        rp = reprice_run(
+            store,
+            args.run,
+            prices,
+            prices_label=str(args.prices),
+            balance_before=args.balance_before,
+            balance_after=args.balance_after,
+            write=not args.no_write,
+        )
+    except (ConfigError, RepriceError) as exc:
+        out(f"refused: {exc}")
+        return EXIT_REFUSED
+    finally:
+        store.close()
+    for line in render(rp):
+        out(line)
+    return EXIT_OK
+
+
 def _cmd_serve(args: argparse.Namespace, env: Mapping[str, str]) -> int:
     import uvicorn
 
@@ -552,6 +589,8 @@ def main(
         return _cmd_serve(args, e)
     if args.cmd == "export-replay":
         return _cmd_export_replay(args, e, out)
+    if args.cmd == "reprice":
+        return _cmd_reprice(args, e, out)
     if args.cmd == "status":
         return _cmd_status(args, e, out)
     return _cmd_report(args, e, out)

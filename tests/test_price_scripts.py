@@ -1,5 +1,6 @@
 # ruff: noqa: S101
 import importlib.util
+import json
 import sys
 from pathlib import Path
 from types import ModuleType
@@ -128,3 +129,93 @@ def test_measured_tokens_per_row_drives_the_fine_tune_line() -> None:
     ft = next(ln for ln in lines if ln.name == "fine-tune")
     assert ft.usd == pytest.approx(120 * 960 * 3 * 2 / 1e6)  # price 2 per Mtok; chars ignored
     assert "MEASURED" in ft.quantity
+
+
+# ---- gated (claims-real) design -----------------------------------------------------------------
+
+GATED_AVGS = {**AVGS}
+NANO_AVG = est.Avg(0, 200.0, 100.0)
+
+
+def gated_prices() -> PriceFile:
+    return PriceFile(
+        llm={
+            est.TEACHER: px(1, 3),
+            est.PLANNER: px(3, 9),
+            est.NANO: px(0.5, 1.0),
+        },
+        finetune={
+            est.STUDENT_1_7B: FinetunePrice(usd_per_mtok_trained_tokens=2, source="t", date="d")
+        },
+        sandbox=SandboxPrice(usd_per_second=0.01, source="t", date="d"),
+    )
+
+
+def test_gated_estimate_arithmetic() -> None:
+    sc = SCALES["gated"]
+    lines = est.build_gated_estimate(
+        sc, gated_prices(), GATED_AVGS, human_n=100, final_rows=1800, original_yield=0.9,
+        sec_per_sample=20.0, nano_avg=NANO_AVG,
+    )  # fmt: skip
+    usd = {ln.name: ln.usd for ln in lines}
+    t = (1000 * 1 + 400 * 3) / 1e6  # one teacher call
+    assert usd["teacher: train originals"] == pytest.approx(650 * t)
+    assert usd["nano: paraphrase calls"] == pytest.approx(650 * 0.9 * (200 * 0.5 + 100 * 1.0) / 1e6)
+    assert usd["teacher: verify paraphrases (upper bound)"] == pytest.approx(650 * 0.9 * 3 * t)
+    assert usd["teacher: draft human set (k=3)"] == pytest.approx(100 * 3 * t)
+    assert usd["teacher: eval gate+stress+human"] == pytest.approx((300 + 100 + 100) * t)
+    assert usd["planner: failure analysis (upper bound)"] == 0.0  # one round, no analysis
+    assert usd["fine-tune"] == pytest.approx(1800 * 960 * 3 * 2 / 1e6)
+    n_gen = 150 + 150 + 2 * 500
+    assert est.gated_generations(sc, 100) == n_gen
+    assert usd["sandbox generation"] == pytest.approx(n_gen * 20.0 * 0.01)
+    nano = next(ln for ln in lines if ln.name.startswith("nano"))
+    assert "USER-SUPPLIED" in nano.status
+    assert "TOTAL: $" in est.render(lines)
+
+
+def test_gated_nano_is_missing_measurement_not_a_guess() -> None:
+    lines = est.build_gated_estimate(SCALES["gated"], gated_prices(), GATED_AVGS, human_n=50)
+    nano = next(ln for ln in lines if ln.name.startswith("nano"))
+    assert nano.usd is None and "MISSING MEASUREMENT" in nano.status
+    text = est.render(lines)
+    assert "TOTAL withheld" in text and "TOTAL: $" not in text
+
+
+def test_finetune_ceiling_is_explicit_assumed_never_a_price_or_in_a_total() -> None:
+    no_ft = PriceFile(llm=gated_prices().llm, sandbox=gated_prices().sandbox)
+    lines = est.build_gated_estimate(
+        SCALES["gated"], no_ft, GATED_AVGS, human_n=100, nano_avg=NANO_AVG,
+        finetune_ceiling_usd=8.0,
+    )  # fmt: skip
+    ft = next(ln for ln in lines if ln.name == "fine-tune")
+    assert ft.usd is None and est.MISSING_PRICE in ft.status
+    ceil = next(ln for ln in lines if ln.informational)
+    assert ceil.usd == 8.0 and ceil.status.startswith("ASSUMED") and "NOT a price" in ceil.status
+    text = est.render(lines)
+    assert "TOTAL withheld" in text and "TOTAL: $" not in text
+    subtotal = sum(ln.usd for ln in lines if ln.usd is not None and not ln.informational)
+    assert f"SUBTOTAL of priced lines only: ${subtotal:.4f}" in text  # ceiling not inside it
+    assert "ASSUMED CEILING (not a price, not a quote)" in text
+    none = est.build_gated_estimate(SCALES["gated"], no_ft, GATED_AVGS, human_n=100)
+    assert not any(ln.informational for ln in none)  # shown only when asked for
+
+
+def test_wall_clock_note_and_cli(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    note = est.wall_clock_note(1100, 0.22)
+    assert "1.39 h" in note and "0.22 samples/s" in note
+    s = Store(tmp_path)
+    s.record_llm_call("r1", est.TEACHER, 1000, 300, 0.0)
+    s.close()
+    prices = tmp_path / "p.json"
+    entry = {"input_per_mtok": 0.3, "output_per_mtok": 0.9, "source": "api", "date": "d"}
+    prices.write_text(json.dumps({est.TEACHER: entry}))
+    rc = est.main(
+        [
+            "--scale", "gated", "--prices", str(prices), "--root", str(tmp_path), "--run", "r1",
+            "--human-n", "100", "--finetune-ceiling-usd", "8",
+        ]
+    )  # fmt: skip
+    out = capsys.readouterr().out
+    assert rc == 0 and "scale=gated" in out and "wall-clock" in out
+    assert "MISSING MEASUREMENT" in out and "ASSUMED CEILING" in out and "TOTAL withheld" in out

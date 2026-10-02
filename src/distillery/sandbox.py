@@ -29,6 +29,15 @@ _TIMEOUT_GRACE_S = 5.0
 # The SDK truncates stdout/stderr at 65535 bytes by default, which would cut a JSON result set
 # mid-way (the S4 spike already needed 400000). Ask for more explicitly on every run.
 TRUNCATE_OUTPUT_AT = 1_000_000
+# Transient transport failures (SDK ``ApiTimeoutError`` / ``ContreeTransportError``):
+# * POLL_RETRIES: consecutive failed polls of one operation status that are tolerated before the
+#   error is let through (polling is a GET by operation uuid, so repeating it is idempotent);
+# * RUN_RETRIES: extra whole-run attempts for DISPOSABLE runs only (no image is kept, so a repeat
+#   has no side effect beyond compute). Branch (non-disposable) runs are never resubmitted.
+POLL_RETRIES = 6
+RUN_RETRIES = 2
+RETRY_BACKOFF_S = 1.0
+_BACKOFF_CAP_S = 8.0
 
 FileSource = bytes | str | Path
 
@@ -380,8 +389,15 @@ class ContreeSandbox(_SandboxBase):
         max_inflight: int = BETA_INFLIGHT_CAP,
         sdk: Any | None = None,
         truncate_output_at: int = TRUNCATE_OUTPUT_AT,
+        poll_retries: int = POLL_RETRIES,
+        run_retries: int = RUN_RETRIES,
+        retry_backoff_s: float = RETRY_BACKOFF_S,
     ) -> None:
         super().__init__()
+        self._poll_retries = poll_retries
+        self._run_retries = run_retries
+        self._retry_backoff_s = retry_backoff_s
+        self._hardened = False
         self._truncate_output_at = truncate_output_at
         self._sdk = sdk
         self._api_key_getter = api_key_getter  # key is fetched only at connect time
@@ -411,7 +427,47 @@ class ContreeSandbox(_SandboxBase):
                 token=self._api_key_getter(), project_id=project, base_url=self._base_url
             )
             self._sdk = sdk_mod.Contree(cfg_mod.ContreeConfig(auth=auth))
+        if not self._hardened:
+            self._harden_polling(self._sdk)
+            self._hardened = True
         return self._sdk
+
+    def _backoff(self, attempt: int) -> float:
+        return float(min(self._retry_backoff_s * 2.0**attempt, _BACKOFF_CAP_S))
+
+    def _harden_polling(self, sdk: Any) -> None:
+        """Make the SDK's operation poll tolerate transient transport errors.
+
+        contree-sdk 0.3.6 ``image.run`` starts an operation and then calls
+        ``_wait_operation(uuid)``, which polls ``_api.get_operation_status(uuid)``. If one poll
+        raises ``ApiTimeoutError`` the SDK's ``_operation_canceller`` CANCELS the (possibly
+        finished) operation and the error escapes without the uuid. Wrapping the poll call itself
+        retries the same uuid in place: a GET, so idempotent, and the operation is never
+        resubmitted or cancelled for a blip. Bounded by ``poll_retries`` consecutive failures;
+        beyond that the original error propagates (and becomes a ``SandboxError``). Skipped
+        quietly if the SDK internals are not as expected (stub SDKs, other versions).
+        """
+        api = getattr(sdk, "_api", None)
+        orig = getattr(api, "get_operation_status", None)
+        if api is None or not callable(orig):
+            return
+        transient = _transient_error_types()
+        retries, backoff = self._poll_retries, self._backoff
+
+        async def tolerant(*args: Any, **kwargs: Any) -> Any:
+            for attempt in range(retries + 1):
+                try:
+                    return await orig(*args, **kwargs)
+                except transient:
+                    if attempt >= retries:
+                        raise
+                    await asyncio.sleep(backoff(attempt))
+            raise AssertionError("unreachable")  # pragma: no cover
+
+        try:
+            api.get_operation_status = tolerant
+        except (AttributeError, TypeError):  # frozen / slotted client: leave as is
+            return
 
     async def ensure_image(self, ref: str) -> str:
         """Import ``ref`` (e.g. ``python:3.12-slim``) if it is not present; returns its uuid."""
@@ -451,17 +507,28 @@ class ContreeSandbox(_SandboxBase):
         if timeout is not None:
             kwargs["timeout"] = timeout
         contree_error, timed_out_error = _sdk_error_types()
+        transient = _transient_error_types()
+        # only a disposable run may be repeated whole: it keeps no image, so a repeat is harmless
+        attempts = 1 + (self._run_retries if disposable else 0)
         async with self._global_sem:
             backstop = None if timeout is None else timeout + _TIMEOUT_GRACE_S
-            try:
-                image = await sdk.images.use(image_ref)  # no API call per getting-started.md
-                res = await asyncio.wait_for(image.run(**kwargs), timeout=backstop)
-            except TimeoutError:
-                raise SandboxTimeoutError(f"run exceeded timeout={timeout}s") from None
-            except timed_out_error as exc:
-                raise SandboxTimeoutError(_short(exc)) from exc
-            except contree_error as exc:
-                raise SandboxError(_short(exc)) from exc
+            for attempt in range(attempts):
+                try:
+                    image = await sdk.images.use(image_ref)  # no API call per getting-started.md
+                    res = await asyncio.wait_for(image.run(**kwargs), timeout=backstop)
+                    break
+                except TimeoutError:
+                    raise SandboxTimeoutError(f"run exceeded timeout={timeout}s") from None
+                except timed_out_error as exc:
+                    raise SandboxTimeoutError(_short(exc)) from exc
+                except transient as exc:
+                    if attempt + 1 < attempts:
+                        await asyncio.sleep(self._backoff(attempt))
+                        continue
+                    note = "" if disposable else " (branch run: not resubmitted, not idempotent)"
+                    raise SandboxError(_short(exc) + note) from exc
+                except contree_error as exc:
+                    raise SandboxError(_short(exc)) from exc
         uuid = None if res.uuid is None else str(res.uuid)
         if uuid is not None and not disposable:
             self._note_child(image_ref, uuid, _label(shell, command, args))
@@ -478,6 +545,15 @@ def _sdk_error_types() -> tuple[type[BaseException], type[BaseException]]:
         return mod.ContreeError, mod.OperationTimedOutError
     except (ImportError, AttributeError):  # stub SDK in tests
         return _Never, _Never
+
+
+def _transient_error_types() -> tuple[type[BaseException], ...]:
+    """SDK transport errors worth retrying: ``ApiTimeoutError`` and ``ContreeTransportError``."""
+    try:
+        mod = importlib.import_module("contree_sdk.sdk.exceptions")
+        return (mod.ApiTimeoutError, mod.ContreeTransportError)
+    except (ImportError, AttributeError):  # stub SDK in tests
+        return (_Never,)
 
 
 class _Never(BaseException):  # sentinel that is never raised

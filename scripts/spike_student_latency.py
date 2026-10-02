@@ -13,8 +13,15 @@ OOM / non-zero exit / timeout is a valid, recorded result, not an error. Servers
 The 40 prompts come from ``prompts.build_messages`` over template dev tasks of the synthetic DB
 (``generate_tasks``); nothing sealed is touched.
 
+With ``--dummy-adapter`` the same sweep runs on the base model PLUS an UNTRAINED LoRA (default
+r=16, alpha=16, all linear layers; see ``--lora-r/--lora-alpha/--target-modules``) built inside the
+sandbox on top of the deps image and loaded through the normal strict adapter path, so the reported
+peak RSS is the one a trained Token Factory adapter would see. Results go to
+``docs/spikes/s5-qwen3-1_7b-dummy-adapter.json`` unless ``--out`` says otherwise.
+
 Usage:
   python scripts/spike_student_latency.py [--model Qwen/Qwen3-1.7B] [--out PATH]
+  python scripts/spike_student_latency.py --dummy-adapter [--target-modules all-linear]
   python scripts/spike_student_latency.py --dry-run     # fakes only, no network, FAKE table
 
 Environment for a live run (never printed): NEBIUS_API_KEY, NEBIUS_PROJECT_ID / NEBIUS_AI_PROJECT,
@@ -41,6 +48,7 @@ from distillery.taskpacks.sql.questions import generate_tasks
 
 DEFAULT_MODEL = "Qwen/Qwen3-1.7B"
 DEFAULT_OUT = Path("docs/spikes/s5-qwen3-1_7b.json")
+DEFAULT_DUMMY_OUT = Path("docs/spikes/s5-qwen3-1_7b-dummy-adapter.json")
 N_PROMPTS = 40
 LEVELS = (1, 5, 10, 20)  # below the 50-operation cap and student_concurrency=20
 MAX_PER_LEVEL = 40
@@ -154,12 +162,16 @@ def run_spike(
     max_wall_s: float = 3600.0,
     levels: Sequence[int] = LEVELS,
     clock: Callable[[], float] = time.monotonic,
+    adapter: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Run the spike procedure; never raises on OOM/exit/timeout, records it as the outcome."""
+    """Run the spike procedure; never raises on OOM/exit/timeout, records it as the outcome.
+
+    ``adapter`` describes an adapter the servers load (the dummy-adapter pre-flight); None = base.
+    """
     budget = Budget(max_generations, clock() + max_wall_s, clock)
     result: dict[str, Any] = {
         "model": model,
-        "adapter": None,
+        "adapter": adapter,
         "sandbox": {"vcpu": 4, "ram_gb": 4},
         "n_prompts": len(prompts),
         "max_generations": max_generations,
@@ -231,13 +243,14 @@ def format_table(result: dict[str, Any], *, fake: bool = False) -> str:
     def f(v: object, unit: str = "") -> str:
         return "-" if v is None else f"{v}{unit}"
 
+    tag = " +dummy-LoRA" if result.get("adapter") else ""
     head = ["run", "batch", "conc", "n", "s/sample", "load_s", "peak RSS MB", "samples/s", "status"]
     b = BASELINE
     rows = [["0.6B baseline", "-", "-", "-", f(b["s_per_sample"]), "-", f(b["peak_rss_mb"]), "-",
              "measured (STATUS.md)"]]  # fmt: skip
     for p in result["phases"]:
         rows.append([
-            f"{result['model'].split('/')[-1]} {p['name']}", f(p.get("batch_size")),
+            f"{result['model'].split('/')[-1]}{tag} {p['name']}", f(p.get("batch_size")),
             f(p.get("concurrency")), f(p.get("n")), f(p.get("per_sample_s")), f(p.get("load_s")),
             f(p.get("peak_rss_mb")), f(p.get("samples_per_s")), p["status"],
         ])  # fmt: skip
@@ -286,19 +299,39 @@ def fake_prompts(n: int = N_PROMPTS) -> list[ChatMessages]:
 
 
 def live_wiring(
-    sandbox: Any, image: str, bridge: Any, model: str
+    sandbox: Any,
+    image: str,
+    bridge: Any,
+    model: str,
+    *,
+    dummy_adapter: dict[str, Any] | None = None,
 ) -> tuple[Callable[[], str], MakeServer]:
+    """``(build_deps, make_server)``. With ``dummy_adapter`` (keys ``r``, ``alpha``,
+    ``target_modules``) build_deps also builds the untrained adapter image, and every server loads
+    it through the ordinary adapter path (``--adapter``, strict loader)."""
     from distillery.sandbox_student import SandboxCpuStudent, ServingImages
 
     images = ServingImages(sandbox, image, bridge, base_model=model)
+    built: dict[str, str] = {}
+
+    def build() -> str:
+        if dummy_adapter is None:
+            return images.deps_image()
+        built["adapter"] = images.dummy_adapter_image(
+            r=int(dummy_adapter["r"]),
+            alpha=int(dummy_adapter["alpha"]),
+            target_modules=str(dummy_adapter["target_modules"]),
+        )
+        return built["adapter"]
 
     def make_server(batch_size: int, concurrency: int, timeout_s: float) -> Server:
         return SandboxCpuStudent(
             sandbox, image, bridge, base_model=model, batch_size=batch_size,
             concurrency=concurrency, timeout_s=timeout_s, images=images,
+            prebuilt_adapter_image=built.get("adapter"),
         )  # fmt: skip
 
-    return images.deps_image, make_server
+    return build, make_server
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -308,14 +341,31 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--dry-run", action="store_true", help="fakes only; no network, FAKE table")
     ap.add_argument("--max-generations", type=int, default=60)
     ap.add_argument("--max-wall-s", type=float, default=3600.0)
+    ap.add_argument(
+        "--dummy-adapter", action="store_true",
+        help="also load an UNTRAINED LoRA built inside the sandbox (memory pre-flight)",
+    )  # fmt: skip
+    ap.add_argument("--lora-r", type=int, default=16)
+    ap.add_argument("--lora-alpha", type=int, default=16)
+    ap.add_argument(
+        "--target-modules", default="all-linear",
+        help="'all-linear' (every linear layer except the head) or comma-separated module names, "
+        "e.g. q_proj,k_proj,v_proj,o_proj,gate_proj,up_proj,down_proj",
+    )  # fmt: skip
     args = ap.parse_args(argv)
+    dummy: dict[str, Any] | None = None
+    if args.dummy_adapter:
+        dummy = {
+            "kind": "dummy_untrained", "r": args.lora_r, "alpha": args.lora_alpha,
+            "target_modules": args.target_modules,
+        }  # fmt: skip
 
     if args.dry_run:
         prompts = fake_prompts()
         result = run_spike(
             model=args.model, prompts=prompts, build_deps=lambda: "fake-image",
             make_server=lambda bs, c, t: FakeSpikeServer(),
-            max_generations=args.max_generations, max_wall_s=args.max_wall_s,
+            max_generations=args.max_generations, max_wall_s=args.max_wall_s, adapter=dummy,
         )  # fmt: skip
         result["fake"] = True
         print(format_table(result, fake=True))
@@ -342,13 +392,15 @@ def main(argv: list[str] | None = None) -> int:
         image = bridge.run(
             sandbox.ensure_image(os.environ.get("DISTILLERY_SANDBOX_IMAGE") or SANDBOX_BASE_IMAGE)
         )
-        build_deps, make_server = live_wiring(sandbox, image, bridge, args.model)
+        build_deps, make_server = live_wiring(
+            sandbox, image, bridge, args.model, dummy_adapter=dummy
+        )
         result = run_spike(
             model=args.model, prompts=prompts, build_deps=build_deps, make_server=make_server,
-            max_generations=args.max_generations, max_wall_s=args.max_wall_s,
+            max_generations=args.max_generations, max_wall_s=args.max_wall_s, adapter=dummy,
         )  # fmt: skip
     result["fake"] = False
-    out = Path(args.out) if args.out else DEFAULT_OUT
+    out = Path(args.out) if args.out else (DEFAULT_DUMMY_OUT if dummy else DEFAULT_OUT)
     _write(out, result)
     print(format_table(result))
     print(f"wrote {out}")

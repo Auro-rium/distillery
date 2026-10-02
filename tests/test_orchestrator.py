@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import math
 import os
 import re
 import shutil
@@ -23,6 +24,7 @@ from distillery.orchestrator import (
     STUDENT_COST_UNAVAILABLE,
     ConfigRefusal,
     Pipeline,
+    PipelineConfig,
     Scale,
     ShortfallError,
     TaskTooEasyError,
@@ -35,7 +37,11 @@ from distillery.sandbox_executor import DB_PATH, SCRIPT_PATH, AsyncBridge, Sandb
 from distillery.store import Store
 from distillery.taskpacks.sql import schema as sql_schema
 from distillery.taskpacks.sql.executor import LocalExecutor
-from distillery.taskpacks.sql.questions import generate_tasks, stress_families
+from distillery.taskpacks.sql.questions import (
+    DEFAULT_SKELETON_CAP,
+    generate_tasks,
+    stress_families,
+)
 
 NANO = Scale(name="nano", train=16, dev=8, heldout=12, stress=6)
 
@@ -869,3 +875,45 @@ def test_resume_does_not_adopt_a_dead_job(tmp_path: Path, bridge: AsyncBridge, s
     pipe2.run()
     assert dr2.finetune.created  # a fresh job was created for round 1
     assert not [d for n, d in store.list_experiments("dry-t") if n == "finetune_job_adopted"]
+
+
+# ---- gated scale and teacher cost denominator ---------------------------------------------------
+
+
+def test_gated_scale_is_pinned_and_reachable_by_plan_split_arithmetic(tmp_path: Path) -> None:
+    sc = SCALES["gated"]
+    assert (sc.train, sc.dev, sc.heldout, sc.stress) == (650, 150, 300, 100)
+    assert (SCALES["full"].train, SCALES["mini"].train) == (1800, 120)  # others untouched
+    oversample = PipelineConfig().oversample
+    assert oversample == 1.1
+    n_total = math.ceil((sc.train + sc.dev + sc.heldout) * oversample)
+    n_stress = math.ceil(sc.stress * oversample)
+    assert (n_total, n_stress) == (1210, 111)  # ceil(100 x 1.1) is 111 in floating point
+    db = tmp_path / "d.sqlite"
+    sql_schema.write_database(0, db)
+    reserved = stress_families()
+    seed = PipelineConfig().seed  # same generation arguments as Pipeline._stage_questions
+    tasks = generate_tasks(
+        str(db), n_total, seed, exclude_families=reserved, skeleton_cap=DEFAULT_SKELETON_CAP
+    ).tasks
+    stress = generate_tasks(
+        str(db), n_stress, seed + 7, families=reserved, template_share=0.1, family_share=1.0
+    ).tasks
+    plan = plan_split(tasks, sc, seed, stress)
+    assert (len(plan.train), len(plan.dev), len(plan.heldout), len(plan.stress)) == (
+        650, 150, 300, 100,
+    )  # fmt: skip
+
+
+def test_dry_run_at_gated_stand_in_scale_and_teacher_cost_denominator(
+    tmp_path: Path, bridge: AsyncBridge
+) -> None:
+    stand_in = Scale(name="gated-mini", train=26, dev=6, heldout=12, stress=6)
+    pipe, _dr, store = make(tmp_path, bridge, scale=stand_in)
+    rep = pipe.run()
+    store.close()
+    t = rep["cost"]["cost_per_1k_tasks"]["teacher"]
+    assert t["items_scored_breakdown"] == {"gate": 12, "stress": 6}
+    assert t["items_scored"] == 18
+    assert t["usd_per_1k_tasks"] == pytest.approx(t["usd"] / 18 * 1000)
+    assert "18 items" in t["usd_per_1k_tasks_basis"]

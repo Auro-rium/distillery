@@ -192,3 +192,72 @@ def test_live_wiring_with_fake_sandbox() -> None:
         )
     assert res["outcome"] == "completed"
     assert res["phases"][0]["per_sample_s"] == 4.0 and res["phases"][0]["peak_rss_mb"] == 3000
+
+
+def _gen_handler(shells: list[str]) -> Any:
+    def handler(job: Job, fs: dict[str, bytes]) -> FakeExecution:
+        shells.append(job.shell or "")
+        if job.stdin is None:
+            return FakeExecution()
+        batch = json.loads(job.stdin)["messages_batch"]
+        out = {
+            "results": [{"text": "SELECT 1", "error": None} for _ in batch],
+            "load_s": 2.0, "gen_s": 5.0, "n": len(batch), "peak_rss_mb": 3900,
+            "adapter_tensors": 196,
+        }  # fmt: skip
+        return FakeExecution("DISTILLERY_OUT:" + json.dumps(out))
+
+    return handler
+
+
+def test_dummy_adapter_sweep_goes_through_the_adapter_loading_path() -> None:
+    shells: list[str] = []
+    dummy = {"kind": "dummy_untrained", "r": 16, "alpha": 16, "target_modules": "all-linear"}
+    with AsyncBridge() as bridge:
+        sandbox = FakeSandbox(_gen_handler(shells))
+        image = bridge.run(sandbox.ensure_image("docker://base"))
+        build, make = spike.live_wiring(
+            sandbox, image, bridge, "Qwen/Qwen3-1.7B", dummy_adapter=dummy
+        )
+        res = spike.run_spike(
+            model="Qwen/Qwen3-1.7B", prompts=spike.fake_prompts(), build_deps=build,
+            make_server=make, adapter=dummy,
+        )  # fmt: skip
+    assert res["outcome"] == "completed" and res["adapter"] == dummy
+    makes = [x for x in shells if "make_dummy_adapter.py" in x]
+    assert len(makes) == 1  # built once and shared by every phase
+    assert "--r 16 --alpha 16 --target-modules all-linear" in makes[0]
+    assert "--out /work/adapter" in makes[0] and "Qwen/Qwen3-1.7B" in makes[0]
+    gens = [x for x in shells if "gen.py" in x]
+    assert gens and all("--adapter /work/adapter" in g for g in gens)
+    assert res["phases"][0]["peak_rss_mb"] == 3900
+    assert "+dummy-LoRA" in spike.format_table(res)
+
+
+def test_target_modules_is_a_flag_and_reaches_the_shell() -> None:
+    from distillery.sandbox_student import dummy_adapter_shell
+
+    cmd = dummy_adapter_shell("Qwen/Qwen3-1.7B", r=8, alpha=32, target_modules="q_proj,v_proj")
+    assert "--r 8 --alpha 32" in cmd and "--target-modules q_proj,v_proj" in cmd
+
+
+def test_dummy_adapter_script_is_valid_python_and_mimics_token_factory_checkpoint() -> None:
+    import ast
+
+    from distillery.sandbox_student import DUMMY_ADAPTER_SCRIPT
+
+    ast.parse(DUMMY_ADAPTER_SCRIPT)
+    for needle in ("init_empty_weights", "base_model.model.", "init_lora_weights = False",
+                   "adapter_model.safetensors", "--target-modules"):  # fmt: skip
+        assert needle in DUMMY_ADAPTER_SCRIPT
+
+
+def test_dummy_adapter_dry_run_cli(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    out = tmp_path / "d.json"
+    args = ["--dry-run", "--dummy-adapter", "--target-modules", "q_proj,v_proj", "--out", str(out)]
+    assert spike.main(args) == 0
+    got = json.loads(out.read_text())
+    assert got["adapter"] == {
+        "kind": "dummy_untrained", "r": 16, "alpha": 16, "target_modules": "q_proj,v_proj",
+    }  # fmt: skip
+    assert "+dummy-LoRA" in capsys.readouterr().out
