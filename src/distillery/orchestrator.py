@@ -1502,7 +1502,12 @@ class Pipeline:
                     cks = ft.checkpoints(handle.job_id)
                     if not cks:
                         raise PipelineError(f"job {handle.job_id} succeeded with no checkpoints")
-                    art = ft.trained_artifact(info, cks[-1], rdir / "checkpoints")
+                    # The API list order is not a contract: evaluate the last step trained.
+                    # (sorted is stable, so among equal steps the API-order last still wins.)
+                    best = sorted(
+                        cks, key=lambda c: -1 if c.step_number is None else c.step_number
+                    )[-1]
+                    art = ft.trained_artifact(info, best, rdir / "checkpoints")
                     training = self._training_record(ft, r, info, base_model)
                     # Record what was trained BEFORE anything is evaluated.
                     self.store.add_experiment(

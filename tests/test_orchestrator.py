@@ -10,6 +10,7 @@ import subprocess
 import sys
 import tempfile
 from collections.abc import Callable, Iterator
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -326,6 +327,28 @@ def test_interrupt_during_finetune_cancels_job(tmp_path: Path, bridge: AsyncBrid
     with pytest.raises(KeyboardInterrupt):
         pipe.run()
     assert dr.finetune.cancelled == dr.finetune.created and len(dr.finetune.created) == 1
+
+
+def test_evaluated_checkpoint_is_the_highest_step_not_the_last_listed(
+    tmp_path: Path, bridge: AsyncBridge
+) -> None:
+    pipe, dr, _s = make(tmp_path, bridge)
+    real = dr.finetune.checkpoints
+    taken: list[str] = []
+    real_dl = dr.finetune.trained_artifact
+
+    def out_of_order(job_id: str) -> Any:
+        (c,) = real(job_id)
+        return [replace(c, id="ck-step9", step_number=9), replace(c, id="ck-step3", step_number=3)]
+
+    def spy(job: Any, ck: Any, directory: Any) -> Any:
+        taken.append(ck.id)
+        return real_dl(job, ck, directory)
+
+    dr.finetune.checkpoints = out_of_order  # type: ignore[method-assign]
+    dr.finetune.trained_artifact = spy  # type: ignore[method-assign]
+    pipe.run()
+    assert taken and set(taken) == {"ck-step9"}
 
 
 def test_orphaned_job_from_killed_process_is_cancelled_on_resume(
