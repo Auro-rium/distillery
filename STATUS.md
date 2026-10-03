@@ -1,6 +1,22 @@
 # STATUS
 
-**Date:** 2026-10-01 · **Phase:** diagnostics done, benchmark rebuilt and pre-registered, **no paid run until the cost estimate is approved** · **Result claims:** none (two smoke runs, both REJECT, both undertrained)
+**Date:** 2026-10-03 · **Phase:** proof mode (feature freeze; grounding prompt of 2026-10-03). The baseline is in `GROUND_TRUTH.md` · **Result claims:** none.
+
+## Proof phase (2026-10-03)
+- **Phase 0, GROUND_TRUTH.md: done** (21 claims, each with path, command and output).
+- **P1.1-P1.10 (free): done except P1.3.** Root cause of the smoke REJECTs, proven from the provider's job objects: 3/6/9 optimizer steps at defaults (lr 1e-5, batch 8, packing on, r8/α8). Token-ID parity train vs eval 200/200, no truncation (train max 1,074 of 8,192 tokens; gold SQL max 111 of 160), extraction clean, final checkpoint evaluated. P1.3 (loss masking) is being inferred from base loss vs step-1 loss.
+- **P3 (free): PASS.** Verifier 1321/1321 gold, 1193/1193 equivalent wraps, 8/8 pairs. Teacher-as-student PROMOTE, base-as-student REJECT on recorded vectors. Power at true ratio 0.95 is 1.00 (n=300) and 0.95 (n=100).
+- **Fixes before P1.11 (SDD Task 1):** pick the max-step checkpoint (P1.8), report cap hits (P1.5), planned-steps floor 50 → 300 (P1.7).
+- **Next: P1.11 overfit (paid, needs your approval and your console balance before and after).**
+
+### Spend ladder (dollar amounts need your console balance; the fine-tune and sandbox prices are still unknown)
+| Step | What is billed | Size |
+|---|---|---|
+| Free proofs (P0, P1.1-P1.10, P3) | nothing | $0 |
+| P1.11 overfit | Qwen3-1.7B LoRA, 64 rows x 10 epochs; sandbox 64 x 2 generations | ~0.62M trained tokens; ~128 sandbox generations (~10-15 min) |
+| P1.12 pilot | 2-3 jobs x ~300 rows, ≥300 steps each | ~2-3M trained tokens; ~150 dev generations x 3 |
+| P4 = P5 full run, from the UI | teacher data + gate/stress teacher (~$1.4 at API prices); fine-tune ≥1,600 rows x 3 epochs; ~1,100 sandbox generations | ~4.6M trained tokens |
+The 0.6B smoke jobs trained 0.85M tokens in total. Their billed cost would price a token once you read the console. P1.11 and P3 are never dropped.
 
 ## Where each step of the plan stands
 1. **Free diagnostics: done** (evidence below). 2. **Pre-registration: done** (DECISIONS.md, committed before any new data). 3. **Gold from templates: done** (code, audit, tests). 4. **Student config: done in code** (pinned hyperparameters, 50-step floor, base/student/teacher scored concurrently). 5. **Cost estimate: blocked on you** (console prices). 6. **Real backend: partly done** (see bottom); host and `vercel.json` decisions are yours.
@@ -12,7 +28,7 @@
 - **(d) loss curves (real job objects):** tiny 3 steps (train 0.771 to 0.751), mini r1 6 steps (0.674 to 0.609), mini r2 9 steps (0.687 to 0.566). Loss fell, from only 3 to 9 optimizer steps.
 - **(e) prompt render: byte-identical.** Training row and rebuilt eval prompt are identical (system 215 chars, user 3886 chars, same text). Rendered through the checkpoint's own chat template with jinja2: `/no_think` is in both, and the thinking-off eval prompt ends with `<think>\n\n</think>\n\n`, the same block the training render puts before the answer. No template mismatch.
 - **(f)** the same 3 of 30 dev tasks were solved after round 1 and round 2.
-- **Reading:** root cause is the provider defaults the pipeline silently accepted (batch 8, lr 1e-5, lora_r 8, alpha 8, packing on): 3 to 9 optimizer steps. That is consistent with every number above (student ~2x base on its own training data, but far from fitting it). It is **not proven** to be the whole explanation; the properly configured run is the test. Fixed with explicit pinned hyperparameters, packing off, a refusal below 50 planned steps, and a `finetune` report section.
+- **Reading:** root cause is the provider defaults the pipeline silently accepted (batch 8, lr 1e-5, lora_r 8, alpha 8, packing on): 3 to 9 optimizer steps. That is consistent with every number above (student ~2x base on its own training data, but far from fitting it). It is **not proven** to be the whole explanation; the properly configured run is the test. Fixed with explicit pinned hyperparameters, packing off, a refusal below 50 planned steps (raised to 300 on 2026-10-03, `fix(P1.7)`), and a `finetune` report section.
 
 ## Benchmark as now built (offline, tested; fake-model dry run at full scale passes)
 - Gold = template SQL, executed in the sandbox; no model writes or vets it. The Ultra/Super agreement filter is gone; Ultra is only used for failure analysis.
