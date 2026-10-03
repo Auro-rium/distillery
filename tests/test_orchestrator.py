@@ -377,7 +377,7 @@ def _live_like(tmp_path: Path, bridge: AsyncBridge, **pcfg: Any) -> tuple[Pipeli
 
 
 def test_min_planned_steps_refuses_before_any_upload(tmp_path: Path, bridge: AsyncBridge) -> None:
-    pipe, dr = _live_like(tmp_path, bridge)  # 16 rows / batch 16 x 3 epochs = 3 < 50
+    pipe, dr = _live_like(tmp_path, bridge)  # 16 rows / batch 16 x 3 epochs = 3 < 300
     with pytest.raises(ConfigRefusal, match="planned optimizer steps"):
         pipe._finetune_preflight(16)
     assert dr.finetune.uploads == {} and dr.finetune.created == []
@@ -385,9 +385,9 @@ def test_min_planned_steps_refuses_before_any_upload(tmp_path: Path, bridge: Asy
 
 def test_min_planned_steps_accepts_enough_rows(tmp_path: Path, bridge: AsyncBridge) -> None:
     pipe, _dr = _live_like(tmp_path, bridge)
-    pipe._finetune_preflight(16 * 17)  # 17 x 3 = 51 steps
-    with pytest.raises(ConfigRefusal):
-        pipe._finetune_preflight(16 * 16)  # 48
+    pipe._finetune_preflight(16 * 100)  # 100 x 3 = 300 steps (the 1,600-row minimum)
+    with pytest.raises(ConfigRefusal, match="min_planned_steps=300"):
+        pipe._finetune_preflight(16 * 99)  # 297
 
 
 def test_packing_refused_unless_allowed(tmp_path: Path, bridge: AsyncBridge) -> None:

@@ -227,7 +227,7 @@ class PipelineConfig(BaseModel):
     # Pinned, never provider defaults (measured: defaults gave 3-9 optimizer steps for 40-138 rows).
     hyperparameters: HyperParameters = PINNED_HYPERPARAMETERS
     # Refuse before any spend when the planned optimizer steps fall below this (dry runs exempt).
-    min_planned_steps: int = Field(default=50, ge=0)
+    min_planned_steps: int = Field(default=300, ge=0)
     # packing=True makes the step count unknowable; refuse unless the caller says so explicitly.
     allow_packing: bool = False
     # How the student and base are served. "injected" (default) = use Deps.student_factory /

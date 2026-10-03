@@ -66,7 +66,7 @@ def _parser() -> argparse.ArgumentParser:
     r.add_argument("--finetune-estimate-usd", type=float, default=None)
     r.add_argument(
         "--min-planned-steps", type=int, default=None,
-        help="refuse a live fine-tune planning fewer optimizer steps than this (default 50)",
+        help="refuse a live fine-tune planning fewer optimizer steps than this (default 300)",
     )  # fmt: skip
     r.add_argument("--max-rounds", type=int, default=3)
     r.add_argument("--max-base-acc", type=float, default=0.80, help="headroom threshold on dev")
