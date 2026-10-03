@@ -104,10 +104,14 @@ def _close_all(servers: Sequence[StudentServer], *, raise_first: bool = True) ->
 
 
 def _generation_error_counter(name: str, server: Any) -> dict[str, int]:
-    """Samples the serving backend failed to generate (scored as wrong, never dropped). Only
-    backends that can fail per sample (sandbox CPU) expose ``generation_errors``."""
-    errors = getattr(server, "generation_errors", None)
-    return {} if errors is None else {f"{name}_generation_errors": int(errors)}
+    """Samples the serving backend failed to generate (scored as wrong, never dropped), and those
+    that ran to ``max_new_tokens``. Only the sandbox CPU backend exposes these counters."""
+    out: dict[str, int] = {}
+    for attr in ("generation_errors", "cap_hits"):
+        n = getattr(server, attr, None)
+        if n is not None:
+            out[f"{name}_{attr}"] = int(n)
+    return out
 
 
 def _with_serving(artifact: Mapping[str, str], trained: TrainedArtifact) -> dict[str, str]:

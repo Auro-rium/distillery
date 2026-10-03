@@ -468,6 +468,7 @@ class SandboxCpuStudent:
         self._image: str | None = None
         self._closed = False
         self.generation_errors = 0
+        self.cap_hits = 0  # samples that ran to max_new_tokens (truncated or runaway)
         self.job_retries = 0  # generation jobs re-submitted after a sandbox-level failure
         self.error_samples: list[str] = []
         self.timings: list[dict[str, object]] = []  # per batch: load_s, gen_s, n, failed, ...
@@ -554,7 +555,7 @@ class SandboxCpuStudent:
             items = parsed.get("results")
             if not isinstance(items, list) or len(items) != len(chunk):
                 raise StudentServingError("generation batch returned the wrong number of outputs")
-            n_failed = 0
+            n_failed = n_cap = 0
             for item in items:
                 if not isinstance(item, dict):
                     raise StudentServingError("generation batch returned a malformed result")
@@ -564,8 +565,11 @@ class SandboxCpuStudent:
                     outputs.append("")
                 else:
                     outputs.append(str(item.get("text", "")))
+                    n_new = item.get("new_tokens")
+                    n_cap += isinstance(n_new, int) and n_new >= self._max_new_tokens
             failed += n_failed
             self.generation_errors += n_failed
+            self.cap_hits += n_cap
             self.timings.append(
                 {
                     **{
@@ -580,6 +584,7 @@ class SandboxCpuStudent:
                         )
                     },
                     "failed": n_failed,
+                    "cap_hits": n_cap,
                 }
             )
         if failed > self._max_fail * len(outputs):

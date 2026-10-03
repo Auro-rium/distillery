@@ -105,7 +105,8 @@ class Model:
         text = PROMPTS[input_ids[0][0]]
         if "boom" in text:
             raise RuntimeError("boom in " + text)
-        return T([[input_ids[0][0], input_ids[0][0]]])
+        n_new = 2 if "long" in text else 1  # "long" runs to a cap of 2 new tokens
+        return T([[input_ids[0][0]] * (1 + n_new)])
 class AutoModelForCausalLM:
     @classmethod
     def from_pretrained(cls, base, torch_dtype):
@@ -368,6 +369,18 @@ def test_per_sample_failure_is_counted_and_reported_not_dropped(
     assert s.generation_errors == 1
     assert "boom" in s.error_samples[0]
     assert sum(t["failed"] for t in s.timings) == 1  # type: ignore[misc]
+
+
+def test_samples_that_hit_max_new_tokens_are_counted(
+    stubs: Path, tmp_path: Path, bridge: AsyncBridge
+) -> None:
+    s = SandboxCpuStudent(
+        make_sandbox(stubs, tmp_path, Log()), "img", bridge,
+        base_model=MODEL, batch_size=4, max_new_tokens=2,
+    )  # fmt: skip
+    out = s.generate([[{"role": "user", "content": "long"}], *msgs(1)])
+    assert len(out) == 2 and s.cap_hits == 1 and s.generation_errors == 0
+    assert sum(t["cap_hits"] for t in s.timings) == 1  # type: ignore[misc]
 
 
 def test_too_many_sample_failures_raise_but_stay_counted(
