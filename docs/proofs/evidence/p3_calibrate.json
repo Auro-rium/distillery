@@ -1,0 +1,175 @@
+{
+ "P3.1_verifier": {
+  "gold_vs_gold": "1321/1321",
+  "corruptions_rejected": "5272/5272 (corrupt_sql keeps only variants the verifier rejects, so this is a consistency check, not recall)",
+  "subquery_wrap_equivalent_accepted": "1193/1193",
+  "handwritten_pairs": [
+   {
+    "pair": "join_order_and_aliases",
+    "expected_match": true,
+    "got_match": true,
+    "as_expected": true,
+    "reason": "match"
+   },
+   {
+    "pair": "in_vs_exists",
+    "expected_match": true,
+    "got_match": true,
+    "as_expected": true,
+    "reason": "match"
+   },
+   {
+    "pair": "not_exists_vs_left_join_null",
+    "expected_match": true,
+    "got_match": true,
+    "as_expected": true,
+    "reason": "match"
+   },
+   {
+    "pair": "between_vs_range",
+    "expected_match": true,
+    "got_match": true,
+    "as_expected": true,
+    "reason": "match"
+   },
+   {
+    "pair": "count_star_vs_count_pk_and_column_aliases",
+    "expected_match": true,
+    "got_match": true,
+    "as_expected": true,
+    "reason": "match"
+   },
+   {
+    "pair": "cte_wrapper",
+    "expected_match": true,
+    "got_match": true,
+    "as_expected": true,
+    "reason": "match"
+   },
+   {
+    "pair": "column_order_swapped (positional by design: expected REJECT)",
+    "expected_match": false,
+    "got_match": false,
+    "as_expected": true,
+    "reason": "row contents differ: 10 unexpected, 10 missing"
+   },
+   {
+    "pair": "order_by_desc_vs_asc on ordered gold (expected REJECT)",
+    "expected_match": false,
+    "got_match": false,
+    "as_expected": true,
+    "reason": "row contents differ: 5 unexpected, 5 missing"
+   }
+  ]
+ },
+ "P3.2-4_recorded": {
+  "heldout60_teacher_as_student": {
+   "decision": "PROMOTE",
+   "n": 60,
+   "acc": [
+    0.03333333333333333,
+    1.0,
+    1.0
+   ],
+   "ratio_ci": [
+    1.0,
+    1.0
+   ],
+   "mcnemar_p": 6.938893903907228e-18,
+   "reasons": [
+    "ratio lower bound 1.000 >= 0.85 (point 1.000)",
+    "McNemar exact p=0.0000 < 0.05 (student-only 58, base-only 0)"
+   ]
+  },
+  "heldout60_base_as_student": {
+   "decision": "REJECT",
+   "n": 60,
+   "acc": [
+    0.03333333333333333,
+    0.03333333333333333,
+    1.0
+   ],
+   "ratio_ci": [
+    0.0,
+    0.08333333333333333
+   ],
+   "mcnemar_p": 1.0,
+   "reasons": [
+    "ratio lower bound 0.000 < 0.85 (point 0.033)",
+    "student does not beat base: student-only wins 0 <= base-only wins 0"
+   ]
+  },
+  "heldout60_round1_student (the real REJECT)": {
+   "decision": "REJECT",
+   "n": 60,
+   "acc": [
+    0.03333333333333333,
+    0.05,
+    1.0
+   ],
+   "ratio_ci": [
+    0.0,
+    0.11666666666666667
+   ],
+   "mcnemar_p": 1.0,
+   "reasons": [
+    "ratio lower bound 0.000 < 0.85 (point 0.050)",
+    "McNemar exact p=1.0000 >= 0.05 (student-only 1, base-only 0)"
+   ]
+  },
+  "train117_teacher_as_student": {
+   "decision": "PROMOTE",
+   "n": 116,
+   "acc": [
+    0.08620689655172414,
+    1.0,
+    1.0
+   ],
+   "ratio_ci": [
+    1.0,
+    1.0
+   ],
+   "mcnemar_p": 2.465190328815662e-32,
+   "reasons": [
+    "ratio lower bound 1.000 >= 0.85 (point 1.000)",
+    "McNemar exact p=0.0000 < 0.05 (student-only 106, base-only 0)"
+   ]
+  },
+  "train117_base_as_student": {
+   "decision": "REJECT",
+   "n": 116,
+   "acc": [
+    0.08620689655172414,
+    0.08620689655172414,
+    1.0
+   ],
+   "ratio_ci": [
+    0.034482758620689655,
+    0.13793103448275862
+   ],
+   "mcnemar_p": 1.0,
+   "reasons": [
+    "ratio lower bound 0.034 < 0.85 (point 0.086)",
+    "student does not beat base: student-only wins 0 <= base-only wins 0"
+   ]
+  },
+  "aa_base_heldout_counts": {
+   "run_final_eval_base_acc": 0.03333333333333333,
+   "diagnosis_base_acc": 0.03333333333333333
+  }
+ },
+ "P3.5_power": {
+  "assumptions": "teacher acc 0.97, base acc 0.15 (independent), student correct only where teacher is, with prob = true ratio; real GateThresholds (10k resamples)",
+  "promote_rate": {
+   "n=300 true_ratio=0.8": 0.0,
+   "n=300 true_ratio=0.85": 0.05,
+   "n=300 true_ratio=0.9": 0.715,
+   "n=300 true_ratio=0.95": 1.0,
+   "n=100 true_ratio=0.8": 0.005,
+   "n=100 true_ratio=0.85": 0.02,
+   "n=100 true_ratio=0.9": 0.395,
+   "n=100 true_ratio=0.95": 0.95
+  },
+  "sims_per_cell": 200
+ }
+}

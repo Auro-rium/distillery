@@ -1,0 +1,294 @@
+{
+  "ftjob-f9a2a5c8132c439da5ebe367055e25f8": {
+    "status": "succeeded",
+    "resolved_hyperparameters": {
+      "batch_size": 8,
+      "learning_rate_multiplier": null,
+      "n_epochs": 3,
+      "learning_rate": 1e-05,
+      "warmup_ratio": 0.0,
+      "weight_decay": 0.0,
+      "packing": true,
+      "max_grad_norm": 1.0,
+      "context_length": 8192,
+      "lora": true,
+      "lora_r": 8,
+      "lora_alpha": 8,
+      "lora_dropout": 0.0
+    },
+    "trained_tokens": 336855,
+    "trained_steps": 6,
+    "total_steps": 6,
+    "loss_curve": [
+      {
+        "step": 2,
+        "train_loss": 0.6735737323760986,
+        "valid_loss": 0.8029658794403076
+      },
+      {
+        "step": 4,
+        "train_loss": 0.6448690891265869,
+        "valid_loss": 0.7189332246780396
+      },
+      {
+        "step": 6,
+        "train_loss": 0.6087871193885803,
+        "valid_loss": 0.6852126717567444
+      }
+    ],
+    "events": [
+      {
+        "created_at": 1790772349,
+        "level": "info",
+        "message": "Job is submitted"
+      },
+      {
+        "created_at": 1790772411,
+        "level": "info",
+        "message": "Dataset 'validation' processed successfully"
+      },
+      {
+        "created_at": 1790772430,
+        "level": "info",
+        "message": "Dataset 'training' processed successfully"
+      },
+      {
+        "created_at": 1790772570,
+        "level": "info",
+        "message": "Training started"
+      },
+      {
+        "created_at": 1790772674,
+        "level": "info",
+        "message": "Training completed successfully"
+      }
+    ],
+    "raw_job": {
+      "id": "ftjob-f9a2a5c8132c439da5ebe367055e25f8",
+      "created_at": 1790772347,
+      "error": null,
+      "fine_tuned_model": null,
+      "finished_at": 1790772752,
+      "hyperparameters": {
+        "batch_size": 8,
+        "learning_rate_multiplier": null,
+        "n_epochs": 3,
+        "learning_rate": 1e-05,
+        "warmup_ratio": 0.0,
+        "weight_decay": 0.0,
+        "packing": true,
+        "max_grad_norm": 1.0,
+        "context_length": 8192,
+        "lora": true,
+        "lora_r": 8,
+        "lora_alpha": 8,
+        "lora_dropout": 0.0
+      },
+      "model": "Qwen/Qwen3-0.6B",
+      "object": "fine_tuning.job",
+      "organization_id": "",
+      "result_files": [
+        "file-a4d723ee7fb25898b663d580cf99d3c4",
+        "file-a09a098a0cf856ceb6e10e8d47dbbef0",
+        "file-de3a65433c085e4baf4214532e08c2fc",
+        "file-9ea87f5a14fd5f1fbcc6f0cbbc469925",
+        "file-b947100a20a2588c91730b69000b9ddd",
+        "file-b7c94ce9d97c5ed9875cc285bf46c220",
+        "file-61df9c6452c55705be76eef61a9c523f",
+        "file-6b20eb93af405334b0085a7d8bdd519e",
+        "file-d44da444224759a988d274055f2d5526",
+        "file-01f9fb9d6acf5703b9195c60e11e4801",
+        "file-4513ce169c7254b19fc5fc4acbf781f4",
+        "file-d78e3494409956e48ca0c039fa455cd7",
+        "file-261dda040761521a922a033eff116718",
+        "file-9ce4006baa0e53ff8b5ae71d3daa1702",
+        "file-d317897c8d405382bd4569ca4a8be917",
+        "file-4d937f08036b579e86bc47be6309b848",
+        "file-ca73aaad87e75c96b74c7d2730e96ecd",
+        "file-6edd9d2e27d25e84afbc8323b983ed6a"
+      ],
+      "seed": 1234,
+      "status": "succeeded",
+      "trained_tokens": 336855,
+      "training_file": "file-01a0f259-796e-7e8e-b0e1-7c203bf9e77b",
+      "validation_file": "file-01a0f259-7ca9-70f2-9b32-692d42a1a268",
+      "estimated_finish": 1790772655,
+      "integrations": null,
+      "metadata": null,
+      "method": {
+        "type": "supervised",
+        "dpo": null,
+        "reinforcement": null,
+        "supervised": {
+          "hyperparameters": {
+            "batch_size": 8,
+            "learning_rate_multiplier": null,
+            "n_epochs": 3,
+            "learning_rate": 1e-05,
+            "warmup_ratio": 0.0,
+            "weight_decay": 0.0,
+            "packing": true,
+            "max_grad_norm": 1.0,
+            "context_length": 8192,
+            "lora": true,
+            "lora_r": 8,
+            "lora_alpha": 8,
+            "lora_dropout": 0.0
+          }
+        }
+      },
+      "from_checkpoint": null,
+      "suffix": "distillery-sql-mini-live1-r1",
+      "trained_steps": 6,
+      "total_steps": 6,
+      "benchmark_mode": false,
+      "profile_mode": true
+    }
+  },
+  "ftjob-972b0b8bd64a4f228b262e2508191a95": {
+    "status": "succeeded",
+    "resolved_hyperparameters": {
+      "batch_size": 8,
+      "learning_rate_multiplier": null,
+      "n_epochs": 3,
+      "learning_rate": 1e-05,
+      "warmup_ratio": 0.0,
+      "weight_decay": 0.0,
+      "packing": true,
+      "max_grad_norm": 1.0,
+      "context_length": 8192,
+      "lora": true,
+      "lora_r": 8,
+      "lora_alpha": 8,
+      "lora_dropout": 0.0
+    },
+    "trained_tokens": 396885,
+    "trained_steps": 9,
+    "total_steps": 9,
+    "loss_curve": [
+      {
+        "step": 3,
+        "train_loss": 0.6874600648880005,
+        "valid_loss": 0.743102490901947
+      },
+      {
+        "step": 6,
+        "train_loss": 0.6253063678741455,
+        "valid_loss": 0.6448947787284851
+      },
+      {
+        "step": 9,
+        "train_loss": 0.5661439299583435,
+        "valid_loss": 0.606388509273529
+      }
+    ],
+    "events": [
+      {
+        "created_at": 1790772968,
+        "level": "info",
+        "message": "Job is submitted"
+      },
+      {
+        "created_at": 1790773012,
+        "level": "info",
+        "message": "Dataset 'training' processed successfully"
+      },
+      {
+        "created_at": 1790773012,
+        "level": "info",
+        "message": "Dataset 'validation' processed successfully"
+      },
+      {
+        "created_at": 1790773208,
+        "level": "info",
+        "message": "Training started"
+      },
+      {
+        "created_at": 1790773317,
+        "level": "info",
+        "message": "Training completed successfully"
+      }
+    ],
+    "raw_job": {
+      "id": "ftjob-972b0b8bd64a4f228b262e2508191a95",
+      "created_at": 1790772965,
+      "error": null,
+      "fine_tuned_model": null,
+      "finished_at": 1790773393,
+      "hyperparameters": {
+        "batch_size": 8,
+        "learning_rate_multiplier": null,
+        "n_epochs": 3,
+        "learning_rate": 1e-05,
+        "warmup_ratio": 0.0,
+        "weight_decay": 0.0,
+        "packing": true,
+        "max_grad_norm": 1.0,
+        "context_length": 8192,
+        "lora": true,
+        "lora_r": 8,
+        "lora_alpha": 8,
+        "lora_dropout": 0.0
+      },
+      "model": "Qwen/Qwen3-0.6B",
+      "object": "fine_tuning.job",
+      "organization_id": "",
+      "result_files": [
+        "file-77f7a57106545057bd2fa091cc3b5afe",
+        "file-bd23d69952385f6da2d81fb0e2fa3c5c",
+        "file-7b76bb7b532e5831b3eb4e8ec1171b6d",
+        "file-880e3763d1d5578e9dddb45cd5f6b596",
+        "file-e6629ee923795dd8844720992c149020",
+        "file-3e5a8dee66d15baa8c7adbb8f466d715",
+        "file-89192603e87656cc992612dc29ca29e4",
+        "file-fb5a24113dc55609ad8dff52b2fc85df",
+        "file-29eac2256fce52d38045cb34b1316f93",
+        "file-c08d42c164bc5612b18435d0f64f5cec",
+        "file-40fa1b5a37cc5ea9b8d4bdc32e6cafff",
+        "file-f0cf448905625b1296d5d354184d0424",
+        "file-9730831a39ff5441a5bd2b5dde651de8",
+        "file-49cd8f84daca51769e793b7f8cb15122",
+        "file-e0326080bd5e5d639575d24490e4cbc7",
+        "file-c7de54b4948e5a0d89ca3db32da09961",
+        "file-462d20a309bd56358e32c8f1b6718c8e",
+        "file-06634eaaf1495a648e22838f36312a42"
+      ],
+      "seed": 1234,
+      "status": "succeeded",
+      "trained_tokens": 396885,
+      "training_file": "file-01a0f262-e9e0-7ccf-85b0-bd2dae019184",
+      "validation_file": "file-01a0f262-eced-7bc9-93bf-bf5a738a688b",
+      "estimated_finish": 1790773296,
+      "integrations": null,
+      "metadata": null,
+      "method": {
+        "type": "supervised",
+        "dpo": null,
+        "reinforcement": null,
+        "supervised": {
+          "hyperparameters": {
+            "batch_size": 8,
+            "learning_rate_multiplier": null,
+            "n_epochs": 3,
+            "learning_rate": 1e-05,
+            "warmup_ratio": 0.0,
+            "weight_decay": 0.0,
+            "packing": true,
+            "max_grad_norm": 1.0,
+            "context_length": 8192,
+            "lora": true,
+            "lora_r": 8,
+            "lora_alpha": 8,
+            "lora_dropout": 0.0
+          }
+        }
+      },
+      "from_checkpoint": null,
+      "suffix": "distillery-sql-mini-live1-r2",
+      "trained_steps": 9,
+      "total_steps": 9,
+      "benchmark_mode": false,
+      "profile_mode": true
+    }
+  }
+}

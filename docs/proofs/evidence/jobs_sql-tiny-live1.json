@@ -1,0 +1,148 @@
+{
+  "ftjob-b9962948ef5c4a07af68fbb6a03b41d4": {
+    "status": "succeeded",
+    "resolved_hyperparameters": {
+      "batch_size": 8,
+      "learning_rate_multiplier": null,
+      "n_epochs": 3,
+      "learning_rate": 1e-05,
+      "warmup_ratio": 0.0,
+      "weight_decay": 0.0,
+      "packing": true,
+      "max_grad_norm": 1.0,
+      "context_length": 8192,
+      "lora": true,
+      "lora_r": 8,
+      "lora_alpha": 8,
+      "lora_dropout": 0.0
+    },
+    "trained_tokens": 115611,
+    "trained_steps": 3,
+    "total_steps": 3,
+    "loss_curve": [
+      {
+        "step": 1,
+        "train_loss": 0.7711755633354187,
+        "valid_loss": 0.8129866123199463
+      },
+      {
+        "step": 2,
+        "train_loss": 0.7641865611076355,
+        "valid_loss": 0.7770964503288269
+      },
+      {
+        "step": 3,
+        "train_loss": 0.7506921291351318,
+        "valid_loss": 0.7598985433578491
+      }
+    ],
+    "events": [
+      {
+        "created_at": 1790756946,
+        "level": "info",
+        "message": "Job is submitted"
+      },
+      {
+        "created_at": 1790756988,
+        "level": "info",
+        "message": "Dataset 'validation' processed successfully"
+      },
+      {
+        "created_at": 1790757011,
+        "level": "info",
+        "message": "Dataset 'training' processed successfully"
+      },
+      {
+        "created_at": 1790757178,
+        "level": "info",
+        "message": "Training started"
+      },
+      {
+        "created_at": 1790757283,
+        "level": "info",
+        "message": "Training completed successfully"
+      }
+    ],
+    "raw_job": {
+      "id": "ftjob-b9962948ef5c4a07af68fbb6a03b41d4",
+      "created_at": 1790756944,
+      "error": null,
+      "fine_tuned_model": null,
+      "finished_at": 1790757358,
+      "hyperparameters": {
+        "batch_size": 8,
+        "learning_rate_multiplier": null,
+        "n_epochs": 3,
+        "learning_rate": 1e-05,
+        "warmup_ratio": 0.0,
+        "weight_decay": 0.0,
+        "packing": true,
+        "max_grad_norm": 1.0,
+        "context_length": 8192,
+        "lora": true,
+        "lora_r": 8,
+        "lora_alpha": 8,
+        "lora_dropout": 0.0
+      },
+      "model": "Qwen/Qwen3-0.6B",
+      "object": "fine_tuning.job",
+      "organization_id": "",
+      "result_files": [
+        "file-f735c047ffc85cc68a9567c918f2f3f8",
+        "file-cd0f24c74da25f2ba722c84fbae0c1fd",
+        "file-a552fd34b94f5728992b2206954a2d4c",
+        "file-779838d7d8d65a9fa51b4a4d99cc7002",
+        "file-e8b5b001c167588eafed65513e905f3e",
+        "file-528522a097bc5687a011c8415f6fe558",
+        "file-f2917fb14ebe5e0cb94cb1cb29410003",
+        "file-58fff22178b45b308cc3ff1e6c5ccaeb",
+        "file-c5584726e76752569deb394677902440",
+        "file-219640227a3b58b3b75f84fedb13cf3e",
+        "file-ea47b526431b5ed2aa252055a3a05a47",
+        "file-5ef995ce14e55388957f87aca12d1536",
+        "file-0966d55adfa85363935f45fee7b833fd",
+        "file-66cd65b2c2c15642a9ee71f047f07583",
+        "file-c448607cc7645d5f895760d830ace74e",
+        "file-f8b65fecf215538bac7119d2c1ff95d7",
+        "file-8791a9eec05b5c3f9e084fb490aa3d66",
+        "file-8760f935587c5ed5bc4e80a238f3bbc9"
+      ],
+      "seed": 1234,
+      "status": "succeeded",
+      "trained_tokens": 115611,
+      "training_file": "file-01a0f16e-69f7-7c79-ab2e-d78993675401",
+      "validation_file": "file-01a0f16e-7048-7c73-aaf7-2d183fd088be",
+      "estimated_finish": 1790757268,
+      "integrations": null,
+      "metadata": null,
+      "method": {
+        "type": "supervised",
+        "dpo": null,
+        "reinforcement": null,
+        "supervised": {
+          "hyperparameters": {
+            "batch_size": 8,
+            "learning_rate_multiplier": null,
+            "n_epochs": 3,
+            "learning_rate": 1e-05,
+            "warmup_ratio": 0.0,
+            "weight_decay": 0.0,
+            "packing": true,
+            "max_grad_norm": 1.0,
+            "context_length": 8192,
+            "lora": true,
+            "lora_r": 8,
+            "lora_alpha": 8,
+            "lora_dropout": 0.0
+          }
+        }
+      },
+      "from_checkpoint": null,
+      "suffix": "distillery-sql-tiny-live1-r1",
+      "trained_steps": 3,
+      "total_steps": 3,
+      "benchmark_mode": false,
+      "profile_mode": true
+    }
+  }
+}

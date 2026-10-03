@@ -1,0 +1,59 @@
+{
+ "templates_identical_hf_vs_provider": true,
+ "P1.2_token_parity": {
+  "checked": 200,
+  "prefix_identical": 200,
+  "completion_decodes_to_sql": 200,
+  "example": {
+   "eval_tail": "no_think<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n",
+   "train_completion": "SELECT usage_id, used_on, event_count, SUM(event_count) OVER (ORDER BY used_on, usage_id) FROM feature_usage WHERE user_id = 265 ORDER BY used_on, usage_id<|im_end|>\n",
+   "prompt_tokens": 903,
+   "row_tokens": 947
+  }
+ },
+ "P1.4_train_row_tokens": {
+  "sql-tiny-live1": {
+   "n": 40,
+   "p50": 972,
+   "p95": 1032,
+   "max": 1073
+  },
+  "sql-mini-live1": {
+   "n": 255,
+   "p50": 959,
+   "p95": 1026,
+   "max": 1074
+  },
+  "gated_train_with_gold_as_completion": {
+   "n": 650,
+   "p50": 969,
+   "p95": 1022,
+   "max": 1028
+  }
+ },
+ "P1.5_gold_sql_tokens": {
+  "n": 1321,
+  "p50": 63,
+  "p95": 109,
+  "max": 111,
+  "over_160": 0,
+  "over_256": 0
+ },
+ "P1.5_recorded_raw_outputs": {
+  "outputs": 780,
+  "at_or_near_cap_158plus": 89,
+  "extraction_changed_text": 2,
+  "extraction_none": 0,
+  "think_tag_seen": 0,
+  "fence_seen": 0
+ },
+ "P1.9_style": {
+  "rows": 295,
+  "keywords_upper": 295,
+  "keywords_lower": 0,
+  "uses_table_alias": 183,
+  "multiline": 258,
+  "trailing_semicolon": 0,
+  "median_chars": 215
+ }
+}
