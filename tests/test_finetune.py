@@ -418,14 +418,14 @@ def test_guard_requires_lora_true_and_each_field() -> None:
 
 def test_pinned_values() -> None:
     assert PINNED_HYPERPARAMETERS.to_request() == {
-        "lora": True, "lora_r": 16, "lora_alpha": 16, "learning_rate": 1e-4, "n_epochs": 3,
-        "batch_size": 16, "packing": False, "warmup_ratio": 0.0, "weight_decay": 0.0,
+        "lora": True, "lora_r": 16, "lora_alpha": 32, "learning_rate": 1e-4, "n_epochs": 3,
+        "batch_size": 4, "packing": False, "warmup_ratio": 0.0, "weight_decay": 0.0,
         "max_grad_norm": 1.0, "lora_dropout": 0.0, "context_length": 8192,
     }  # fmt: skip
 
 
 def test_planned_steps() -> None:
-    assert planned_steps(117, PINNED_HYPERPARAMETERS) == 8 * 3
+    assert planned_steps(117, PINNED_HYPERPARAMETERS) == 30 * 3
     assert planned_steps(40, PINNED_HYPERPARAMETERS.model_copy(update={"packing": True})) is None
 
 

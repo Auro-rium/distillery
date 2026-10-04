@@ -98,9 +98,10 @@ def require_explicit_hyperparameters(hp: HyperParameters | None) -> HyperParamet
     return hp
 
 
-# The values the pipeline pins (chosen, not provider defaults).
+# The values the pipeline pins (chosen, not provider defaults): the P1.12 winner (lr 1e-4, dev
+# 142/150 vs base 33/150) with r16/alpha32 and batch 4, as pre-registered in DECISIONS 2026-10-04.
 PINNED_HYPERPARAMETERS = HyperParameters(
-    lora=True, lora_r=16, lora_alpha=16, learning_rate=1e-4, n_epochs=3, batch_size=16,
+    lora=True, lora_r=16, lora_alpha=32, learning_rate=1e-4, n_epochs=3, batch_size=4,
     packing=False, warmup_ratio=0.0, weight_decay=0.0, max_grad_norm=1.0, lora_dropout=0.0,
     context_length=8192,
 )  # fmt: skip

@@ -401,7 +401,7 @@ def _live_like(tmp_path: Path, bridge: AsyncBridge, **pcfg: Any) -> tuple[Pipeli
 
 
 def test_min_planned_steps_refuses_before_any_upload(tmp_path: Path, bridge: AsyncBridge) -> None:
-    pipe, dr = _live_like(tmp_path, bridge)  # 16 rows / batch 16 x 3 epochs = 3 < 300
+    pipe, dr = _live_like(tmp_path, bridge)  # 16 rows / batch 4 x 3 epochs = 12 < 300
     with pytest.raises(ConfigRefusal, match="planned optimizer steps"):
         pipe._finetune_preflight(16)
     assert dr.finetune.uploads == {} and dr.finetune.created == []
@@ -409,9 +409,9 @@ def test_min_planned_steps_refuses_before_any_upload(tmp_path: Path, bridge: Asy
 
 def test_min_planned_steps_accepts_enough_rows(tmp_path: Path, bridge: AsyncBridge) -> None:
     pipe, _dr = _live_like(tmp_path, bridge)
-    pipe._finetune_preflight(16 * 100)  # 100 x 3 = 300 steps (the 1,600-row minimum)
+    pipe._finetune_preflight(4 * 100)  # 100 x 3 = 300 steps (the 400-row minimum)
     with pytest.raises(ConfigRefusal, match="min_planned_steps=300"):
-        pipe._finetune_preflight(16 * 99)  # 297
+        pipe._finetune_preflight(4 * 99)  # 297
 
 
 def test_packing_refused_unless_allowed(tmp_path: Path, bridge: AsyncBridge) -> None:
@@ -436,7 +436,7 @@ def test_report_has_finetune_section(reference: dict[str, Any]) -> None:
     assert len(rep["finetune"]) == len(rep["rounds"])
     rec = rep["finetune"][0]
     assert rec["round"] == 1 and rec["job_id"] == rep["rounds"][0]["job_id"]
-    assert rec["hyperparameters"]["batch_size"] == 16 and rec["hyperparameters"]["packing"] is False
+    assert rec["hyperparameters"]["batch_size"] == 4 and rec["hyperparameters"]["packing"] is False
     assert rec["trained_steps"] and rec["trained_tokens"] and rec["loss_curve"] and rec["events"]
     assert rep["config"]["pipeline"]["hyperparameters"]["learning_rate"] == 1e-4
 
