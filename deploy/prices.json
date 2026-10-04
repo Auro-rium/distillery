@@ -22,5 +22,22 @@
     "output_per_mtok": 0.0,
     "source": "ASSUMED UPPER BOUND for budget guard, NOT the console price",
     "date": "2026-09-30"
+  },
+  "finetune": {
+    "Qwen/Qwen3-0.6B": {
+      "usd_per_mtok_trained_tokens": 0.4,
+      "source": "Nebius console Organisation > Usage, Table view (screenshot from the user): cost / usage over 2026-09-04..10-04 ('Fine-tuning Qwen3-0.6B LoRA 8K': 0.85M tokens, $0.34)",
+      "as_of": "2026-10-04"
+    },
+    "Qwen/Qwen3-1.7B": {
+      "usd_per_mtok_trained_tokens": 0.4,
+      "source": "Nebius console Organisation > Usage, Table view (screenshot from the user): cost / usage over 2026-09-04..10-04 ('Fine-tuning Qwen3-1.7B LoRA 16K': 0.62M tokens, $0.25; the 8K line is assumed equal until it appears)",
+      "as_of": "2026-10-04"
+    }
+  },
+  "sandbox": {
+    "usd_per_second": 0.0,
+    "source": "Nebius console Organisation > Usage, Table view (screenshot from the user): cost / usage over 2026-09-04..10-04: no Sandboxes line at all although sandboxes ran on 09-30 and 10-04 (beta, unbilled); revisit if a line appears",
+    "as_of": "2026-10-04"
   }
 }
