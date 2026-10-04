@@ -29,6 +29,7 @@ import os
 import random
 import statistics
 import sys
+import time
 from collections.abc import Sequence
 from datetime import UTC, datetime
 from pathlib import Path
@@ -53,7 +54,59 @@ HP = HyperParameters(
     context_length=16384,  # provider: batch_size x context_length >= 32768 (422 otherwise)
 )  # fmt: skip
 ADAPTER_NAMES = ("adapter_config.json", "adapter_model.safetensors")
-EVIDENCE = Path(__file__).resolve().parent / "evidence" / "p1_11_overfit.json"
+EVIDENCE_DIR = Path(__file__).resolve().parent / "evidence"
+EVIDENCE = EVIDENCE_DIR / "p1_11_overfit.json"
+EVAL, SET_NAME, BASE_CACHE_DIR = "train", "train64", Path(".distillery/proofs/p1_11")
+
+
+def _pilot_hp(lr: float) -> HyperParameters:  # P1.12 arms, DECISIONS.md 2026-10-04 (fixed)
+    return HyperParameters(
+        lora=True, lora_r=16, lora_alpha=32, lora_dropout=0.0, learning_rate=lr, batch_size=4,
+        n_epochs=4, packing=False, warmup_ratio=0.0, weight_decay=0.0, max_grad_norm=1.0,
+        context_length=8192,
+    )  # fmt: skip
+
+
+# name -> (n_train, hyperparameters, eval split, set name, evidence file, out dir, base cache dir)
+PRESETS: dict[str, tuple[int, HyperParameters, str, str, str, str, str]] = {
+    "p1_11": (
+        64,
+        HP,
+        "train",
+        "train64",
+        "p1_11_overfit.json",
+        ".distillery/proofs/p1_11",
+        ".distillery/proofs/p1_11",
+    ),
+    "p1_12a": (
+        300,
+        _pilot_hp(1e-4),
+        "dev",
+        "dev150",
+        "p1_12_arm_a.json",
+        ".distillery/proofs/p1_12/a",
+        ".distillery/proofs/p1_12",
+    ),
+    "p1_12b": (
+        300,
+        _pilot_hp(2e-4),
+        "dev",
+        "dev150",
+        "p1_12_arm_b.json",
+        ".distillery/proofs/p1_12/b",
+        ".distillery/proofs/p1_12",
+    ),
+}
+
+
+def apply_preset(name: str) -> str:
+    """Set the module constants for one pre-registered configuration; returns its out dir."""
+    global N_TRAIN, HP, EVAL, SET_NAME, EVIDENCE, BASE_CACHE_DIR, SUFFIX
+    n, hp, ev, set_name, evidence, out_dir, base_cache = PRESETS[name]
+    N_TRAIN, HP, EVAL, SET_NAME = n, hp, ev, set_name
+    EVIDENCE, BASE_CACHE_DIR = EVIDENCE_DIR / evidence, Path(base_cache)
+    SUFFIX = f"distillery-{name.replace('_', '-')}"
+    return out_dir
 
 
 def select_tasks(
@@ -140,6 +193,17 @@ def prepare(args: argparse.Namespace) -> tuple[list[dict[str, Any]], Path, Path]
     return train_sel, train_path, valid_path
 
 
+def eval_tasks(args: argparse.Namespace, train_sel: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """P1.11 scores the trained rows themselves; P1.12 scores split["dev"] (never trained on)."""
+    if EVAL == "train":
+        return train_sel
+    store = Store(Path(args.root))
+    try:
+        return list(stage_artifact(store, RUN_ID, "split")["dev"])
+    finally:
+        store.close()
+
+
 def plan(args: argparse.Namespace) -> int:
     train_sel, train_path, valid_path = prepare(args)
     rows = [json.loads(x) for x in train_path.read_text("utf-8").splitlines()]
@@ -161,7 +225,8 @@ def plan(args: argparse.Namespace) -> int:
                 "row_tokens": pct(counts),
                 "planned_steps": steps,
                 "estimated_trained_tokens": sum(counts) * int(HP.n_epochs or 0),
-                "estimated_sandbox_generations": len(rows) * 2,
+                "eval_set": SET_NAME,
+                "estimated_sandbox_generations": len(eval_tasks(args, train_sel)) * 2,
                 "hyperparameters": HP.to_request(),
                 "files": {"train": str(train_path), "valid": str(valid_path)},
             },
@@ -258,7 +323,7 @@ def run(args: argparse.Namespace) -> int:
             "requires_order": bool(t["requires_order"]),
             "question": t["question"],
         }
-        for t in train_sel
+        for t in eval_tasks(args, train_sel)
     ]
     db_path = Path(args.root) / "runs" / RUN_ID / "db.sqlite"
     servers: dict[str, Any] = {}
@@ -283,24 +348,31 @@ def run(args: argparse.Namespace) -> int:
         # cached in out-dir as soon as they exist, so a crash never discards finished work.
         models: dict[str, Any] = {}
         for name, files_ in (("adapter", adapter_files), ("base", ())):
-            cache = out / f"score_{name}.json"
+            cache = (BASE_CACHE_DIR if name == "base" else out) / f"score_{name}.json"
+            lock = cache.with_suffix(".lock")
+            while name == "base" and lock.exists() and not cache.exists():  # other arm scoring it
+                time.sleep(30)
             if cache.exists():
                 models[name] = json.loads(cache.read_text())
                 print(f"{name}: reusing cached scores from {cache}", flush=True)
                 continue
+            if name == "base":
+                cache.parent.mkdir(parents=True, exist_ok=True)
+                lock.write_text(str(os.getpid()))
             servers[name] = make_server(files_)
             try:
                 models[name] = diagnose_generate(
-                    {name: servers[name]}, {"train64": items}, LocalExecutor(),
+                    {name: servers[name]}, {SET_NAME: items}, LocalExecutor(),
                     db_ref=str(db_path), schema_ddl=schema_ddl(0),
                 )["models"][name]  # fmt: skip
             finally:
                 servers[name].close()
             cache.write_text(json.dumps(models[name]))
-            print(f"{name}: accuracy {models[name]['train64']['accuracy']:.3f}", flush=True)
+            lock.unlink(missing_ok=True)
+            print(f"{name}: accuracy {models[name][SET_NAME]['accuracy']:.3f}", flush=True)
         base_items, ad_items = (
-            models["base"]["train64"]["items"],
-            models["adapter"]["train64"]["items"],
+            models["base"][SET_NAME]["items"],
+            models["adapter"][SET_NAME]["items"],
         )
         result = {
             "models": models,
@@ -315,7 +387,7 @@ def run(args: argparse.Namespace) -> int:
     def timing_sum(server: Any, k: str) -> float:
         return sum(float(t.get(k) or 0) for t in getattr(server, "timings", []))
 
-    accuracy = {m: result["models"][m]["train64"]["accuracy"] for m in result["models"]}
+    accuracy = {m: result["models"][m][SET_NAME]["accuracy"] for m in result["models"]}
     evidence = {
         "run_id": RUN_ID,
         "base_model": base_model,
@@ -346,16 +418,59 @@ def run(args: argparse.Namespace) -> int:
     return 0
 
 
+def wilson(k: int, n: int, z: float = 1.96) -> tuple[float, float]:
+    p, d = k / n, 1 + z * z / n
+    c, h = (p + z * z / (2 * n)) / d, z * ((p * (1 - p) / n + z * z / (4 * n * n)) ** 0.5) / d
+    return c - h, c + h
+
+
+def decide() -> int:
+    """P1.12 decision rule (DECISIONS.md 2026-10-04): qualify = Wilson CI entirely above base's;
+    winner = higher dev accuracy among qualifiers, tie -> lower learning rate; none -> stop."""
+    arms = {a: json.loads((EVIDENCE_DIR / f"p1_12_arm_{a}.json").read_text()) for a in ("a", "b")}
+
+    def k(m: dict[str, Any]) -> int:
+        return sum(bool(i["correct"]) for i in m["dev150"]["items"])
+
+    base = arms["a"]["models"]["base"]
+    n = len(base["dev150"]["items"])
+    b_ci = wilson(k(base), n)
+    rows = {}
+    for a, ev in arms.items():
+        ad = ev["models"]["adapter"]
+        ci = wilson(k(ad), n)
+        rows[a] = {"lr": ev["hyperparameters"]["learning_rate"], "correct": k(ad), "n": n,
+                   "acc": k(ad) / n, "wilson95": ci, "qualifies": ci[0] > b_ci[1]}  # fmt: skip
+    q = [a for a in rows if rows[a]["qualifies"]]
+    winner = min(q, key=lambda a: (-rows[a]["correct"], rows[a]["lr"])) if q else None
+    verdict = (
+        f"PASS: arm {winner} (lr {rows[winner]['lr']})"
+        if winner
+        else "FAIL: no arm beats base (stop)"
+    )
+    out = {"base": {"correct": k(base), "n": n, "acc": k(base) / n, "wilson95": b_ci},
+           "arms": rows, "winner": winner, "verdict": verdict}  # fmt: skip
+    path = EVIDENCE_DIR / "p1_12_decision.json"
+    path.write_text(json.dumps(out, indent=1))
+    print(json.dumps(out, indent=1))
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawTextHelpFormatter)
-    ap.add_argument("mode", nargs="?", choices=("plan", "run"), default="plan")
+    ap.add_argument("mode", nargs="?", choices=("plan", "run", "decide"), default="plan")
+    ap.add_argument("--preset", choices=sorted(PRESETS), default="p1_11")
     ap.add_argument("--root", default=".distillery/live")
-    ap.add_argument("--out-dir", default=".distillery/proofs/p1_11")
+    ap.add_argument("--out-dir", default=None, help="default: the preset's out dir")
     ap.add_argument(
         "--tokenizer", default=None, help="dir with tokenizer.json + tokenizer_config.json"
     )
     ap.add_argument("--i-approve-spend", action="store_true")
     args = ap.parse_args(argv)
+    if args.mode == "decide":
+        return decide()
+    out_dir = apply_preset(args.preset)
+    args.out_dir = args.out_dir or out_dir
     return run(args) if args.mode == "run" else plan(args)
 
 
