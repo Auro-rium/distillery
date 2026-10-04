@@ -1,0 +1,14 @@
+{
+ "model": "Qwen/Qwen3-0.6B",
+ "rows": 12,
+ "base_mean_token_loss": {
+  "full": 1.8555,
+  "completion": 0.8025,
+  "completion_no_think_block": 0.7569
+ },
+ "tokens": {
+  "full": 11546,
+  "completion": 795,
+  "completion_no_think_block": 843
+ }
+}
