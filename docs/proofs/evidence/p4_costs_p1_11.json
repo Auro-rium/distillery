@@ -1,0 +1,37 @@
+{
+ "window": [
+  "2026-10-04T08:00:00Z",
+  "2026-10-04T23:59:00Z"
+ ],
+ "finetune": {
+  "trained_tokens_by_job": {
+   "ftjob-575e0c3322384b5e846bae4c29ac78fa": 615460.0
+  },
+  "trained_tokens_total": 615460.0
+ },
+ "sandbox": {
+  "total_ops": 76,
+  "by_status": {
+   "SUCCESS": {
+    "ops": 72,
+    "duration_sum": 6862.6179999999995,
+    "consumed_cpu_sum": 15383.761410000001
+   },
+   "CANCELLED": {
+    "ops": 4,
+    "duration_sum": -4.0,
+    "consumed_cpu_sum": 0.0
+   }
+  },
+  "consumed_cpu_total_ASSUMED_CPU_SECONDS": 15383.761410000001,
+  "ops_per_hour_utc": {
+   "2026-10-04T08": 38,
+   "2026-10-04T13": 38
+  },
+  "duration_unit": "as returned (undocumented)"
+ },
+ "cost": {
+  "finetune_usd": "price not supplied",
+  "sandbox_usd": "price not supplied"
+ }
+}
