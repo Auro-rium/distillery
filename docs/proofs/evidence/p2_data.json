@@ -1,0 +1,215 @@
+{
+ "same_db_file_across_runs": true,
+ "pool_rows": 276,
+ "pool_notes": {
+  "sql-tiny-live1/round1": {
+   "rows": 40,
+   "unmatched_to_template_task": 0
+  },
+  "sql-mini-live1/round1": {
+   "rows": 117,
+   "unmatched_to_template_task": 0
+  },
+  "sql-mini-live1/round2": {
+   "rows": 138,
+   "unmatched_to_template_task": 19
+  }
+ },
+ "P2.1_label_correct": "276/276",
+ "P2.2_perturbation": {
+  "shuffled_columns": 41
+ },
+ "P2.2_perturbed": {
+  "match_original": 276,
+  "match_perturbed": 273,
+  "match_both": 273,
+  "matched_original_not_perturbed": 3,
+  "accidental_match_rate": 0.0109,
+  "by_family_lost": {
+   "null_handling": 3
+  }
+ },
+ "P2.3_filter_recall_trained_rows": {
+  "sampled": 27,
+  "corrupt_sql": {
+   "injected": 27,
+   "rejected": 27,
+   "recall": "27/27",
+   "recall_rate": 1.0
+  },
+  "own_mutations": {
+   "injected": 27,
+   "rejected_result_mismatch": 24,
+   "accepted_wrongly_or_equivalent": 3,
+   "recall": "24/27",
+   "recall_rate": 0.8889
+  }
+ },
+ "P2.3_filter_recall_gated_train_pool_gold": {
+  "sampled": 65,
+  "corrupt_sql": {
+   "injected": 65,
+   "rejected": 65,
+   "recall": "65/65",
+   "recall_rate": 1.0
+  },
+  "own_mutations": {
+   "injected": 65,
+   "rejected_result_mismatch": 61,
+   "accepted_wrongly_or_equivalent": 4,
+   "recall": "61/65",
+   "recall_rate": 0.9385
+  }
+ },
+ "P2.4_P2.5_leakage_and_coverage": {
+  "sql-tiny-live1": {
+   "train_tasks_in_split": 40,
+   "train_family_counts": {
+    "filter": 4,
+    "null_handling": 8,
+    "join": 4,
+    "set_ops": 2,
+    "soft_delete": 3,
+    "window": 4,
+    "anti_join": 3,
+    "subquery_cte": 5,
+    "aggregation": 6,
+    "top_n": 1
+   },
+   "heldout": {
+    "n": 20,
+    "exact_question": 0,
+    "masked_question": 0,
+    "exact_sql": 0,
+    "masked_sql_skeleton": 3,
+    "same_template_name": 4,
+    "family_counts": {
+     "date_math": 9,
+     "conditional": 3,
+     "window": 1,
+     "null_handling": 1,
+     "aggregation": 2,
+     "anti_join": 2,
+     "filter": 2
+    },
+    "exact_question_rate": 0.0,
+    "masked_question_rate": 0.0,
+    "exact_sql_rate": 0.0,
+    "masked_sql_skeleton_rate": 0.15,
+    "same_template_name_rate": 0.2
+   }
+  },
+  "sql-mini-live1": {
+   "train_tasks_in_split": 120,
+   "train_family_counts": {
+    "join": 19,
+    "filter": 13,
+    "top_n": 11,
+    "set_ops": 8,
+    "null_handling": 18,
+    "window": 13,
+    "anti_join": 17,
+    "aggregation": 9,
+    "subquery_cte": 7,
+    "soft_delete": 5
+   },
+   "heldout": {
+    "n": 60,
+    "exact_question": 0,
+    "masked_question": 6,
+    "exact_sql": 0,
+    "masked_sql_skeleton": 18,
+    "same_template_name": 20,
+    "family_counts": {
+     "date_math": 26,
+     "conditional": 10,
+     "aggregation": 3,
+     "window": 4,
+     "subquery_cte": 2,
+     "top_n": 5,
+     "anti_join": 2,
+     "set_ops": 2,
+     "soft_delete": 2,
+     "null_handling": 2,
+     "filter": 1,
+     "join": 1
+    },
+    "exact_question_rate": 0.0,
+    "masked_question_rate": 0.1,
+    "exact_sql_rate": 0.0,
+    "masked_sql_skeleton_rate": 0.3,
+    "same_template_name_rate": 0.3333
+   }
+  },
+  "gated-1p7b-r1": {
+   "train_tasks_in_split": 650,
+   "train_family_counts": {
+    "window": 89,
+    "top_n": 53,
+    "conditional": 48,
+    "subquery_cte": 66,
+    "null_handling": 71,
+    "join": 109,
+    "anti_join": 69,
+    "filter": 47,
+    "aggregation": 60,
+    "soft_delete": 38
+   },
+   "heldout": {
+    "n": 300,
+    "exact_question": 0,
+    "masked_question": 156,
+    "exact_sql": 0,
+    "masked_sql_skeleton": 294,
+    "same_template_name": 294,
+    "family_counts": {
+     "top_n": 27,
+     "conditional": 22,
+     "window": 41,
+     "null_handling": 40,
+     "aggregation": 25,
+     "subquery_cte": 25,
+     "join": 47,
+     "anti_join": 38,
+     "filter": 21,
+     "soft_delete": 14
+    },
+    "exact_question_rate": 0.0,
+    "masked_question_rate": 0.52,
+    "exact_sql_rate": 0.0,
+    "masked_sql_skeleton_rate": 0.98,
+    "same_template_name_rate": 0.98
+   },
+   "stress": {
+    "n": 100,
+    "exact_question": 0,
+    "masked_question": 0,
+    "exact_sql": 0,
+    "masked_sql_skeleton": 0,
+    "same_template_name": 0,
+    "family_counts": {
+     "set_ops": 38,
+     "date_math": 62
+    },
+    "exact_question_rate": 0.0,
+    "masked_question_rate": 0.0,
+    "exact_sql_rate": 0.0,
+    "masked_sql_skeleton_rate": 0.0,
+    "same_template_name_rate": 0.0
+   }
+  }
+ },
+ "train_family_counts_trained_rows": {
+  "filter": 30,
+  "null_handling": 45,
+  "join": 42,
+  "set_ops": 18,
+  "soft_delete": 13,
+  "window": 26,
+  "anti_join": 35,
+  "subquery_cte": 19,
+  "aggregation": 25,
+  "top_n": 23
+ },
+ "P2.6_spotcheck": ".distillery/proofs/p2_spotcheck.md (30 rows, not committed)"
+}
