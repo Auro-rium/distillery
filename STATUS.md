@@ -12,6 +12,11 @@
 - **P5 harness (dry): PASS** for stage latency (max 1.43 s), tree, report, kill/resume; per-stage spend, live job adoption and forced failure still need the live run.
 - **Next: P1.12 pilot (paid; pre-register the config in DECISIONS.md first; needs your approval and console balance).** Cost measurement: there is no billing API; read the console Usage tab (Fine-tuning and Sandboxes) for 2026-10-04 to price P1.11 (615,460 tokens; sandbox `consumed_cpu` per op from `GET /v1/operations`).
 
+### Console readings (you, screenshot of Organisation > Usage)
+- 2026-10-04 13:57 UTC: **balance $29.21**. Usage 2026-09-04..10-04 (last updated 11:39 UTC): subtotal $2.07, VAT $0.37, total $2.43; daily ~$1.82 on 09-30 (smoke runs), ~$0.25 on 10-04.
+- The 10-04 figure (as of 11:39 UTC) covers only P1.11's fine-tune (615,460 tokens, done 08:29) and its first scoring attempt (38 sandbox ops, ~8,737 consumed_cpu). So **P1.11 cost ~ $0.25 before VAT**; fine-tune price **<= ~$0.41 per 1M trained tokens** (upper bound, if all of it were fine-tuning). Per-service split pending (Table view).
+- P1.12 (2 x 1.16M tokens, started 13:50 UTC) is NOT in these numbers; read again after the usage refresh.
+
 ### Spend ladder (dollar amounts need your console balance; the fine-tune and sandbox prices are still unknown)
 | Step | What is billed | Size |
 |---|---|---|
