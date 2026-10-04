@@ -111,6 +111,23 @@ describe("live screen: disconnected / stale", () => {
     expect(screen.queryByText("Disconnected / stale", { selector: "h3" })).toBeNull();
   });
 
+  it("heartbeat events keep the page live; silence still goes stale", async () => {
+    stubFetch(contractFetch({ run: running }));
+    renderApp(`/runs/${rid}`);
+    await waitFor(() => expect(FakeES.all).toHaveLength(1));
+    const a = FakeES.all[0];
+    const stale = () => screen.queryByText("Disconnected / stale", { selector: "h3" });
+    act(() => { a.onopen!(); a.emit("spend", 1, spend); });
+    for (let i = 0; i < 6; i++) {
+      act(() => { vi.advanceTimersByTime(15_000); a.emit("heartbeat", 0, { ts: i }); });
+      expect(stale()).toBeNull();
+    }
+    expect(screen.getByText("Spend")).toBeTruthy();
+    act(() => { vi.advanceTimersByTime(30_500); });
+    expect(stale()).toBeTruthy();
+    expect(screen.getByText("Spend (last known, not current)")).toBeTruthy();
+  });
+
   it("shows the server's refusal (429 too_many_streams) instead of an empty page", async () => {
     const ok = contractFetch({ run: running });
     stubFetch((u, i) => (u.includes("/events") ? json({ error: "too_many_streams", message: "too many live streams" }, 429) : ok(u, i)));

@@ -100,6 +100,8 @@ export function useSSE(url: string | null, maxDelayMs = 15000, staleMs = STALE_M
           }
         });
       }
+      // Liveness only: resets the stale timer; never becomes a stage/spend/log event.
+      es.addEventListener("heartbeat", () => { if (!stopped) touch(); });
       es.onerror = () => {
         if (stopped) return;
         setState("reconnecting");

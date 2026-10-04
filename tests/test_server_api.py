@@ -290,7 +290,10 @@ def test_sse_heartbeat_when_idle() -> None:
         sleep=lambda dt: now.__setitem__(0, now[0] + dt),
     )
     got = [next(frames) for _ in range(2)]
-    assert got == [": heartbeat\n\n", ": heartbeat\n\n"]
+    for g in got:
+        assert (
+            g.startswith('event: heartbeat\ndata: {"ts":') and "id:" not in g and g.endswith("\n\n")
+        )
     assert now[0] >= 15.0
 
 

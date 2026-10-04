@@ -19,6 +19,13 @@ def frame(event_id: int, event: str, data: dict[str, Any]) -> str:
     return f"id: {event_id}\nevent: {event}\ndata: {json.dumps(data, separators=(',', ':'))}\n\n"
 
 
+def heartbeat_frame(now: float | None = None) -> str:
+    """Id-less named event: EventSource never surfaces comments to JS, so liveness needs a real
+    event. No ``id:`` line, so it never moves ``Last-Event-ID``."""
+    ts = time.time() if now is None else now
+    return f"event: heartbeat\ndata: {json.dumps({'ts': ts}, separators=(',', ':'))}\n\n"
+
+
 def stream(
     refresh: Refresh,
     last_id: int,
@@ -39,7 +46,7 @@ def stream(
         if finished:
             return
         if clock() - last_sent >= heartbeat_s:
-            yield ": heartbeat\n\n"
+            yield heartbeat_frame()
             last_sent = clock()
         sleep(poll_s)
 
@@ -96,7 +103,7 @@ async def astream(
             if await is_disconnected():
                 return
             if clock() - last_sent >= heartbeat_s:
-                yield ": heartbeat\n\n"
+                yield heartbeat_frame()
                 last_sent = clock()
             await asyncio.sleep(poll_s)
     finally:
