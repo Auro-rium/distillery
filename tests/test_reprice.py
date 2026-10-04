@@ -120,3 +120,14 @@ def test_cli_reprice(store: Store, tmp_path: Path) -> None:
     assert main([*base, "--balance-before", "20"], out=lines.append) == EXIT_REFUSED
     bad = main(["--root", str(store.root), "reprice", "zz", "--prices", str(pf)], out=lines.append)
     assert bad in (EXIT_REFUSED, EXIT_FAIL)
+
+
+def test_a_report_without_finetune_block_withholds_the_total(store: Store) -> None:
+    """P4 proof finding: smoke-run reports predate report.finetune; reprice dropped the charge."""
+    path = store.run_dir(RUN) / "report.json"
+    rep = json.loads(path.read_text())
+    del rep["finetune"]
+    path.write_text(json.dumps(rep))
+    rp = reprice_run(store, RUN, _prices(), prices_label="p")
+    assert rp["total_usd"] is None
+    assert any("no trained_tokens" in m for m in rp["missing"])

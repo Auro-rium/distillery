@@ -16,10 +16,18 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from distillery.budget import KIND_SANDBOX, KIND_SANDBOX_UNPRICED, spend_lines
+from distillery.budget import (
+    KIND_FINETUNE,
+    KIND_FINETUNE_CEILING,
+    KIND_SANDBOX,
+    KIND_SANDBOX_UNPRICED,
+    spend_lines,
+)
 from distillery.config import PriceFile
 from distillery.orchestrator import cost_by_model
 from distillery.store import Store, atomic_write_bytes
+
+FINETUNE_KINDS = (KIND_FINETUNE, KIND_FINETUNE_CEILING)
 
 
 class RepriceError(RuntimeError):
@@ -94,6 +102,11 @@ def compute_repriced(
                 price={"source": fp.source, "as_of": fp.as_of},
             )
         lines.append(line)
+
+    if not report.get("finetune"):
+        n_ft = sum(ln["kind"] in FINETUNE_KINDS for ln in spend_lines(store, run_id))
+        if n_ft:  # older reports have no finetune block: never drop the charge silently
+            missing.append(f"finetune ({n_ft} charge row(s) but the report has no trained_tokens)")
 
     secs_by_purpose = _sandbox_secs_by_purpose(store, run_id)
     total_secs = sum(secs_by_purpose.values())
