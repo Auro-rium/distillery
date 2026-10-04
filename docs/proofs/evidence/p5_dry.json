@@ -1,0 +1,432 @@
+{
+  "mode": "dry",
+  "started": "2026-10-04T08:26:22Z",
+  "checks": {
+    "A1_stage_transitions_visible_within_5s": {
+      "result": "PASS",
+      "done_latency_s": {
+        "schema:done": 0.071,
+        "questions:done": 0.764,
+        "gold_crosscheck:done": 0.611,
+        "verifier_selftest:done": 0.419,
+        "split:done": 0.349,
+        "headroom:done": 0.319,
+        "teacher_data:done": 1.433,
+        "paraphrase:done": 1.156,
+        "finetune_r1:done": 1.156,
+        "dev_eval_r1:done": 0.495,
+        "analysis_r1:done": 0.495,
+        "targeted_r1:done": 0.136,
+        "sandbox_branch_r1:done": 1.114,
+        "finetune_r2:done": 1.015,
+        "dev_eval_r2:done": 0.984,
+        "analysis_r2:done": 0.984,
+        "targeted_r2:done": 0.675,
+        "sandbox_branch_r2:done": 0.675,
+        "finetune_r3:done": 0.565,
+        "dev_eval_r3:done": 0.471,
+        "final_eval:done": 0.65
+      },
+      "running_latency_s": {
+        "schema:running": null,
+        "questions:running": 0.071,
+        "gold_crosscheck:running": null,
+        "verifier_selftest:running": 0.611,
+        "split:running": null,
+        "headroom:running": null,
+        "teacher_data:running": 0.319,
+        "paraphrase:running": 0.762,
+        "dev_eval_r1:running": null,
+        "targeted_r1:running": null,
+        "finetune_r2:running": null,
+        "dev_eval_r2:running": null,
+        "targeted_r2:running": null,
+        "dev_eval_r3:running": null,
+        "final_eval:running": 0.471
+      },
+      "note": "'done' transitions are the strict check; a 'running' state shorter than the UI poll can legitimately be skipped (None)",
+      "max_done_latency_s": 1.433
+    },
+    "A2_spend_meter_present": {
+      "result": "PASS",
+      "meter_values_seen": [
+        0.0,
+        0.044678,
+        0.185138,
+        0.204988,
+        0.238694,
+        0.249762
+      ],
+      "note": "UI has ONE run-level spend meter plus a by-model breakdown; there is no per-STAGE spend in the UI, API or spend table (no stage column)"
+    },
+    "A2b_spend_meter_per_stage": {
+      "result": "N/A",
+      "note": "not available: spend rows carry kind/model only, not stage; would need code"
+    },
+    "A3_experiment_tree_rendered": {
+      "result": "PASS",
+      "api_nodes": [
+        "base model",
+        "round 1",
+        "round 2",
+        "round 3"
+      ],
+      "found_in_ui": {
+        "base model": true,
+        "round 1": true,
+        "round 2": true,
+        "round 3": true
+      }
+    },
+    "A4_report_matches_report_json": {
+      "result": "PASS",
+      "want": {
+        "decision": "REJECT",
+        "base": "55.0%",
+        "student": "90.0%",
+        "teacher": "95.0%",
+        "mcnemar_p": "0.0391",
+        "ratio_lo": "0.778",
+        "n": "n=20"
+      },
+      "found_in_ui": {
+        "decision": true,
+        "base": true,
+        "student": true,
+        "teacher": true,
+        "mcnemar_p": true,
+        "ratio_lo": true,
+        "n": true
+      },
+      "api_matches_report_json": true
+    },
+    "B1_resumes_to_completion": {
+      "result": "PASS",
+      "run_id": "dry-sql-tiny-d415f9a3",
+      "killed_driver_pid": 61047,
+      "kill_snapshot_stages": [
+        [
+          "gold_crosscheck",
+          "complete"
+        ],
+        [
+          "headroom",
+          "complete"
+        ],
+        [
+          "paraphrase",
+          "running"
+        ],
+        [
+          "questions",
+          "complete"
+        ],
+        [
+          "schema",
+          "complete"
+        ],
+        [
+          "split",
+          "complete"
+        ],
+        [
+          "teacher_data",
+          "complete"
+        ],
+        [
+          "verifier_selftest",
+          "complete"
+        ]
+      ],
+      "report_existed_at_kill": false,
+      "ui_text_after_kill_and_restart": "Run dry-sql-tiny-d415f9a3\nFAILED\nDRY RUN \u2014 fake models, numbers are NOT results\nRun\nReport\nTree\nRun error\n\nrun is not active and produced no report (interrupted?)\n\nStages\nschema\ndone\nquestions\ndone\ngold_crosscheck\ndone\nverifier_selftest\ndone\nsplit\ndone\nheadroom\ndone\nteacher_data\ndone\nparaphrase\nRUNN",
+      "resubmit_status": 202,
+      "resumed_to_report": true,
+      "completed_stages_rerun": [],
+      "finetune_events": [
+        {
+          "name": "finetune_job_started",
+          "job_id": "ftjob-00d535511fb8",
+          "round": 1
+        },
+        {
+          "name": "finetune_job_closed",
+          "job_id": "ftjob-00d535511fb8",
+          "outcome": "succeeded"
+        },
+        {
+          "name": "finetune_job_started",
+          "job_id": "ftjob-034c6dc59251",
+          "round": 2
+        },
+        {
+          "name": "finetune_job_closed",
+          "job_id": "ftjob-034c6dc59251",
+          "outcome": "succeeded"
+        },
+        {
+          "name": "finetune_job_started",
+          "job_id": "ftjob-2cdbaa9dae28",
+          "round": 3
+        },
+        {
+          "name": "finetune_job_closed",
+          "job_id": "ftjob-2cdbaa9dae28",
+          "outcome": "succeeded"
+        }
+      ],
+      "spend_before_kill": {
+        "rows": 114,
+        "by_kind": {
+          "llm": 114
+        },
+        "identical_row_dupes": 0
+      },
+      "spend_after_resume": {
+        "rows": 374,
+        "by_kind": {
+          "llm": 371,
+          "finetune_ceiling": 3
+        },
+        "identical_row_dupes": 0
+      },
+      "control_finetune_ceiling_rows": 3,
+      "resumed_finetune_ceiling_rows": 3
+    },
+    "B2_completed_stages_not_rerun": {
+      "result": "PASS",
+      "completed_stages_rerun": []
+    },
+    "B3_job_adopted_not_recreated": {
+      "result": "N/A",
+      "adopted_events": [],
+      "jobs_started_per_round": {
+        "1": 1,
+        "2": 1,
+        "3": 1
+      },
+      "note": "only meaningful when killed mid fine-tune (live, or --kill-stage finetune_r1). Dry: the fake fine-tune stage lasts milliseconds and its job lives inside the killed process, so adoption cannot be exercised; code path: unclosed jobs are cancelled by _cancel_orphans, finetune_job_adopted only fires for a job closed as 'aborted'"
+    },
+    "B4_no_duplicate_charge_rows": {
+      "result": "PASS",
+      "identical_row_dupes": 0,
+      "ceiling_rows_resumed": 3,
+      "distinct_jobs_started": 3
+    },
+    "C_failure_ui_reason_and_cancel_event": {
+      "result": "N/A",
+      "note": "hook(s) found but harness has no driver for them",
+      "hooks": [
+        "src/distillery/sandbox_executor.py:32: DEFAULT_MAX_ROWS,",
+        "src/distillery/sandbox_executor.py:33: DEFAULT_TIMEOUT_S,",
+        "src/distillery/sandbox_executor.py:42: DEFAULT_STATEMENTS_PER_JOB = 25",
+        "src/distillery/sandbox_executor.py:198: timeout_s: float = DEFAULT_TIMEOUT_S,",
+        "src/distillery/sandbox_executor.py:199: max_rows: int = DEFAULT_MAX_ROWS,",
+        "src/distillery/sandbox_executor.py:200: statements_per_job: int = DEFAULT_STATEMENTS_PER_JOB,",
+        "src/distillery/sandbox_student.py:44: DEFAULT_MAX_NEW_TOKENS = 160  # what the S4 spike measured",
+        "src/distillery/sandbox_student.py:60: ap.add_argument(\"--max-new-tokens\", type=int, default=160)",
+        "src/distillery/sandbox_student.py:149: DEFAULT_TARGET_MODULES = \"all-linear\"",
+        "src/distillery/sandbox_student.py:165: ap.add_argument(\"--r\", type=int, default=16)",
+        "src/distillery/sandbox_student.py:166: ap.add_argument(\"--alpha\", type=int, default=16)",
+        "src/distillery/sandbox_student.py:167: ap.add_argument(\"--target-modules\", default=\"all-linear\")",
+        "src/distillery/sandbox_student.py:190: key = name.replace(\".default.\", \".\", 1)",
+        "src/distillery/sandbox_student.py:199: c = pm.peft_config[\"default\"]",
+        "src/distillery/sandbox_student.py:213: base_model: str, *, r: int = 16, alpha: int = 16, target_modules: str = DEFAULT_TARGET_MODULES",
+        "src/distillery/sandbox_student.py:370: self, *, r: int = 16, alpha: int = 16, target_modules: str = DEFAULT_TARGET_MODULES",
+        "src/distillery/sandbox_student.py:438: max_new_tokens: int = DEFAULT_MAX_NEW_TOKENS,",
+        "src/distillery/pipeline_fakes.py:57: DEFAULT_ERROR_RATES: dict[str, float] = {",
+        "src/distillery/pipeline_fakes.py:63: DEFAULT_STUDENT_ERROR_RATES: tuple[float, ...] = (0.45, 0.25, 0.10)",
+        "src/distillery/pipeline_fakes.py:93: self._gold.setdefault(new_question, self.gold(original))",
+        "src/distillery/pipeline_fakes.py:123: self.error_rates = dict(DEFAULT_ERROR_RATES if error_rates is None else error_rates)",
+        "src/distillery/pipeline_fakes.py:215: uploads: dict[str, Path] = field(default_factory=dict)",
+        "src/distillery/pipeline_fakes.py:216: created: list[str] = field(default_factory=list)",
+        "src/distillery/pipeline_fakes.py:217: cancelled: list[str] = field(default_factory=list)",
+        "src/distillery/pipeline_fakes.py:218: suffixes: dict[str, str] = field(default_factory=dict)",
+        "src/distillery/pipeline_fakes.py:219: job_status: dict[str, str] = field(default_factory=dict)  # test override for ``get``",
+        "src/distillery/pipeline_fakes.py:220: _base_models: dict[str, str] = field(default_factory=dict)",
+        "src/distillery/pipeline_fakes.py:221: _hps: dict[str, dict[str, Any]] = field(default_factory=dict)",
+        "src/distillery/pipeline_fakes.py:342: error_rates: Sequence[float] = DEFAULT_STUDENT_ERROR_RATES,",
+        "src/distillery/pipeline_fakes.py:421: student_error_rates: Sequence[float] = DEFAULT_STUDENT_ERROR_RATES,",
+        "src/distillery/pipeline_fakes.py:437: (error_rates or {}).get(\"fake-student-base\", DEFAULT_ERROR_RATES[\"fake-student-base\"]),",
+        "src/distillery/pipeline_fakes.py:447: pipeline_overrides.setdefault(\"finetune_estimate_usd\", 0.0)",
+        "src/distillery/pipeline_fakes.py:465: \"DEFAULT_ERROR_RATES\",",
+        "src/distillery/stats.py:82: \"\"\"Wilson score interval for a binomial proportion (default 95%).\"\"\"",
+        "src/distillery/reprice.py:13: from collections import defaultdict",
+        "src/distillery/reprice.py:30: out: dict[str, float] = defaultdict(float)",
+        "src/distillery/reprice.py:169: \"\"\"Compute ``cost_repriced`` and (by default) add it to the run's report.json.\"\"\"",
+        "src/distillery/sandbox.py:27: DEFAULT_BASE_URL = \"https://api.tokenfactory.nebius.com/sandboxes\"",
+        "src/distillery/sandbox.py:29: # The SDK truncates stdout/stderr at 65535 bytes by default, which would cut a JSON result set",
+        "src/distillery/sandbox.py:156: self._lineage.setdefault(ref, (None, f\"root:{ref}\"))",
+        "src/distillery/sandbox.py:160: self._lineage.setdefault(child, (parent, label))",
+        "src/distillery/sandbox.py:227: files: dict[str, bytes] = field(default_factory=dict)",
+        "src/distillery/sandbox.py:233: def default_handler(job: Job, fs: dict[str, bytes]) -> FakeExecution:",
+        "src/distillery/sandbox.py:282: handler: Handler = default_handler,",
+        "src/distillery/sandbox.py:404: self._base_url = base_url or DEFAULT_BASE_URL",
+        "src/distillery/cli.py:56: \"--root\", default=None, help=\"data dir (default: $DISTILLERY_HOME or .distillery)\"",
+        "src/distillery/cli.py:60: r.add_argument(\"--pack\", choices=[\"sql\"], default=\"sql\")",
+        "src/distillery/cli.py:61: r.add_argument(\"--scale\", choices=sorted(SCALES), default=\"tiny\")",
+        "src/distillery/cli.py:63: r.add_argument(\"--run-id\", default=None)",
+        "src/distillery/cli.py:64: r.add_argument(\"--budget-usd\", type=float, default=None, help=\"per-run spend cap\")",
+        "src/distillery/cli.py:66: r.add_argument(\"--finetune-estimate-usd\", type=float, default=None)",
+        "src/distillery/cli.py:68: \"--min-planned-steps\", type=int, default=None,",
+        "src/distillery/cli.py:69: help=\"refuse a live fine-tune planning fewer optimizer steps than this (default 300)\",",
+        "src/distillery/cli.py:71: r.add_argument(\"--max-rounds\", type=int, default=3)",
+        "src/distillery/cli.py:72: r.add_argument(\"--max-base-acc\", type=float, default=0.80, help=\"headroom threshold on dev\")",
+        "src/distillery/cli.py:73: r.add_argument(\"--seed\", type=int, default=1234)",
+        "src/distillery/cli.py:75: \"--human-set\", default=None, metavar=\"FILE\",",
+        "src/distillery/cli.py:88: rp.add_argument(\"--balance-before\", type=float, default=None, help=\"console balance, USD\")",
+        "src/distillery/cli.py:89: rp.add_argument(\"--balance-after\", type=float, default=None, help=\"console balance, USD\")",
+        "src/distillery/cli.py:92: sv.add_argument(\"--host\", default=\"127.0.0.1\")",
+        "src/distillery/cli.py:93: sv.add_argument(\"--port\", type=int, default=8000)",
+        "src/distillery/cli.py:98: dh.add_argument(\"--budget-usd\", type=float, default=None, help=\"spend cap for this drafting\")",
+        "src/distillery/cli.py:100: dh.add_argument(\"--db-seed\", type=int, default=0)",
+        "src/distillery/cli.py:105: \"--set\", default=None, metavar=\"ID\", help=\"humanset/<id> (default: the only one)\"",
+        "src/distillery/cli.py:114: sh.add_argument(\"--budget-usd\", type=float, default=None, help=\"per-run spend cap\")",
+        "src/distillery/cli.py:118: ex.add_argument(\"--replay-dir\", default=None, help=\"default: $DISTILLERY_REPLAY_DIR or replay\")",
+        "src/distillery/cli.py:172: e.get(\"DISTILLERY_SANDBOX_URL\") or None,  # None = the SDK default base URL",
+        "src/distillery/llm.py:107: extra: dict[str, Any] = field(default_factory=dict)",
+        "src/distillery/llm.py:114: blob = json.dumps(list(messages), sort_keys=True, default=str, ensure_ascii=False)",
+        "src/distillery/finetune.py:58: batch_size: int | None = Field(default=None, ge=1, le=64)  # OpenAPI 1..64 (doc \"typical\" 8-32)",
+        "src/distillery/finetune.py:59: learning_rate: float | None = Field(default=None, ge=0)",
+        "src/distillery/finetune.py:60: n_epochs: int | None = Field(default=None, ge=1, le=20)",
+        "src/distillery/finetune.py:61: warmup_ratio: float | None = Field(default=None, ge=0, le=1)",
+        "src/distillery/finetune.py:62: weight_decay: float | None = Field(default=None, ge=0)",
+        "src/distillery/finetune.py:64: lora_r: int | None = Field(default=None, ge=8, le=128)",
+        "src/distillery/finetune.py:65: lora_alpha: int | None = Field(default=None, ge=8)",
+        "src/distillery/finetune.py:66: lora_dropout: float | None = Field(default=None, ge=0, le=1)",
+        "src/distillery/finetune.py:68: max_grad_norm: float | None = Field(default=None, gt=0)  # OpenAPI: exclusiveMinimum 0",
+        "src/distillery/finetune.py:69: context_length: int | None = Field(default=None, ge=8192, le=131072)",
+        "src/distillery/finetune.py:79: # Every field the pipeline must choose itself: the provider defaults were measured to be",
+        "src/distillery/finetune.py:93: f\"fine-tune hyperparameters must be explicit (provider defaults are unusable); \"",
+        "src/distillery/finetune.py:101: # The values the pipeline pins (chosen, not provider defaults).",
+        "src/distillery/finetune.py:148: metrics: Mapping[str, float] = field(default_factory=dict)",
+        "src/distillery/evaluator.py:54: outputs: list[str] = field(default_factory=list)  # raw model output per item",
+        "src/distillery/evaluator.py:55: sqls: list[str | None] = field(default_factory=list)  # extracted SQL per item",
+        "src/distillery/evaluator.py:70: artifact: dict[str, str] = field(default_factory=dict)",
+        "src/distillery/evaluator.py:72: examples: list[dict[str, Any]] = field(default_factory=list)",
+        "src/distillery/config.py:85: usd_per_cpu_second: float | None = Field(default=None, ge=0)",
+        "src/distillery/config.py:86: usd_per_second: float | None = Field(default=None, ge=0)",
+        "src/distillery/config.py:122: llm: dict[str, Price] = Field(default_factory=dict)",
+        "src/distillery/config.py:123: finetune: dict[str, FinetunePrice] = Field(default_factory=dict)",
+        "src/distillery/config.py:132: bootstrap_resamples: int = Field(default=10000, ge=1)",
+        "src/distillery/config.py:144: model_ids: dict[str, str] = Field(default_factory=dict)",
+        "src/distillery/config.py:145: prices: dict[str, Price] = Field(default_factory=dict)",
+        "src/distillery/config.py:146: finetune_prices: dict[str, FinetunePrice] = Field(default_factory=dict)",
+        "src/distillery/config.py:148: gate: GateThresholds = Field(default_factory=GateThresholds)",
+        "src/distillery/config.py:199: def _float_env(env: Mapping[str, str], name: str, default: float) -> float:",
+        "src/distillery/config.py:202: return default",
+        "src/distillery/orchestrator.py:71: DEFAULT_SKELETON_CAP,",
+        "src/distillery/orchestrator.py:140: measured trained_tokens). Epochs default to 3 when the request leaves them to the service.",
+        "src/distillery/orchestrator.py:214: round_extra_tasks: int | None = None  # default: max(10, train // 4)",
+        "src/distillery/orchestrator.py:227: # Pinned, never provider defaults (measured: defaults gave 3-9 optimizer steps for 40-138 rows).",
+        "src/distillery/orchestrator.py:230: min_planned_steps: int = Field(default=300, ge=0)",
+        "src/distillery/orchestrator.py:233: # How the student and base are served. \"injected\" (default) = use Deps.student_factory /",
+        "src/distillery/orchestrator.py:236: student_sandbox_image: str | None = None  # sandbox_cpu: image with pip (default: sandbox_image)",
+        "src/distillery/orchestrator.py:237: student_batch_size: int = Field(default=2, ge=1)  # sandbox_cpu: prompts per generation job",
+        "src/distillery/orchestrator.py:239: student_concurrency: int = Field(default=10, ge=1, le=20)",
+        "src/distillery/orchestrator.py:240: student_max_new_tokens: int = Field(default=160, ge=16)  # sandbox_cpu: per sample (S4 recipe)",
+        "src/distillery/orchestrator.py:243: human_set_path: Path | None = Field(default=None, exclude=True)",
+        "src/distillery/orchestrator.py:246: paraphrases_per_task: int = Field(default=3, ge=0)",
+        "src/distillery/orchestrator.py:247: train_row_cap: int = Field(default=2000, ge=1)",
+        "src/distillery/orchestrator.py:356: a = self._agg.setdefault(",
+        "src/distillery/orchestrator.py:570: counters: dict[str, int] = field(default_factory=dict)",
+        "src/distillery/orchestrator.py:601: anchors.setdefault(t.family, t)",
+        "src/distillery/orchestrator.py:970: skeleton_cap=DEFAULT_SKELETON_CAP,",
+        "src/distillery/orchestrator.py:978: template_share=0.1,  # only two families: the default shares starve the pool",
+        "src/distillery/orchestrator.py:1012: \"skeleton_cap\": DEFAULT_SKELETON_CAP,",
+        "src/distillery/orchestrator.py:1371: f = fam.setdefault(t.family, Counter())",
+        "src/distillery/server/telemetry.py:64: h = self._hist.setdefault(route, [0] * (len(BUCKETS) + 1))",
+        "src/distillery/server/telemetry.py:97: r = by_route.setdefault(route, {\"requests\": 0, \"errors_5xx\": 0})",
+        "src/distillery/server/limits.py:7: from collections import defaultdict, deque",
+        "src/distillery/server/limits.py:18: self._hits: dict[str, deque[float]] = defaultdict(deque)",
+        "src/distillery/server/worker.py:36: logs: list[str] = field(default_factory=list)",
+        "src/distillery/server/worker.py:101: CLI's own dry-run defaults (no --seed / --max-rounds overrides).\"\"\"",
+        "src/distillery/server/playground.py:220: self._gold.setdefault(",
+        "src/distillery/server/replay.py:3: Until a real bundle exists the default replay item is the labelled dry-run sample fixture.",
+        "src/distillery/server/replay.py:79: out.setdefault(SAMPLE_ID, Bundle(SAMPLE_ID, report, recorded=False, recorded_at=None))",
+        "src/distillery/server/app.py:69: budget_usd: float | None = Field(default=None, gt=0)",
+        "src/distillery/server/app.py:72: finetune_estimate_usd: float | None = Field(default=None, ge=0)",
+        "src/distillery/server/app.py:92: (the default) the header is ignored, so it cannot be used to dodge per-IP limits.\"\"\"",
+        "src/distillery/server/reader.py:126: seen.setdefault(job.run_id, None)",
+        "src/distillery/server/reader.py:225: ev = self._events.setdefault(run_id, Events())",
+        "src/distillery/server/settings.py:51: # Peer addresses whose X-Forwarded-For is believed. Default: none, the header is ignored.",
+        "src/distillery/server/settings.py:57: now: Callable[[], datetime] = field(default=_utcnow)",
+        "src/distillery/server/settings.py:88: def default_playground_llm(config: Config) -> LLMClient | None:",
+        "src/distillery/server/settings.py:116: playground_llm=default_playground_llm(config),",
+        "src/distillery/taskpacks/sql/schema.py:331: users_by_acct.setdefault(int(u[1]), []).append(int(u[0]))  # type: ignore[call-overload]",
+        "src/distillery/taskpacks/sql/executor.py:14: DEFAULT_MAX_ROWS,",
+        "src/distillery/taskpacks/sql/executor.py:15: DEFAULT_TIMEOUT_S,",
+        "src/distillery/taskpacks/sql/executor.py:41: timeout_s: float = DEFAULT_TIMEOUT_S,",
+        "src/distillery/taskpacks/sql/executor.py:42: max_rows: int = DEFAULT_MAX_ROWS,",
+        "src/distillery/taskpacks/sql/runner.py:18: DEFAULT_TIMEOUT_S = 2.0",
+        "src/distillery/taskpacks/sql/runner.py:19: DEFAULT_MAX_ROWS = 10_000",
+        "src/distillery/taskpacks/sql/runner.py:36: elapsed_s: float = field(default=0.0, compare=False)",
+        "src/distillery/taskpacks/sql/runner.py:71: timeout_s: float = DEFAULT_TIMEOUT_S,",
+        "src/distillery/taskpacks/sql/runner.py:72: max_rows: int = DEFAULT_MAX_ROWS,",
+        "src/distillery/taskpacks/sql/verifier.py:17: DEFAULT_MAX_ROWS,",
+        "src/distillery/taskpacks/sql/verifier.py:18: DEFAULT_TIMEOUT_S,",
+        "src/distillery/taskpacks/sql/verifier.py:83: timeout_s: float = DEFAULT_TIMEOUT_S,",
+        "src/distillery/taskpacks/sql/verifier.py:84: max_rows: int = DEFAULT_MAX_ROWS,",
+        "src/distillery/taskpacks/sql/questions.py:1743: DEFAULT_TEMPLATE_SHARE = 0.04",
+        "src/distillery/taskpacks/sql/questions.py:1744: DEFAULT_FAMILY_SHARE = 0.25",
+        "src/distillery/taskpacks/sql/questions.py:1748: DEFAULT_SKELETON_CAP = 40",
+        "src/distillery/taskpacks/sql/questions.py:1763: dropped_by_template: Counter[str] = field(default_factory=Counter)",
+        "src/distillery/taskpacks/sql/questions.py:1764: capped_templates: set[str] = field(default_factory=set)",
+        "src/distillery/taskpacks/sql/questions.py:1765: capped_families: set[str] = field(default_factory=set)",
+        "src/distillery/taskpacks/sql/questions.py:1786: template_share: float = DEFAULT_TEMPLATE_SHARE,",
+        "src/distillery/taskpacks/sql/questions.py:1787: family_share: float = DEFAULT_FAMILY_SHARE,",
+        "src/distillery/taskpacks/sql/questions.py:1792: Templates are cycled round-robin (with randomised parameters) over ``families`` (default: all)"
+      ]
+    }
+  },
+  "notes": [],
+  "acceptance_run_id": "dry-sql-tiny-f27512b2",
+  "control_run": {
+    "spend": {
+      "rows": 343,
+      "by_kind": {
+        "llm": 340,
+        "finetune_ceiling": 3
+      },
+      "identical_row_dupes": 0
+    },
+    "finetune_events": [
+      {
+        "name": "finetune_job_started",
+        "job_id": "ftjob-09c6a0254d99",
+        "round": 1
+      },
+      {
+        "name": "finetune_job_closed",
+        "job_id": "ftjob-09c6a0254d99",
+        "outcome": "succeeded"
+      },
+      {
+        "name": "finetune_job_started",
+        "job_id": "ftjob-6a32126fefe0",
+        "round": 2
+      },
+      {
+        "name": "finetune_job_closed",
+        "job_id": "ftjob-6a32126fefe0",
+        "outcome": "succeeded"
+      },
+      {
+        "name": "finetune_job_started",
+        "job_id": "ftjob-9d15efac6183",
+        "round": 3
+      },
+      {
+        "name": "finetune_job_closed",
+        "job_id": "ftjob-9d15efac6183",
+        "outcome": "succeeded"
+      }
+    ]
+  },
+  "videos": [
+    "/home/lenovo/Documents/distillery/.distillery/proofs/p5/video/page@91ee0946e80ccc52b0e9e35805ba2de9.webm",
+    "/home/lenovo/Documents/distillery/.distillery/proofs/p5/video/page@9dd6a6c814a60ae2021cee1ab10a1a29.webm",
+    "/home/lenovo/Documents/distillery/.distillery/proofs/p5/video/page@d3ecc5f0e19942fad5a3cb64f705be2a.webm"
+  ],
+  "all_checked_pass": true
+}
