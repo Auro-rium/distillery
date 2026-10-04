@@ -42,7 +42,37 @@
    "rejected_result_mismatch": 24,
    "accepted_wrongly_or_equivalent": 3,
    "recall": "24/27",
-   "recall_rate": 0.8889
+   "recall_rate": 0.8889,
+   "accepted_equivalent_robust": 3,
+   "accepted_true_miss": 0,
+   "recall_excluding_equivalent_robust": "24/24",
+   "recall_excluding_equivalent_robust_rate": 1.0,
+   "accepted_mutants": [
+    {
+     "mutator": "number_plus_1",
+     "family": "join",
+     "class": "equivalent_robust",
+     "gold_sql": "SELECT p.payment_id, a.name FROM payments p JOIN invoices i ON i.invoice_id = p.invoice_id JOIN accounts a ON a.account_id = i.account_id WHERE p.method = 'card' AND p.status = 'succeeded' AND p.amount_cents > 400",
+     "mutant_sql": "SELECT p.payment_id, a.name\nFROM payments p\nJOIN invoices i ON p.invoice_id = i.invoice_id\nJOIN accounts a ON i.account_id = a.account_id\nWHERE p.method = 'card'\n  AND p.status = 'succeeded'\n  AND p.amount_cents > 401",
+     "diff": "'' -> 'p.invoice_id ='; '= p.invoice_id' -> ''; '' -> 'i.account_id ='; '= i.account_id' -> ''; '400' -> '401'"
+    },
+    {
+     "mutator": "drop_distinct",
+     "family": "null_handling",
+     "class": "equivalent_robust",
+     "gold_sql": "SELECT u.email FROM users u JOIN accounts a ON a.account_id = u.account_id WHERE a.industry = 'retail' AND u.last_login_at IS NULL",
+     "mutant_sql": "SELECT u.email\nFROM users u\nJOIN accounts a ON u.account_id = a.account_id\nWHERE a.industry = 'retail'\n  AND u.last_login_at IS NULL",
+     "diff": "'' -> 'u.account_id ='; '= u.account_id' -> ''"
+    },
+    {
+     "mutator": "drop_distinct",
+     "family": "subquery_cte",
+     "class": "equivalent_robust",
+     "gold_sql": "SELECT email FROM users WHERE role = 'member' AND account_id IN (SELECT account_id FROM support_tickets WHERE priority = 'high' GROUP BY account_id HAVING COUNT(*) >= 3)",
+     "mutant_sql": "WITH high_ticket_accounts AS (\n    SELECT account_id\n    FROM support_tickets\n    WHERE priority = 'high'\n    GROUP BY account_id\n    HAVING COUNT(*) >= 3\n)\nSELECT u.email\nFROM users u\nJOIN high_ticket_accounts hta ON u.account_id = hta.account_id\nWHERE u.role = 'member'",
+     "diff": "'' -> 'WITH high_ticket_accounts AS ('; \"email FROM users WHERE role = 'member' AND account_id IN (SELECT\" -> ''; '3)' -> \"3 ) SELECT u.email FROM users u JOIN high_ticket_accounts hta ON u.account_id = hta.account_id WHERE u.role = 'member'\""
+    }
+   ]
   }
  },
  "P2.3_filter_recall_gated_train_pool_gold": {
@@ -58,9 +88,231 @@
    "rejected_result_mismatch": 61,
    "accepted_wrongly_or_equivalent": 4,
    "recall": "61/65",
-   "recall_rate": 0.9385
+   "recall_rate": 0.9385,
+   "accepted_equivalent_robust": 3,
+   "accepted_true_miss": 1,
+   "recall_excluding_equivalent_robust": "61/62",
+   "recall_excluding_equivalent_robust_rate": 0.9839,
+   "accepted_mutants": [
+    {
+     "mutator": "number_plus_1",
+     "family": "conditional",
+     "class": "equivalent_robust",
+     "gold_sql": "SELECT p.tier, CASE WHEN s.seats <= 16 THEN 'small' WHEN s.seats <= 41 THEN 'mid' ELSE 'large' END AS size, COUNT(*) FROM subscriptions s JOIN plans p ON p.plan_id = s.plan_id WHERE s.status = 'trialing' GROUP BY p.tier, size",
+     "mutant_sql": "SELECT p.tier, CASE WHEN s.seats <= 17 THEN 'small' WHEN s.seats <= 41 THEN 'mid' ELSE 'large' END AS size, COUNT(*) FROM subscriptions s JOIN plans p ON p.plan_id = s.plan_id WHERE s.status = 'trialing' GROUP BY p.tier, size",
+     "diff": "'16' -> '17'"
+    },
+    {
+     "mutator": "number_plus_1",
+     "family": "null_handling",
+     "class": "equivalent_robust",
+     "gold_sql": "SELECT a.name, ROUND(AVG(t.csat_score), 2) FROM support_tickets t JOIN accounts a ON a.account_id = t.account_id WHERE t.priority = 'urgent' AND t.category = 'account_access' GROUP BY a.account_id HAVING COUNT(t.csat_score) >= 1",
+     "mutant_sql": "SELECT a.name, ROUND(AVG(t.csat_score), 3) FROM support_tickets t JOIN accounts a ON a.account_id = t.account_id WHERE t.priority = 'urgent' AND t.category = 'account_access' GROUP BY a.account_id HAVING COUNT(t.csat_score) >= 1",
+     "diff": "'2)' -> '3)'"
+    },
+    {
+     "mutator": "number_plus_1",
+     "family": "filter",
+     "class": "equivalent_robust",
+     "gold_sql": "SELECT invoice_id FROM invoices WHERE amount_cents > 20000",
+     "mutant_sql": "SELECT invoice_id FROM invoices WHERE amount_cents > 20001",
+     "diff": "'20000' -> '20001'"
+    },
+    {
+     "mutator": "drop_distinct",
+     "family": "anti_join",
+     "class": "true_miss",
+     "gold_sql": "SELECT DISTINCT a.account_id FROM accounts a JOIN users u ON u.account_id = a.account_id JOIN feature_usage f ON f.user_id = u.user_id WHERE a.industry = 'healthcare' AND f.feature = 'api' AND NOT EXISTS (SELECT 1 FROM users u2 JOIN feature_usage f2 ON f2.user_id = u2.user_id WHERE u2.account_id = a.account_id AND f2.feature = 'exports')",
+     "mutant_sql": "SELECT a.account_id FROM accounts a JOIN users u ON u.account_id = a.account_id JOIN feature_usage f ON f.user_id = u.user_id WHERE a.industry = 'healthcare' AND f.feature = 'api' AND NOT EXISTS (SELECT 1 FROM users u2 JOIN feature_usage f2 ON f2.user_id = u2.user_id WHERE u2.account_id = a.account_id AND f2.feature = 'exports')",
+     "diff": "'DISTINCT' -> ''"
+    }
+   ]
   }
  },
+ "P2.2_null_handling_lost_rows": [
+  {
+   "family": "null_handling",
+   "question": "Per ticket category among normal tickets opened 2023-07-16 to 2024-04-13, give the number with no user_id next to the total number of tickets.",
+   "gold_sql": "SELECT category, SUM(CASE WHEN user_id IS NULL THEN 1 ELSE 0 END), COUNT(*) FROM support_tickets WHERE priority = 'normal' AND opened_at >= '2023-07-16' AND opened_at < '2024-04-13' GROUP BY category",
+   "teacher_sql": "SELECT\n    category,\n    SUM(CASE WHEN user_id IS NULL THEN 1 ELSE 0 END) AS null_user_count,\n    COUNT(*) AS total_count\nFROM support_tickets\nWHERE priority = 'normal'\n  AND date(opened_at) BETWEEN '2023-07-16' AND '2024-04-13'\nGROUP BY category\nORDER BY category",
+   "gold_perturbed_rows": [
+    [
+     "account_access",
+     0,
+     7
+    ],
+    [
+     "billing",
+     0,
+     2
+    ],
+    [
+     "bug",
+     0,
+     9
+    ],
+    [
+     "feature_request",
+     0,
+     10
+    ],
+    [
+     "how_to",
+     0,
+     6
+    ]
+   ],
+   "teacher_perturbed_rows": [
+    [
+     "account_access",
+     0,
+     7
+    ],
+    [
+     "billing",
+     0,
+     2
+    ],
+    [
+     "bug",
+     0,
+     9
+    ],
+    [
+     "feature_request",
+     0,
+     10
+    ],
+    [
+     "how_to",
+     1,
+     7
+    ]
+   ],
+   "gold_n": 5,
+   "teacher_n": 5
+  },
+  {
+   "family": "null_handling",
+   "question": "How many churned accounts have no sales rep assigned, per country?",
+   "gold_sql": "SELECT country, COUNT(*) FROM accounts WHERE sales_rep IS NULL AND status = 'churned' GROUP BY country",
+   "teacher_sql": "SELECT country, COUNT(*) AS churned_no_sales_rep\nFROM accounts\nWHERE status = 'churned'\n  AND sales_rep IS NULL\n  AND deleted_at IS NULL\nGROUP BY country\nORDER BY country",
+   "gold_perturbed_rows": [
+    [
+     "AU",
+     1
+    ],
+    [
+     "FR",
+     2
+    ],
+    [
+     "GB",
+     2
+    ],
+    [
+     "IN",
+     3
+    ],
+    [
+     "JP",
+     1
+    ],
+    [
+     "US",
+     1
+    ]
+   ],
+   "teacher_perturbed_rows": [
+    [
+     "AU",
+     1
+    ],
+    [
+     "FR",
+     1
+    ],
+    [
+     "GB",
+     2
+    ],
+    [
+     "IN",
+     3
+    ],
+    [
+     "JP",
+     1
+    ],
+    [
+     "US",
+     1
+    ]
+   ],
+   "gold_n": 6,
+   "teacher_n": 6
+  },
+  {
+   "family": "null_handling",
+   "question": "How many churned accounts have no sales rep assigned, per country?",
+   "gold_sql": "SELECT country, COUNT(*) FROM accounts WHERE sales_rep IS NULL AND status = 'churned' GROUP BY country",
+   "teacher_sql": "SELECT country, COUNT(*) AS churned_no_sales_rep\nFROM accounts\nWHERE status = 'churned'\n  AND sales_rep IS NULL\n  AND deleted_at IS NULL\nGROUP BY country\nORDER BY country",
+   "gold_perturbed_rows": [
+    [
+     "AU",
+     1
+    ],
+    [
+     "FR",
+     2
+    ],
+    [
+     "GB",
+     2
+    ],
+    [
+     "IN",
+     3
+    ],
+    [
+     "JP",
+     1
+    ],
+    [
+     "US",
+     1
+    ]
+   ],
+   "teacher_perturbed_rows": [
+    [
+     "AU",
+     1
+    ],
+    [
+     "FR",
+     1
+    ],
+    [
+     "GB",
+     2
+    ],
+    [
+     "IN",
+     3
+    ],
+    [
+     "JP",
+     1
+    ],
+    [
+     "US",
+     1
+    ]
+   ],
+   "gold_n": 6,
+   "teacher_n": 6
+  }
+ ],
  "P2.4_P2.5_leakage_and_coverage": {
   "sql-tiny-live1": {
    "train_tasks_in_split": 40,

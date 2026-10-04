@@ -7,6 +7,7 @@ Writes a human spot-check of 30 TRAINING rows to .distillery/proofs/p2_spotcheck
 Acceptance check used by the orchestrator (_teacher_rows): compare_outcomes(candidate, gold, requires_order).ok
 """
 
+import difflib
 import json
 import random
 import re
@@ -76,9 +77,9 @@ def label_check(db, pool) -> list[bool]:
     return [any(accepted(db, r["sql"], run_select(db, g), r["requires_order"]) for g in r["golds"]) for r in pool]
 
 
-def perturb(src: Path, dst: Path) -> dict:
+def perturb(src: Path, dst: Path, seed: int = SEED) -> dict:
     shutil.copy(src, dst)
-    rng = random.Random(SEED)
+    rng = random.Random(seed)
     con = sqlite3.connect(dst)
     cols = 0
     for (t,) in con.execute("select name from sqlite_master where type='table'").fetchall():
@@ -98,26 +99,34 @@ def perturb(src: Path, dst: Path) -> dict:
     return {"shuffled_columns": cols}
 
 
-MUT = [(r"(?<![<>!=])>(?!=)", "<"), (r"(?<![<>!=])<(?![>=])", ">"), (r"(?<![<>!])=(?!=)", "!="),
-       (r"\bAND\b", "OR"), (r"\bDESC\b", "ASC"), (r"\bDISTINCT\b ?", ""),
-       (r"\bLIMIT (\d+)", lambda m: f"LIMIT {int(m.group(1)) + 1}"),
-       (r"\b(\d+)\b", lambda m: str(int(m.group(1)) + 1))]
+MUT = [("flip_gt_to_lt", r"(?<![<>!=])>(?!=)", "<"), ("flip_lt_to_gt", r"(?<![<>!=])<(?![>=])", ">"),
+       ("eq_to_neq", r"(?<![<>!])=(?!=)", "!="),
+       ("and_to_or", r"\bAND\b", "OR"), ("desc_to_asc", r"\bDESC\b", "ASC"), ("drop_distinct", r"\bDISTINCT\b ?", ""),
+       ("limit_plus_1", r"\bLIMIT (\d+)", lambda m: f"LIMIT {int(m.group(1)) + 1}"),
+       ("number_plus_1", r"\b(\d+)\b", lambda m: str(int(m.group(1)) + 1))]
 
 
-def own_mutant(sql: str, rng: random.Random, db) -> str | None:
+def own_mutant(sql: str, rng: random.Random, db) -> tuple[str, str] | None:
     order = list(MUT)
     rng.shuffle(order)
-    for pat, rep in order:
+    for name, pat, rep in order:
         new, k = re.subn(pat, rep, sql, count=1, flags=re.I)
         if k and new != sql:
-            return new
+            return name, new
     return None
 
 
-def recall(db, pool) -> dict:
+def sql_diff(a: str, b: str) -> str:
+    ta, tb = a.split(), b.split()
+    sm = difflib.SequenceMatcher(None, ta, tb)
+    return "; ".join(f"{' '.join(ta[i1:i2])!r} -> {' '.join(tb[j1:j2])!r}" for t, i1, i2, j1, j2 in sm.get_opcodes() if t != "equal")
+
+
+def recall(db, pool, pdbs: list[Path]) -> dict:
     rng = random.Random(SEED)
     sample = rng.sample(pool, max(1, len(pool) // 10))
     out = {"sampled": len(sample), "corrupt_sql": Counter(), "own_mutations": Counter()}
+    acc_list, equiv = [], 0
     for r in sample:
         g = run_select(db, r["golds"][0])
         c = corrupt_sql(r["sql"], db, rng, max_variants=1)
@@ -126,7 +135,8 @@ def recall(db, pool) -> dict:
             out["corrupt_sql"]["rejected"] += not accepted(db, c[0].sql, g, r["requires_order"])
         else:
             out["corrupt_sql"]["no_variant_available"] += 1
-        m = own_mutant(r["sql"], rng, db)
+        mm = own_mutant(r["sql"], rng, db)
+        m = mm[1] if mm else None
         if m is None:
             out["own_mutations"]["no_mutation_applicable"] += 1
             continue
@@ -136,6 +146,11 @@ def recall(db, pool) -> dict:
             out["own_mutations"]["rejected_exec_error"] += 1
         elif compare_outcomes(o, g, r["requires_order"]).ok:
             out["own_mutations"]["accepted_wrongly_or_equivalent"] += 1
+            robust = all(accepted(d, m, run_select(d, r["golds"][0]), r["requires_order"]) for d in pdbs)
+            equiv += robust
+            acc_list.append({"mutator": mm[0], "family": r.get("family"),
+                             "class": "equivalent_robust" if robust else "true_miss",
+                             "gold_sql": r["golds"][0], "mutant_sql": m, "diff": sql_diff(r["golds"][0], m)})
         else:
             out["own_mutations"]["rejected_result_mismatch"] += 1
     for k in ("corrupt_sql", "own_mutations"):
@@ -145,7 +160,26 @@ def recall(db, pool) -> dict:
         d["recall"] = f"{rej}/{inj}"
         d["recall_rate"] = round(rej / inj, 4) if inj else None
         out[k] = d
+    om = out["own_mutations"]
+    inj, acc = om.get("injected", 0), om.get("accepted_wrongly_or_equivalent", 0)
+    om["accepted_equivalent_robust"] = equiv
+    om["accepted_true_miss"] = acc - equiv
+    om["recall_excluding_equivalent_robust"] = f"{inj - acc}/{inj - equiv}"
+    om["recall_excluding_equivalent_robust_rate"] = round((inj - acc) / (inj - equiv), 4) if inj - equiv else None
+    om["accepted_mutants"] = acc_list
     return out
+
+
+def lost_rows(pool, ok, okp, pdb) -> list[dict]:
+    res = []
+    for r, a, b in zip(pool, ok, okp, strict=True):
+        if not (a and not b):
+            continue
+        g, t = run_select(pdb, r["golds"][0]), run_select(pdb, r["sql"])
+        res.append({"family": r["family"], "question": r["question"], "gold_sql": r["golds"][0], "teacher_sql": r["sql"],
+                    "gold_perturbed_rows": [list(x) for x in g.rows[:8]], "teacher_perturbed_rows": [list(x) for x in t.rows[:8]],
+                    "gold_n": len(g.rows), "teacher_n": len(t.rows)})
+    return res
 
 
 def leakage_and_coverage() -> dict:
@@ -213,10 +247,16 @@ if __name__ == "__main__":
         "by_family_lost": dict(Counter(r["family"] for r, a, b in zip(pool, ok, okp, strict=True) if a and not b)),
     }
     # Filter recall on a pool of the trained rows; gated-run train pool (gold as stand-in) added separately.
-    out["P2.3_filter_recall_trained_rows"] = recall(DB, pool)
+    pdbs = [pdb]
+    for sd in (SEED + 1, SEED + 2):
+        extra = TMP / f"p2_perturbed_{sd}.sqlite"
+        perturb(DB, extra, sd)
+        pdbs.append(extra)
+    out["P2.3_filter_recall_trained_rows"] = recall(DB, pool, pdbs)
     gt = stage_artifact(store, "gated-1p7b-r1", "split")["train"]
-    gpool = [{"sql": t["gold_sql"], "golds": [t["gold_sql"]], "requires_order": t["requires_order"]} for t in gt]
-    out["P2.3_filter_recall_gated_train_pool_gold"] = recall(DB, gpool)
+    gpool = [{"family": t["family"], "sql": t["gold_sql"], "golds": [t["gold_sql"]], "requires_order": t["requires_order"]} for t in gt]
+    out["P2.3_filter_recall_gated_train_pool_gold"] = recall(DB, gpool, pdbs)
+    out["P2.2_null_handling_lost_rows"] = lost_rows(pool, ok, okp, pdb)
     out["P2.4_P2.5_leakage_and_coverage"] = leakage_and_coverage()
     out["train_family_counts_trained_rows"] = dict(Counter(r["family"] for r in pool))
     spotcheck(pool)
