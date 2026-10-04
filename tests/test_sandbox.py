@@ -172,6 +172,7 @@ def _install_stub_sdk(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     class ContreeConfig:
         def __init__(self, auth: Any, **kw: Any) -> None:
             seen["config_auth"] = auth
+            seen["config_kw"] = kw
 
     class Contree:
         def __init__(self, config: Any = None, **kw: Any) -> None:
@@ -298,3 +299,13 @@ def test_sdk_errors_become_sandbox_errors_without_leaking_siblings() -> None:
 def test_fake_sandbox_ensure_image_is_identity() -> None:
     sb: Sandbox = FakeSandbox()
     assert run(sb.ensure_image("docker://python:3.12-slim")) == "docker://python:3.12-slim"
+
+
+def test_sdk_gets_a_transport_timeout_big_enough_for_adapter_uploads(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """P4: the SDK default (10 s) timed out uploading the LoRA adapter (POST /v1/files)."""
+    seen = _install_stub_sdk(monkeypatch)
+    monkeypatch.setenv("NEBIUS_AI_PROJECT", "project-e00abc")
+    ContreeSandbox(lambda: "k", None)._get_sdk()
+    assert seen["config_kw"]["transport_timeout"] >= 120

@@ -26,6 +26,9 @@ MAX_CONCURRENCY = 40  # our ceiling; the documented beta cap is 50 in-flight ope
 BETA_INFLIGHT_CAP = 50
 DEFAULT_BASE_URL = "https://api.tokenfactory.nebius.com/sandboxes"
 _TIMEOUT_GRACE_S = 5.0
+# The SDK's default per-request transport timeout (10 s) cut a ~70 MB LoRA adapter upload
+# (POST /v1/files) on a slow link in the P4 run; uploads and polls get a realistic budget.
+TRANSPORT_TIMEOUT_S = 120.0
 # The SDK truncates stdout/stderr at 65535 bytes by default, which would cut a JSON result set
 # mid-way (the S4 spike already needed 400000). Ask for more explicitly on every run.
 TRUNCATE_OUTPUT_AT = 1_000_000
@@ -426,7 +429,9 @@ class ContreeSandbox(_SandboxBase):
             auth = auth_mod.IAMAuth(
                 token=self._api_key_getter(), project_id=project, base_url=self._base_url
             )
-            self._sdk = sdk_mod.Contree(cfg_mod.ContreeConfig(auth=auth))
+            self._sdk = sdk_mod.Contree(
+                cfg_mod.ContreeConfig(auth=auth, transport_timeout=TRANSPORT_TIMEOUT_S)
+            )
         if not self._hardened:
             self._harden_polling(self._sdk)
             self._hardened = True
