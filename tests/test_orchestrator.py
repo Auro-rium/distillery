@@ -6,6 +6,7 @@ import math
 import os
 import re
 import shutil
+import sqlite3
 import subprocess
 import sys
 import tempfile
@@ -356,9 +357,32 @@ def test_orphaned_job_from_killed_process_is_cancelled_on_resume(
 ) -> None:
     pipe, dr, store = make(tmp_path, bridge)
     store.add_experiment("dry-t", "finetune_job_started", {"round": 1, "job_id": "ftjob-ghost"})
+    dr.finetune.job_status["ftjob-ghost"] = "failed"  # dead: nothing to adopt
     pipe.run()
     assert "ftjob-ghost" in dr.finetune.cancelled
     assert pipe.counters["finetune_r1"]["orphan_jobs_cancelled"] == 1
+
+
+def test_running_job_of_a_killed_process_is_adopted_not_cancelled(
+    tmp_path: Path, bridge: AsyncBridge
+) -> None:
+    """P5 kill test: SIGKILL mid-fine-tune leaves the job unclosed; the resume must adopt it
+    (no second billable job), not cancel it and pay again."""
+    store, jid = _outage_first_attempt(tmp_path, bridge)
+    con = sqlite3.connect(store.root / "index.sqlite")  # a kill leaves no close event at all
+    con.execute("DELETE FROM experiments WHERE name='finetune_job_closed'")
+    con.commit()
+    con.close()
+    dr2 = build_dry_run(NANO, bridge)
+    dr2.finetune.job_status[jid] = "running"
+    pipe2 = Pipeline(dr2.pipeline_cfg, dr2.config, dr2.deps, store, "dry-t", say=lambda _s: None)
+    pipe2.run()
+    assert jid not in dr2.finetune.cancelled
+    assert not [s for s in dr2.finetune.suffixes.values() if s.endswith("-r1")]  # no new r1 job
+    adopted = [
+        d["job_id"] for n, d in store.list_experiments("dry-t") if n == "finetune_job_adopted"
+    ]
+    assert adopted == [jid]
 
 
 def test_budget_exceeded_refuses_before_any_llm_call(tmp_path: Path, bridge: AsyncBridge) -> None:

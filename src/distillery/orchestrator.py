@@ -1455,8 +1455,8 @@ class Pipeline:
             atomic_write_bytes(
                 val_p, ("\n".join(canonical_json(x) for x in val_rows) + "\n").encode("utf-8")
             )
-            orphans = self._cancel_orphans(r)
             existing = self._adoptable_job(r)  # a paid job an earlier attempt left ambiguous
+            orphans = self._cancel_orphans(r, keep=existing)
             # Refuse BEFORE any upload/job: planned tokens x price when the price exists,
             # else the operator ceiling.
             planned = _planned_trained_tokens(
@@ -1618,9 +1618,10 @@ class Pipeline:
 
     def _adoptable_job(self, r: int) -> str | None:
         """A job of this round that an earlier attempt aborted but may not have managed to cancel
-        (e.g. the network died mid-poll and the cancel failed too): if it is still active or
-        succeeded, use it rather than paying for a second one. A failed status check raises: the
-        wrong guess would create a duplicate billable job."""
+        (e.g. the network died mid-poll and the cancel failed too), or never closed at all (the
+        process was killed mid-fine-tune): if it is still active or succeeded, use it rather than
+        paying for a second one. A failed status check raises: the wrong guess would create a
+        duplicate billable job."""
         started: list[str] = []
         outcome: dict[str, str] = {}
         for name, data in self.store.list_experiments(self.run_id):
@@ -1629,16 +1630,17 @@ class Pipeline:
             elif name == "finetune_job_closed":
                 outcome[str(data["job_id"])] = str(data.get("outcome"))
         for jid in reversed(started):
-            if outcome.get(jid) != "aborted":
+            if outcome.get(jid, "aborted") != "aborted":  # unclosed counts as aborted
                 continue
             status = self.deps.finetune.get(jid).status
             if status == "succeeded" or status in ACTIVE_STATUSES:
                 return jid
         return None
 
-    def _cancel_orphans(self, r: int) -> tuple[int, int]:
+    def _cancel_orphans(self, r: int, keep: str | None = None) -> tuple[int, int]:
         """Cancel jobs of this round that were started but never closed (e.g. process killed),
-        so a resume cannot leave a second billable job running."""
+        except ``keep`` (the one being adopted), so a resume cannot leave a second billable job
+        running."""
         started: dict[str, int] = {}
         closed: set[str] = set()
         for name, data in self.store.list_experiments(self.run_id):
@@ -1648,7 +1650,7 @@ class Pipeline:
                 closed.add(str(data["job_id"]))
         done = errors = 0
         for jid in started:
-            if jid in closed:
+            if jid in closed or jid == keep:
                 continue
             try:
                 self.deps.finetune.cancel(jid)
