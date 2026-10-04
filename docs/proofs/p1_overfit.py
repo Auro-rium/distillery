@@ -50,7 +50,7 @@ MIN_STEPS = 300
 HP = HyperParameters(
     lora=True, lora_r=16, lora_alpha=32, lora_dropout=0.0, learning_rate=2e-4, batch_size=2,
     n_epochs=10, packing=False, warmup_ratio=0.0, weight_decay=0.0, max_grad_norm=1.0,
-    context_length=8192,
+    context_length=16384,  # provider: batch_size x context_length >= 32768 (422 otherwise)
 )  # fmt: skip
 ADAPTER_NAMES = ("adapter_config.json", "adapter_model.safetensors")
 EVIDENCE = Path(__file__).resolve().parent / "evidence" / "p1_11_overfit.json"
