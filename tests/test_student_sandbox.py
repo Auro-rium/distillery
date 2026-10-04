@@ -516,3 +516,13 @@ def test_retries_are_bounded(stubs: Path, tmp_path: Path, bridge: AsyncBridge) -
     with pytest.raises(StudentServingError):
         s.generate(msgs(2))
     assert flaky.batches == 3  # one attempt plus GENERATION_JOB_RETRIES
+
+
+def test_a_timed_out_job_is_retried_with_a_doubled_timeout(
+    stubs: Path, tmp_path: Path, bridge: AsyncBridge
+) -> None:
+    log = Log()
+    flaky = FlakyJobs(make_sandbox(stubs, tmp_path, log), lose=1)
+    s = SandboxCpuStudent(flaky, "img", bridge, base_model=MODEL, batch_size=2, timeout_s=500)
+    assert s.generate(msgs(2)) == ["base|q0", "base|q1"]
+    assert [j.timeout for j in log.jobs] == [300.0, 500.0]  # 120 + 90 * 2, then 2x capped

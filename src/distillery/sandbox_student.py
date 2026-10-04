@@ -28,7 +28,7 @@ import json
 import shlex
 import threading
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
@@ -438,7 +438,7 @@ class SandboxCpuStudent:
         max_new_tokens: int = DEFAULT_MAX_NEW_TOKENS,
         timeout_s: float = 1800.0,
         job_base_timeout_s: float = 120.0,
-        job_per_sample_timeout_s: float = 45.0,
+        job_per_sample_timeout_s: float = 90.0,  # 1.7B on sandbox CPU: one batch of 2 took 229 s
         max_sample_failure_fraction: float = 0.25,
         images: ServingImages | None = None,
         prebuilt_adapter_image: str | None = None,
@@ -536,6 +536,12 @@ class SandboxCpuStudent:
             if not redo:
                 break
             self.job_retries += len(redo)
+            # Greedy decoding makes a slow batch slow every time (P1.11: the same 2 batches timed
+            # out 3x, then ran fine with more time), so a timed-out job retries with 2x its timeout.
+            for i in redo:
+                t = jobs[i].timeout
+                if results[i].timed_out and t is not None:
+                    jobs[i] = replace(jobs[i], timeout=min(self._timeout_s, t * 2))
             again = self._bridge.run(
                 self._sandbox.run_batch(
                     image, [jobs[i] for i in redo], concurrency=self._concurrency
