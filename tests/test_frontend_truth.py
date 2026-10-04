@@ -35,6 +35,8 @@ NULLABLE: dict[str, set[str]] = {
         "stages[].started_at",
         "stages[].ended_at",
         "spend.finetune_usd_estimate",
+        "spend.finetune_billed_usd",
+        "spend.finetune_ceiling_usd",
         "sandbox.concurrency_peak",
         # The contract says int, but the server currently reports null (no sandbox counter yet).
         # Tolerated here so the frontend is tested against the real shape; it renders "not measured".

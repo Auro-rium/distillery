@@ -197,6 +197,7 @@ describe("ReportScreen inside the run shell", () => {
 
 describe("provenance with everything loaded", () => {
   const AXIS: Allow = { pattern: /(?<![\d.])(0|50|100)%(?=\s|$)/g, why: "fixed axis tick labels (0, 50, 100 percent)" };
+  const SHA: Allow = { pattern: /adapter [0-9a-f]{12}(?![0-9a-f])/g, why: "first 12 hex chars of adapter_sha256, shortened for display (full hash is in the title attribute)" };
   const CARD: Allow = { pattern: /\bcost \/ 1k tasks/g, why: "'1k' is part of the metric name 'cost per 1k tasks'" };
   const SHOWN: Allow = { pattern: /(capped list, \d+ shown|showing \d+ of \d+)/g, why: "count of items in a returned list" };
   it("every number on the page, examples tabs included, comes from the report or the examples response", async () => {
@@ -207,7 +208,7 @@ describe("provenance with everything loaded", () => {
     fireEvent.click(screen.getByRole("button", { name: "Gate reasons" }));
     const text = visibleText(container);
     expect(text).toContain("showing");
-    expect(unexplained(text, [contract.report, contract.examples, contract.examplesHeaders], [AXIS, CARD, SHOWN])).toEqual([]);
+    expect(unexplained(text, [contract.report, contract.examples, contract.examplesHeaders], [AXIS, CARD, SHOWN, SHA])).toEqual([]);
   });
 });
 
@@ -256,5 +257,45 @@ describe("stress set and in-distribution caveat", () => {
     view(oldRun);
     expect(screen.queryByText(/in-distribution/)).toBeNull();
     expect(screen.getAllByText("not in training").length).toBeGreaterThan(0);
+  });
+});
+
+describe("cost basis, student sandbox cost and fine-tune artifact ids", () => {
+  const withCost = (cost: Partial<Report["cost"]>, rest: Partial<Report> = {}) =>
+    ({ ...base, ...rest, cost: { ...base.cost, ...cost } }) as Report;
+
+  it("shows cost.basis, the sandbox-shape student cost, and never the token junk for it", () => {
+    const student = { basis: "billed-basis (measured seconds x console price)", samples: 60, sandbox_seconds: 12.5, usd_per_1k_tasks: 0.25 };
+    const { container } = view(withCost({
+      basis: "ESTIMATES, not billed amounts. test basis",
+      cost_per_1k_tasks: { ...base.cost.cost_per_1k_tasks, student },
+    }));
+    const text = container.textContent!;
+    expect(text).toContain("ESTIMATES, not billed amounts. test basis");
+    expect(text).toContain("$0.25000");
+    expect(text).toContain("60 samples, 12.5 sandbox s");
+    const cell = screen.getByText("Student cost / 1k tasks").parentElement!.textContent!;
+    expect(cell).not.toMatch(/not measured|tokens|\$0\.00000/);
+  });
+
+  it("divides the teacher hint by items_scored when present", () => {
+    const t = { basis: "b", held_out_tasks: 60, items_scored: 90, input_tokens: 1, output_tokens: 2, usd: 0.5, usd_per_1k_tasks: 5 };
+    view(withCost({ cost_per_1k_tasks: { ...base.cost.cost_per_1k_tasks, teacher: t } }));
+    expect(screen.getByText("Teacher cost / 1k tasks").parentElement!.textContent).toContain("90 tasks");
+  });
+
+  it("shows the fine-tune artifact ids and round job ids", () => {
+    const sha = "f48dcdbe5239cf70a617edeb36638ffb1cd96bfafcb521769a16b65dd5cbe0e2";
+    const r = withCost({}, {
+      evaluation: { ...base.evaluation, artifact: { adapter_sha256: sha, checkpoint_id: "ftckpt_x", job_id: "ftjob-abc" } },
+      rounds: [{ ...base.rounds[0], job_id: "ftjob-round1" }],
+    });
+    const { container } = view(r);
+    const row = container.querySelector(".ft-artifact")!;
+    expect(row.textContent).toContain("ftjob-abc");
+    expect(row.textContent).toContain("ftckpt_x");
+    expect(row.textContent).toContain(sha.slice(0, 12));
+    expect(row.textContent).not.toContain(sha);
+    expect(row.textContent).toContain("ftjob-round1");
   });
 });

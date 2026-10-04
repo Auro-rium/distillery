@@ -1,6 +1,6 @@
 import type { CSSProperties, ReactNode } from "react";
 import { NOT_MEASURED, fmtInt, fmtNumber, fmtPercent, fmtUsd } from "../../api/format";
-import type { AccTriple, Report, TeacherCostPer1k } from "../../api/types";
+import type { AccTriple, Report, SandboxCostPer1k, TeacherCostPer1k } from "../../api/types";
 import { Badge, Card, EmptyState, Stat } from "../../components";
 import { AccuracyChart, AccuracyTable, Legend, MODELS, type BarRow, type TableRow } from "./AccuracyChart";
 import { Breakable } from "./Breakable";
@@ -76,24 +76,41 @@ export function GateDetails({ r }: { r: Report }) {
   );
 }
 
-function CostCell({ label, v }: { label: string; v: string | TeacherCostPer1k | undefined }) {
+type CostV = string | TeacherCostPer1k | SandboxCostPer1k | undefined;
+
+function CostCell({ label, v }: { label: string; v: CostV }) {
   if (v === undefined) return <Stat label={label} value={NOT_MEASURED} hint="not in report" />;
   // A string here is the backend's own explanation (for example "unavailable: ..."); it is shown verbatim.
   if (typeof v === "string") return <Stat label={label} value={NOT_MEASURED} hint={v} />;
+  // The student shape with a sandbox price has no token fields: seconds x price, over `samples`.
+  if (!("input_tokens" in v)) {
+    return (
+      <Stat
+        label={label}
+        value={fmtUsd(v.usd_per_1k_tasks, 5)}
+        hint={`per 1k tasks · ${v.basis} · ${fmtInt(v.samples)} samples, ${fmtNumber(v.sandbox_seconds, 1)} sandbox s`}
+      />
+    );
+  }
+  const tasks = v.items_scored ?? v.held_out_tasks;
   return (
     <Stat
       label={label}
       value={fmtUsd(v.usd_per_1k_tasks, 5)}
-      hint={`per 1k tasks · ${v.basis} · ${fmtInt(v.held_out_tasks)} tasks, ${fmtInt(v.input_tokens)} in / ${fmtInt(v.output_tokens)} out tokens, ${fmtUsd(v.usd, 6)}`}
+      hint={`per 1k tasks · ${v.basis} · ${fmtInt(tasks)} tasks, ${fmtInt(v.input_tokens)} in / ${fmtInt(v.output_tokens)} out tokens, ${fmtUsd(v.usd, 6)}`}
     />
   );
 }
 
+const short = (h: string | undefined) => (h ? h.slice(0, 12) : NOT_MEASURED);
+
 export function CostLatency({ r }: { r: Report }) {
   const c = r.cost;
-  const per = c.cost_per_1k_tasks as Record<string, string | TeacherCostPer1k | undefined>;
+  const per = c.cost_per_1k_tasks as Record<string, CostV>;
   const latency = (r as unknown as { latency?: unknown }).latency;
   const models = Object.entries(c.llm_by_model ?? {});
+  const art = r.evaluation.artifact as Partial<Report["evaluation"]["artifact"]> | undefined;
+  const jobs = (r.rounds ?? []).map((x) => x.job_id).filter(Boolean);
   return (
     <Card title="Cost and latency" className="rp-cost">
       <div className="rp-stats">
@@ -105,6 +122,14 @@ export function CostLatency({ r }: { r: Report }) {
       <p className="muted rp-note">
         Run total {fmtUsd(c.run_total_usd)} of {fmtUsd(c.run_cap_usd)} cap. Fine-tune: {fmtUsd(c.finetune_usd)}
       </p>
+      {c.basis && <p className="muted rp-note cost-basis">{c.basis}</p>}
+      {art && (
+        <p className="muted rp-note ft-artifact">
+          Fine-tune artifact: job <span className="mono">{art.job_id}</span>, checkpoint <span className="mono">{art.checkpoint_id}</span>, adapter{" "}
+          <span className="mono" title={art.adapter_sha256}>{short(art.adapter_sha256)}</span>
+          {jobs.length > 0 && <>; round jobs {jobs.map((j, i) => <span key={j}>{i > 0 && ", "}<span className="mono">{j}</span></span>)}</>}
+        </p>
+      )}
       {models.length > 0 && (
         <div className="tbl-wrap">
           <table className="tbl rp-tbl">

@@ -16,6 +16,16 @@ describe("LabelBanner", () => {
     render(<LabelBanner dry_run={false} recorded={false} />);
     expect(screen.getByRole("status").textContent).toBe("Live run, not a recorded replay");
   });
+  it("labels a completed non-dry local run as completed, and keeps Live run only while running", () => {
+    const { unmount } = render(<LabelBanner dry_run={false} recorded={false} status="complete" />);
+    expect(screen.getByRole("status").textContent).toBe("Completed run (real Token Factory jobs)");
+    unmount();
+    for (const status of ["running", "pending"]) {
+      const r = render(<LabelBanner dry_run={false} recorded={false} status={status} />);
+      expect(screen.getByRole("status").textContent).toBe("Live run, not a recorded replay");
+      r.unmount();
+    }
+  });
   it("never renders missing flags as real", () => {
     for (const props of [{}, { dry_run: null }, { dry_run: undefined, recorded: false }, { dry_run: false }]) {
       const { unmount } = render(<LabelBanner {...props} />);

@@ -88,17 +88,23 @@ class RunReader:
             con.close()
         return [(str(r[0]), str(r[1])) for r in rows]
 
-    def _finetune_estimate(self, store: Store, run_id: str) -> float | None:
+    def _finetune_estimate(self, store: Store, run_id: str) -> dict[str, float | None]:
+        """Fine-tune spend: the legacy total plus billed-basis and ceiling rows kept apart."""
         con = sqlite3.connect(f"file:{store.root / 'index.sqlite'}?mode=ro", uri=True)
         try:
-            row = con.execute(
-                "SELECT COUNT(*), COALESCE(SUM(usd),0) FROM spend "
-                "WHERE run_id=? AND kind IN ('finetune','finetune_ceiling')",
+            rows = con.execute(
+                "SELECT kind, COUNT(*), COALESCE(SUM(usd),0) FROM spend "
+                "WHERE run_id=? AND kind IN ('finetune','finetune_ceiling') GROUP BY kind",
                 (run_id,),
-            ).fetchone()
+            ).fetchall()
         finally:
             con.close()
-        return float(row[1]) if row and row[0] else None
+        by = {str(r[0]): float(r[2]) for r in rows if r[1]}
+        return {
+            "total": sum(by.values()) if by else None,
+            "billed": by.get("finetune"),
+            "ceiling": by.get("finetune_ceiling"),
+        }
 
     def stage_output(self, run_id: str, stage: str) -> Any | None:
         store = self.store_for(run_id)
@@ -197,6 +203,7 @@ class RunReader:
                     "rejected_corruptions": c.get("corruptions_tested"),
                     "failures": 0,
                 }
+        ft = self._finetune_estimate(store, run_id)
         return {
             "run_id": run_id,
             "dry_run": dry,
@@ -209,7 +216,9 @@ class RunReader:
                 "total_usd": store.total_spend(run_id),
                 "cap_usd": cap,
                 "by_model": cost_by_model(store, run_id),
-                "finetune_usd_estimate": self._finetune_estimate(store, run_id),
+                "finetune_usd_estimate": ft["total"],
+                "finetune_billed_usd": ft["billed"],
+                "finetune_ceiling_usd": ft["ceiling"],
             },
             "sandbox": {"operations": None, "concurrency_peak": None},
             "verifier": {"language": "sql", "code": None, "selftest": selftest},

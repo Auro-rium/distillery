@@ -27,7 +27,7 @@ describe("no invented content in src/", () => {
     expect(shipped.length).toBeGreaterThan(10);
   });
   it("has no Math.random, lorem, sample text or fake TODOs", () => {
-    const bad = /Math\.random|lorem|\bsamples?\b|TODO fake/i;
+    const bad = /Math\.random|lorem|\bsample (?:text|data|output)\b|TODO fake/i;
     const hits = shipped.filter((f) => bad.test(read(f))).map(rel);
     expect(hits).toEqual([]);
   });

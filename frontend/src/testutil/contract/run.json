@@ -18,6 +18,8 @@
       }
     },
     "cap_usd": 10.0,
+    "finetune_billed_usd": 2.0,
+    "finetune_ceiling_usd": null,
     "finetune_usd_estimate": 2.0,
     "total_usd": 2.5
   },

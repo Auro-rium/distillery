@@ -31,7 +31,7 @@ describe("RunShell header", () => {
     const rec = shell({ run: { ...run, dry_run: false, recorded: true, recorded_at: "2026-01-02T03:04:05Z" } });
     expect(screen.getByRole("status").textContent).toBe("Recorded run · 2026-01-02T03:04:05Z · real Token Factory jobs");
     rec.unmount();
-    shell({ run: { ...run, dry_run: false, recorded: false } });
+    shell({ run: { ...run, status: "running", dry_run: false, recorded: false } });
     expect(screen.getByRole("status").textContent).toBe(LIVE_TEXT);
   });
   it("says Label unknown when the flags are missing, never a real-run label", () => {

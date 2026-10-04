@@ -12,6 +12,11 @@ export const DRY_RUN_TEXT = "DRY RUN — fake models, numbers are NOT results";
 export const UNLABELLED_TEXT =
   "Label unknown: the API response carried no dry_run flag. Do not treat these numbers as real results.";
 export const LIVE_TEXT = "Live run, not a recorded replay";
+export const COMPLETED_TEXT = "Completed run (real Token Factory jobs)";
+
+// "Live run" only while the run is still going; a finished one is not live any more.
+const liveText = (status?: string | null) =>
+  status === "complete" ? COMPLETED_TEXT : status === "failed" ? "Failed run (real Token Factory jobs)" : LIVE_TEXT;
 
 /**
  * Persistent label for anything that shows run/report data. A missing flag is never read as
@@ -21,6 +26,7 @@ export function LabelBanner(props: {
   dry_run?: boolean | null;
   recorded?: boolean | null;
   recorded_at?: string | null;
+  status?: string | null;
 }) {
   if (props.dry_run === true) {
     return <div className="label-banner dry" role="status">{DRY_RUN_TEXT}</div>;
@@ -33,7 +39,7 @@ export function LabelBanner(props: {
     );
   }
   if (props.dry_run === false && props.recorded === false) {
-    return <div className="label-banner recorded" role="status">{LIVE_TEXT}</div>;
+    return <div className="label-banner recorded" role="status">{liveText(props.status)}</div>;
   }
   return <div className="label-banner dry" role="status">{UNLABELLED_TEXT}</div>;
 }

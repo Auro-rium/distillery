@@ -116,6 +116,9 @@ def test_dry_run_lifecycle_and_derived_progress(tmp_path: Path) -> None:
         ]
         assert d["spend"]["by_model"]["fake-t"]["calls"] == 1
         assert d["spend"]["finetune_usd_estimate"] == 2.0
+        # the two bases are served apart ('finetune' = billed basis, 'finetune_ceiling' = ceiling)
+        assert d["spend"]["finetune_billed_usd"] == 2.0
+        assert d["spend"]["finetune_ceiling_usd"] is None
         assert d["spend"]["total_usd"] == 2.5
         assert d["verifier"] == {
             "language": "sql",

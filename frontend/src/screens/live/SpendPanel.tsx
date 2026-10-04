@@ -13,12 +13,21 @@ const scale = (f: number | null) => ({ "--f": f ?? 0 }) as CSSProperties;
 /** `spend` is undefined when the payload carries none: every figure then reads "not measured". */
 export function SpendPanel({ spend, title }: { spend: Spend | null | undefined; title: string }) {
   const total = frac(spend?.total_usd, spend?.cap_usd);
+  // payloads from before the split carry only the combined figure
+  const split = spend?.finetune_billed_usd !== undefined || spend?.finetune_ceiling_usd !== undefined;
   const models = Object.entries(spend?.by_model ?? {});
   return (
     <Panel title={title} className="lp-spend">
       <dl className="metrics">
-        <Metric label="Total" value={<Val text={fmtUsd(spend?.total_usd)} />} hint={`cap ${fmtUsd(spend?.cap_usd)}`} />
-        <Metric label="Fine-tune (estimate)" value={<Val text={fmtUsd(spend?.finetune_usd_estimate)} />} />
+        <Metric label={spend?.basis && /billed/i.test(spend.basis) ? "Total" : "Total (estimate)"} value={<Val text={fmtUsd(spend?.total_usd)} />} hint={`cap ${fmtUsd(spend?.cap_usd)}`} />
+        {split ? (
+          <>
+            <Metric label="Fine-tune (measured x price)" value={<Val text={fmtUsd(spend?.finetune_billed_usd)} />} />
+            <Metric label="Fine-tune (ceiling)" value={<Val text={fmtUsd(spend?.finetune_ceiling_usd)} />} />
+          </>
+        ) : (
+          <Metric label="Fine-tune (estimate)" value={<Val text={fmtUsd(spend?.finetune_usd_estimate)} />} />
+        )}
       </dl>
       {total !== null && spend && (
         <div className="meter" role="meter" aria-label="Spend against cap" aria-valuemin={0} aria-valuemax={spend.cap_usd} aria-valuenow={spend.total_usd}>

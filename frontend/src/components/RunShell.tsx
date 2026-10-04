@@ -57,7 +57,7 @@ export function RunShell(props: { runId: string; tab: RunTab; run?: RunDetail; c
             </span>
           </div>
           <div className="run-label" data-slot="label" data-state={run ? "ready" : "pending"}>
-            {run ? <LabelBanner dry_run={run.dry_run} recorded={run.recorded} recorded_at={run.recorded_at} /> : null}
+            {run ? <LabelBanner dry_run={run.dry_run} recorded={run.recorded} recorded_at={run.recorded_at} status={run.status} /> : null}
           </div>
         </div>
         <div className="run-tabbar">

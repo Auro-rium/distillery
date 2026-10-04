@@ -8,6 +8,7 @@ afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 const id = contract.run.run_id;
 const AXIS: Allow = { pattern: /(?<![\d.])(0|50|100)%(?=\s|$)/g, why: "fixed axis tick labels of the accuracy chart (0, 50, 100 percent)" };
+const SHA: Allow = { pattern: /adapter [0-9a-f]{12}(?![0-9a-f])/g, why: "first 12 hex chars of adapter_sha256, shortened for display (full hash is in the title attribute)" };
 const CARD: Allow = { pattern: /\bcost \/ 1k tasks/g, why: "'1k' is part of the metric name 'cost per 1k tasks'" };
 const SHOWN: Allow = { pattern: /(capped list, \d+ shown|showing \d+ of \d+)/g, why: "count of items returned in the examples list (a list length, not a payload value)" };
 
@@ -33,7 +34,7 @@ describe("render provenance: numbers on screen come from the contract payloads",
   });
   it("report", async () => {
     stubFetch(contractFetch());
-    await check(`/runs/${id}/report`, "Gate statistics", [contract.report, contract.examples, contract.examplesHeaders], [AXIS, CARD, SHOWN]);
+    await check(`/runs/${id}/report`, "Gate statistics", [contract.report, contract.examples, contract.examplesHeaders], [AXIS, CARD, SHOWN, SHA]);
   });
   it("live run", async () => {
     stubFetch(contractFetch());

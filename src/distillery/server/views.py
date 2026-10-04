@@ -144,6 +144,8 @@ def detail_from_report(
             "cap_usd": cost.get("run_cap_usd"),
             "by_model": cost.get("llm_by_model") or {},
             "finetune_usd_estimate": None,
+            "finetune_billed_usd": None,
+            "finetune_ceiling_usd": None,
         },
         "sandbox": {"operations": None, "concurrency_peak": None},
         "verifier": {"language": report.get("pack", "sql"), "code": None, "selftest": None},

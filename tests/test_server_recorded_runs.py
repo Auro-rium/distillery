@@ -100,3 +100,14 @@ def test_export_rewrites_spot_check_path_and_refuses_absolute_paths(tmp_path: Pa
         )
     assert not (tmp_path / "replay2").exists()
     reader.close()
+
+
+def test_detail_serves_finetune_billed_and_ceiling_apart(tmp_path: Path) -> None:
+    root = tmp_path / "data"
+    store = seed_finished_run(root, "sql-tiny-ft", dry=False)  # seeds one 2.0 'finetune' row
+    store.record_spend("sql-tiny-ft", "finetune_ceiling", None, 3.0)
+    store.close()
+    sp = RunReader(make_settings(tmp_path)).detail("sql-tiny-ft")["spend"]
+    assert sp["finetune_billed_usd"] == 2.0
+    assert sp["finetune_ceiling_usd"] == 3.0
+    assert sp["finetune_usd_estimate"] == 5.0

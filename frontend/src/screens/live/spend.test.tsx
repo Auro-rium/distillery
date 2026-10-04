@@ -69,3 +69,18 @@ describe("spend meter and per-model bars follow real spend events", () => {
     expect(container.querySelectorAll(".mbar-fill")).toHaveLength(0);
   });
 });
+
+describe("spend labels", () => {
+  it("labels the total an estimate and shows fine-tune billed and ceiling apart", async () => {
+    const { SpendPanel } = await import("./SpendPanel");
+    const { render } = await import("@testing-library/react");
+    const sp = { total_usd: 1, cap_usd: 5, by_model: {}, finetune_usd_estimate: 5, finetune_billed_usd: 2, finetune_ceiling_usd: 3 };
+    const { container, rerender } = render(<SpendPanel spend={sp} title="Spend" />);
+    const t = () => container.textContent!;
+    expect(t()).toContain("Total (estimate)");
+    expect(t()).toContain("Fine-tune (measured x price)$2.0000");
+    expect(t()).toContain("Fine-tune (ceiling)$3.0000");
+    rerender(<SpendPanel spend={{ ...sp, basis: "billed-basis (measured)" }} title="Spend" />);
+    expect(t()).not.toContain("Total (estimate)");
+  });
+});

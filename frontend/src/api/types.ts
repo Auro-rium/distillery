@@ -57,6 +57,11 @@ export interface Spend {
   cap_usd: number;
   by_model: Record<string, ModelSpend>;
   finetune_usd_estimate: number | null;
+  // finetune_usd_estimate split by basis: measured x price vs operator ceiling
+  finetune_billed_usd?: number | null;
+  finetune_ceiling_usd?: number | null;
+  // set only if the payload states a billed basis; absent means the totals are estimates
+  basis?: string;
 }
 
 export interface RunDetail {
@@ -158,9 +163,18 @@ export interface ReportRound {
 export interface TeacherCostPer1k {
   basis: string;
   held_out_tasks: number;
+  items_scored?: number; // newer runs divide by this (gate + stress + human items), not held_out_tasks
   input_tokens: number;
   output_tokens: number;
   usd: number;
+  usd_per_1k_tasks: number;
+}
+
+// Student cost when a sandbox price is known: measured sandbox seconds x price (no token fields).
+export interface SandboxCostPer1k {
+  basis: string;
+  samples: number;
+  sandbox_seconds: number;
   usd_per_1k_tasks: number;
 }
 
@@ -244,11 +258,13 @@ export interface Report {
   };
   cost: {
     // student is a string ("unavailable: ...") when the serving path is unknown
-    cost_per_1k_tasks: { student: string | TeacherCostPer1k; teacher: string | TeacherCostPer1k };
+    cost_per_1k_tasks: { student: string | TeacherCostPer1k | SandboxCostPer1k; teacher: string | TeacherCostPer1k };
     finetune_usd: string | number;
     llm_by_model: Record<string, ModelSpend>;
     run_cap_usd: number;
     run_total_usd: number;
+    basis?: string; // says the figures are estimates, and of what
+    price_sources?: Record<string, string>;
   };
   counters: Record<string, Record<string, number>>;
   data: {
