@@ -356,3 +356,17 @@ def test_live_dry_run_cap_matches_the_cap_its_report_will_show(tmp_path: Path) -
     assert settings.config.run_cap_usd != DRY_RUN_CAP_USD  # the two caps really differ here
     live = RunReader(settings).detail(rid)
     assert live is not None and live["spend"]["cap_usd"] == DRY_RUN_CAP_USD
+
+
+def test_live_gated_run_is_one_round_and_others_keep_cli_default(monkeypatch, tmp_path) -> None:
+    """P5 blocker: the UI starts the pre-registered gated run (max_rounds 1, DECISIONS 2026-10-03)."""
+    from distillery.server import worker as w
+
+    seen: list[list[str]] = []
+    monkeypatch.setattr(w, "run_child", lambda argv, env, job, log, k: seen.append(argv) or 0)
+    ex = w.subprocess_executor(str(tmp_path), "tok", ())
+    ex(w.Job("r1", "gated", dry_run=False), lambda _line: None)
+    ex(w.Job("r2", "small", dry_run=False), lambda _line: None)
+    ex(w.Job("r3", "gated", dry_run=True), lambda _line: None)
+    assert seen[0][-2:] == ["--max-rounds", "1"]
+    assert "--max-rounds" not in seen[1] and "--max-rounds" not in seen[2]

@@ -84,11 +84,11 @@ describe("NewRun form structure", () => {
     expect(new Set(ids).size).toBe(ids.length);
   });
 
-  it("Scale is a fieldset with a legend and three radios; only one is checked", () => {
+  it("Scale is a fieldset with a legend and four radios; only one is checked", () => {
     setup(() => json({}, 202));
     const group = screen.getByRole("group", { name: "Scale" });
     const radios = within(group).getAllByRole("radio") as HTMLInputElement[];
-    expect(radios.map((r) => r.value)).toEqual(["tiny", "small", "full"]);
+    expect(radios.map((r) => r.value)).toEqual(["tiny", "small", "full", "gated"]);
     expect(radios.filter((r) => r.checked).map((r) => r.value)).toEqual(["tiny"]);
     fireEvent.click(radios[1]);
     expect(radios.filter((r) => r.checked).map((r) => r.value)).toEqual(["small"]);

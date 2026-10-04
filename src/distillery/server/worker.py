@@ -119,6 +119,8 @@ def subprocess_executor(
                 argv += ["--budget-usd", str(job.budget_usd)]
             if job.finetune_estimate_usd is not None:
                 argv += ["--finetune-estimate-usd", str(job.finetune_estimate_usd)]
+            if job.scale == "gated":  # pre-registered protocol: one round (DECISIONS 2026-10-03)
+                argv += ["--max-rounds", "1"]
         return run_child(argv, env, job, log, kill_after_s)
 
     return run

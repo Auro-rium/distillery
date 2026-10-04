@@ -64,7 +64,7 @@ class RunRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     pack: Literal["sql"] = "sql"
-    scale: Literal["tiny", "small", "full"]
+    scale: Literal["tiny", "small", "full", "gated"]
     dry_run: bool
     budget_usd: float | None = Field(default=None, gt=0)
     run_id: str | None = None

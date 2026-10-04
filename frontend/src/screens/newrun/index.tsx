@@ -7,7 +7,7 @@ import { ApiErrorState, ErrorState } from "../../components";
 import { Button, Card, Checkbox, ChoiceGroup, Field, Input, Select, Switch } from "../../ui";
 import { describeCreateError } from "./errors";
 
-const SCALES = ["tiny", "small", "full"] as const;
+const SCALES = ["tiny", "small", "full", "gated"] as const;
 type Scale = (typeof SCALES)[number];
 const SCALE_OPTIONS = SCALES.map((s) => ({ value: s, label: s }));
 const MEMORY_ONLY = "Held in memory only; lost on reload.";

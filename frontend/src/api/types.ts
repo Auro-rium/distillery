@@ -346,7 +346,7 @@ export interface ExamplesResult {
 
 export interface NewRunBody {
   pack: "sql";
-  scale: "tiny" | "small" | "full";
+  scale: "tiny" | "small" | "full" | "gated";
   dry_run: boolean;
   budget_usd?: number;
   run_id?: string;
