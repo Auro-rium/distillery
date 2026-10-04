@@ -1,0 +1,1070 @@
+{
+ "run_id": "gated-1p7b-r1",
+ "base_model": "Qwen/Qwen3-1.7B",
+ "hyperparameters": {
+  "batch_size": 2,
+  "learning_rate": 0.0002,
+  "n_epochs": 10,
+  "warmup_ratio": 0.0,
+  "weight_decay": 0.0,
+  "lora": true,
+  "lora_r": 16,
+  "lora_alpha": 32,
+  "lora_dropout": 0.0,
+  "packing": false,
+  "max_grad_norm": 1.0,
+  "context_length": 16384
+ },
+ "seed": 1234,
+ "planned_steps": 320,
+ "job_id": "ftjob-575e0c3322384b5e846bae4c29ac78fa",
+ "checkpoint": {
+  "id": "ftckpt_190037f2-742d-4aaf-bfb0-918522c830d2",
+  "step_number": 320
+ },
+ "adapter_sha256": "6a4df564f20ef8b3242b496dfae41fe044e7b47b991c94d298212c3fe2cccf65",
+ "job": {
+  "status": "succeeded",
+  "resolved_hyperparameters": {
+   "batch_size": 2,
+   "learning_rate_multiplier": null,
+   "n_epochs": 10,
+   "learning_rate": 0.0002,
+   "warmup_ratio": 0.0,
+   "weight_decay": 0.0,
+   "packing": false,
+   "max_grad_norm": 1.0,
+   "context_length": 16384,
+   "lora": true,
+   "lora_r": 16,
+   "lora_alpha": 32,
+   "lora_dropout": 0.0
+  },
+  "trained_tokens": 615460,
+  "trained_steps": 320
+ },
+ "loss_curve": [
+  {
+   "step": 32,
+   "train_loss": 0.48065704107284546,
+   "valid_loss": 0.27315548062324524
+  },
+  {
+   "step": 64,
+   "train_loss": 0.30585044622421265,
+   "valid_loss": 0.23345020413398743
+  },
+  {
+   "step": 96,
+   "train_loss": 0.15429168939590454,
+   "valid_loss": 0.3025260865688324
+  },
+  {
+   "step": 128,
+   "train_loss": 0.0721069872379303,
+   "valid_loss": 0.04563463106751442
+  },
+  {
+   "step": 160,
+   "train_loss": 0.05553640052676201,
+   "valid_loss": 0.020437929779291153
+  },
+  {
+   "step": 192,
+   "train_loss": 0.05092841014266014,
+   "valid_loss": 0.024273663759231567
+  },
+  {
+   "step": 224,
+   "train_loss": 0.021467305719852448,
+   "valid_loss": 0.007836387492716312
+  },
+  {
+   "step": 256,
+   "train_loss": 0.00492705637589097,
+   "valid_loss": 0.14385749399662018
+  },
+  {
+   "step": 288,
+   "train_loss": 0.003879138268530369,
+   "valid_loss": 0.4942771792411804
+  },
+  {
+   "step": 320,
+   "train_loss": 0.0003434471145737916,
+   "valid_loss": 0.0019841601606458426
+  }
+ ],
+ "accuracy": {
+  "adapter": 1.0,
+  "base": 0.265625
+ },
+ "identical_to_base": {
+  "adapter": {
+   "raw": 0.0,
+   "sql": 0.0625
+  }
+ },
+ "cap_hits": {
+  "adapter": 0
+ },
+ "sandbox_timings_sum": {
+  "adapter": {
+   "load_s": 288.23,
+   "gen_s": 1304.8700000000001
+  }
+ },
+ "models": {
+  "adapter": {
+   "train64": {
+    "n": 64,
+    "accuracy": 1.0,
+    "items": [
+     {
+      "task_id": "sql-92b5d8a0d841",
+      "raw": "SELECT pl.tier, SUM(p.amount_cents) FROM payments p JOIN invoices i ON i.invoice_id = p.invoice_id JOIN subscriptions s ON s.subscription_id = i.subscription_id JOIN plans pl ON pl.plan_id = s.plan_id WHERE p.status = 'succeeded' AND i.currency = 'EUR' AND p.paid_at BETWEEN '2023-07-16' AND '2024-04-13' GROUP BY pl.tier",
+      "sql": "SELECT pl.tier, SUM(p.amount_cents) FROM payments p JOIN invoices i ON i.invoice_id = p.invoice_id JOIN subscriptions s ON s.subscription_id = i.subscription_id JOIN plans pl ON pl.plan_id = s.plan_id WHERE p.status = 'succeeded' AND i.currency = 'EUR' AND p.paid_at BETWEEN '2023-07-16' AND '2024-04-13' GROUP BY pl.tier",
+      "correct": true,
+      "reason": "match"
+     },
+     {
+      "task_id": "sql-2567d499a79e",
+      "raw": "SELECT DISTINCT a.account_id FROM accounts a JOIN users u ON u.account_id = a.account_id JOIN feature_usage f ON f.user_id = u.user_id WHERE a.industry = 'logistics' AND f.feature = 'sso' AND NOT EXISTS (SELECT 1 FROM users u2 JOIN feature_usage f2 ON f2.user_id = u2.user_id WHERE u2.account_id = a.account_id AND f2.feature = 'audit_log')",
+      "sql": "SELECT DISTINCT a.account_id FROM accounts a JOIN users u ON u.account_id = a.account_id JOIN feature_usage f ON f.user_id = u.user_id WHERE a.industry = 'logistics' AND f.feature = 'sso' AND NOT EXISTS (SELECT 1 FROM users u2 JOIN feature_usage f2 ON f2.user_id = u2.user_id WHERE u2.account_id = a.account_id AND f2.feature = 'audit_log')",
+      "correct": true,
+      "reason": "match"
+     },
+     {
+      "task_id": "sql-0906f774b19a",
+      "raw": "SELECT priority, SUM(status = 'closed'), SUM(status <> 'closed') FROM support_tickets WHERE category = 'billing' GROUP BY priority",
+      "sql": "SELECT priority, SUM(status = 'closed'), SUM(status <> 'closed') FROM support_tickets WHERE category = 'billing' GROUP BY priority",
+      "correct": true,
+      "reason": "match"
+     },
+     {
+      "task_id": "sql-5c24d7cb33e6",
+      "raw": "SELECT name FROM accounts WHERE country = 'IN' AND status = 'trial'",
+      "sql": "SELECT name FROM accounts WHERE country = 'IN' AND status = 'trial'",
+      "correct": true,
+      "reason": "match"
+     },
+     {
+      "task_id": "sql-55c11133f5f7",
+      "raw": "SELECT a.name, s.seats FROM subscriptions s JOIN plans p ON p.plan_id = s.plan_id JOIN accounts a ON a.account_id = s.account_id WHERE p.tier = 'enterprise' AND s.seats > 23 AND a.status = 'suspended'",
+      "sql": "SELECT a.name, s.seats FROM subscriptions s JOIN plans p ON p.plan_id = s.plan_id JOIN accounts a ON a.account_id = s.account_id WHERE p.tier = 'enterprise' AND s.seats > 23 AND a.status = 'suspended'",
+      "correct": true,
+      "reason": "match"
+     },
+     {
+      "task_id": "sql-1a222e66f0c3",
+      "raw": "SELECT i.invoice_id FROM invoices i JOIN subscriptions s ON s.subscription_id = i.subscription_id WHERE i.status = 'paid' AND i.currency = 'USD' AND strftime('%Y', i.issued_date) = '2024' AND (s.discount_pct IS NULL OR s.discount_pct < 16)",
+      "sql": "SELECT i.invoice_id FROM invoices i JOIN subscriptions s ON s.subscription_id = i.subscription_id WHERE i.status = 'paid' AND i.currency = 'USD' AND strftime('%Y', i.issued_date) = '2024' AND (s.discount_pct IS NULL OR s.discount_pct < 16)",
+      "correct": true,
+      "reason": "match"
+     },
+     {
+      "task_id": "sql-e2557a5ab42b",
+      "raw": "SELECT a.account_id, MAX(u.last_login_at) FROM accounts a JOIN users u ON u.account_id = a.account_id WHERE a.industry = 'logistics' AND a.country = 'JP' AND u.deleted_at IS NULL GROUP BY a.account_id HAVING MAX(u.last_login_at) > '2024-07-23'",
+      "sql": "SELECT a.account_id, MAX(u.last_login_at) FROM accounts a JOIN users u ON u.account_id = a.account_id WHERE a.industry = 'logistics' AND a.country = 'JP' AND u.deleted_at IS NULL GROUP BY a.account_id HAVING MAX(u.last_login_at) > '2024-07-23'",
+      "correct": true,
+      "reason": "match"
+     },
+     {
+      "task_id": "sql-0409ea0bc671",
+      "raw": "WITH m AS (SELECT strftime('%Y-%m', issued_date) AS month, COUNT(*) AS n FROM invoices WHERE status = 'overdue' AND currency = 'USD' AND strftime('%Y', issued_date) = '2023' GROUP BY month) SELECT month, n FROM m WHERE n > (SELECT AVG(n) FROM m) + 1",
+      "sql": "WITH m AS (SELECT strftime('%Y-%m', issued_date) AS month, COUNT(*) AS n FROM invoices WHERE status = 'overdue' AND currency = 'USD' AND strftime('%Y', issued_date) = '2023' GROUP BY month) SELECT month, n FROM m WHERE n > (SELECT AVG(n) FROM m) + 1",
+      "correct": true,
+      "reason": "match"
+     },
+     {
+      "task_id": "sql-bb7defbd49fe",
+      "raw": "SELECT invoice_id, amount_cents FROM invoices WHERE status = 'paid' AND currency = 'EUR' AND issued_date BETWEEN '2024-02-18' AND '2024-11-08' AND amount_cents IS NOT NULL ORDER BY amount_cents DESC, invoice_id DESC LIMIT 5",
+      "sql": "SELECT invoice_id, amount_cents FROM invoices WHERE status = 'paid' AND currency = 'EUR' AND issued_date BETWEEN '2024-02-18' AND '2024-11-08' AND amount_cents IS NOT NULL ORDER BY amount_cents DESC, invoice_id DESC LIMIT 5",
+      "correct": true,
+      "reason": "match (ordered)"
+     },
+     {
+      "task_id": "sql-29fe77bef977",
+      "raw": "SELECT account_id, payment_id, amount_cents - prev FROM (SELECT i.account_id, p.payment_id, p.amount_cents, LAG(p.amount_cents) OVER (PARTITION BY i.account_id ORDER BY p.paid_at, p.payment_id) AS prev FROM payments p JOIN invoices i ON i.invoice_id = p.invoice_id WHERE p.status = 'succeeded' AND p.method = 'ach' AND i.currency = 'EUR') WHERE prev IS NOT NULL AND amount_cents - prev > 5300",
+      "sql": "SELECT account_id, payment_id, amount_cents - prev FROM (SELECT i.account_id, p.payment_id, p.amount_cents, LAG(p.amount_cents) OVER (PARTITION BY i.account_id ORDER BY p.paid_at, p.payment_id) AS prev FROM payments p JOIN invoices i ON i.invoice_id = p.invoice_id WHERE p.status = 'succeeded' AND p.method = 'ach' AND i.currency = 'EUR') WHERE prev IS NOT NULL AND amount_cents - prev > 5300",
+      "correct": true,
+      "reason": "match"
+     },
+     {
+      "task_id": "sql-4ae137723a45",
+      "raw": "SELECT pl.tier, SUM(p.amount_cents) FROM payments p JOIN invoices i ON i.invoice_id = p.invoice_id JOIN subscriptions s ON s.subscription_id = i.subscription_id JOIN plans pl ON pl.plan_id = s.plan_id WHERE p.status = 'succeeded' AND i.currency = 'EUR' AND p.paid_at BETWEEN '2024-06-28' AND '2025-01-07' GROUP BY pl.tier",
+      "sql": "SELECT pl.tier, SUM(p.amount_cents) FROM payments p JOIN invoices i ON i.invoice_id = p.invoice_id JOIN subscriptions s ON s.subscription_id = i.subscription_id JOIN plans pl ON pl.plan_id = s.plan_id WHERE p.status = 'succeeded' AND i.currency = 'EUR' AND p.paid_at BETWEEN '2024-06-28' AND '2025-01-07' GROUP BY pl.tier",
+      "correct": true,
+      "reason": "match"
+     },
+     {
+      "task_id": "sql-bf72029bda76",
+      "raw": "SELECT a.account_id FROM accounts a WHERE a.industry = 'education' AND a.status = 'churned' AND NOT EXISTS (SELECT 1 FROM payments p JOIN invoices i ON i.invoice_id = p.invoice_id WHERE i.account_id = a.account_id AND p.status = 'succeeded' AND p.paid_at BETWEEN '2024-07-04' AND '2025-07-23')",
+      "sql": "SELECT a.account_id FROM accounts a WHERE a.industry = 'education' AND a.status = 'churned' AND NOT EXISTS (SELECT 1 FROM payments p JOIN invoices i ON i.invoice_id = p.invoice_id WHERE i.account_id = a.account_id AND p.status = 'succeeded' AND p.paid_at BETWEEN '2024-07-04' AND '2025-07-23')",
+      "correct": true,
+      "reason": "match"
+     },
+     {
+      "task_id": "sql-482948046c15",
+      "raw": "SELECT p.method, SUM(p.status = 'succeeded'), SUM(p.status = 'failed'), SUM(p.status = 'refunded') FROM payments p JOIN invoices i ON i.invoice_id = p.invoice_id WHERE i.currency = 'EUR' AND strftime('%Y', p.paid_at) = '2025' AND p.amount_cents > 2400 GROUP BY p.method",
+      "sql": "SELECT p.method, SUM(p.status = 'succeeded'), SUM(p.status = 'failed'), SUM(p.status = 'refunded') FROM payments p JOIN invoices i ON i.invoice_id = p.invoice_id WHERE i.currency = 'EUR' AND strftime('%Y', p.paid_at) = '2025' AND p.amount_cents > 2400 GROUP BY p.method",
+      "correct": true,
+      "reason": "match"
+     },
+     {
+      "task_id": "sql-c7d2624dd3ea",
+      "raw": "SELECT ticket_id FROM support_tickets WHERE priority = 'low' AND category = 'how_to'",
+      "sql": "SELECT ticket_id FROM support_tickets WHERE priority = 'low' AND category = 'how_to'",
+      "correct": true,
+      "reason": "match"
+     },
+     {
+      "task_id": "sql-aa9b79c7a7d5",
+      "raw": "SELECT i.invoice_id, a.name FROM invoices i JOIN accounts a ON a.account_id = i.account_id WHERE i.status = 'paid' AND strftime('%Y', i.issued_date) = '2023'",
+      "sql": "SELECT i.invoice_id, a.name FROM invoices i JOIN accounts a ON a.account_id = i.account_id WHERE i.status = 'paid' AND strftime('%Y', i.issued_date) = '2023'",
+      "correct": true,
+      "reason": "match"
+     },
+     {
+      "task_id": "sql-874820627730",
+      "raw": "SELECT p.name, ROUND(SUM(s.seats * p.monthly_price_cents * (1 - COALESCE(s.discount_pct, 0) / 100.0)), 2) FROM subscriptions s JOIN plans p ON p.plan_id = s.plan_id JOIN accounts a ON a.account_id = s.account_id WHERE s.status = 'active' AND a.country = 'DE' AND s.start_date >= '2023-01-01' GROUP BY p.name",
+      "sql": "SELECT p.name, ROUND(SUM(s.seats * p.monthly_price_cents * (1 - COALESCE(s.discount_pct, 0) / 100.0)), 2) FROM subscriptions s JOIN plans p ON p.plan_id = s.plan_id JOIN accounts a ON a.account_id = s.account_id WHERE s.status = 'active' AND a.country = 'DE' AND s.start_date >= '2023-01-01' GROUP BY p.name",
+      "correct": true,
+      "reason": "match"
+     },
+     {
+      "task_id": "sql-5367929785c9",
+      "raw": "SELECT status, COUNT(*) FROM accounts WHERE deleted_at IS NOT NULL AND created_at >= '2024-01-01' GROUP BY status",
+      "sql": "SELECT status, COUNT(*) FROM accounts WHERE deleted_at IS NOT NULL AND created_at >= '2024-01-01' GROUP BY status",
+      "correct": true,
+      "reason": "match"
+     },
+     {
+      "task_id": "sql-0f064d24cab4",
+      "raw": "WITH c AS (SELECT a.account_id, a.industry, a.status, a.country, a.created_at, COUNT(u.user_id) AS n FROM accounts a LEFT JOIN users u ON u.account_id = a.account_id GROUP BY a.account_id) SELECT account_id, n FROM c WHERE status = 'active' AND country = 'DE' AND created_at < '2026-01-01' AND n > (SELECT AVG(n) FROM c c2 WHERE c2.industry = c.industry)",
+      "sql": "WITH c AS (SELECT a.account_id, a.industry, a.status, a.country, a.created_at, COUNT(u.user_id) AS n FROM accounts a LEFT JOIN users u ON u.account_id = a.account_id GROUP BY a.account_id) SELECT account_id, n FROM c WHERE status = 'active' AND country = 'DE' AND created_at < '2026-01-01' AND n > (SELECT AVG(n) FROM c c2 WHERE c2.industry = c.industry)",
+      "correct": true,
+      "reason": "match"
+     },
+     {
+      "task_id": "sql-be8faa5c5b98",
+      "raw": "SELECT user_id, SUM(event_count) AS total FROM feature_usage WHERE feature = 'sso' GROUP BY user_id ORDER BY total DESC, user_id ASC LIMIT 4",
+      "sql": "SELECT user_id, SUM(event_count) AS total FROM feature_usage WHERE feature = 'sso' GROUP BY user_id ORDER BY total DESC, user_id ASC LIMIT 4",
+      "correct": true,
+      "reason": "match (ordered)"
+     },
+     {
+      "task_id": "sql-7fba20fef219",
+      "raw": "SELECT account_id, payment_id, amount_cents - prev FROM (SELECT i.account_id, p.payment_id, p.amount_cents, LAG(p.amount_cents) OVER (PARTITION BY i.account_id ORDER BY p.paid_at, p.payment_id) AS prev FROM payments p JOIN invoices i ON i.invoice_id = p.invoice_id WHERE p.status = 'succeeded' AND p.method = 'ach' AND i.currency = 'EUR') WHERE prev IS NOT NULL AND amount_cents - prev > 1700",
+      "sql": "SELECT account_id, payment_id, amount_cents - prev FROM (SELECT i.account_id, p.payment_id, p.amount_cents, LAG(p.amount_cents) OVER (PARTITION BY i.account_id ORDER BY p.paid_at, p.payment_id) AS prev FROM payments p JOIN invoices i ON i.invoice_id = p.invoice_id WHERE p.status = 'succeeded' AND p.method = 'ach' AND i.currency = 'EUR') WHERE prev IS NOT NULL AND amount_cents - prev > 1700",
+      "correct": true,
+      "reason": "match"
+     },
+     {
+      "task_id": "sql-957d1577aca3",
+      "raw": "SELECT pl.tier, SUM(p.amount_cents) FROM payments p JOIN invoices i ON i.invoice_id = p.invoice_id JOIN subscriptions s ON s.subscription_id = i.subscription_id JOIN plans pl ON pl.plan_id = s.plan_id WHERE p.status = 'succeeded' AND i.currency = 'EUR' AND p.paid_at BETWEEN '2023-01-31' AND '2023-06-15' GROUP BY pl.tier",
+      "sql": "SELECT pl.tier, SUM(p.amount_cents) FROM payments p JOIN invoices i ON i.invoice_id = p.invoice_id JOIN subscriptions s ON s.subscription_id = i.subscription_id JOIN plans pl ON pl.plan_id = s.plan_id WHERE p.status = 'succeeded' AND i.currency = 'EUR' AND p.paid_at BETWEEN '2023-01-31' AND '2023-06-15' GROUP BY pl.tier",
+      "correct": true,
+      "reason": "match"
+     },
+     {
+      "task_id": "sql-994ebb09509e",
+      "raw": "SELECT a.name FROM accounts a WHERE a.country = 'JP' AND NOT EXISTS (SELECT 1 FROM support_tickets t WHERE t.account_id = a.account_id)",
+      "sql": "SELECT a.name FROM accounts a WHERE a.country = 'JP' AND NOT EXISTS (SELECT 1 FROM support_tickets t WHERE t.account_id = a.account_id)",
+      "correct": true,
+      "reason": "match"
+     },
+     {
+      "task_id": "sql-34de3e11af07",
+      "raw": "SELECT p.method, SUM(p.status = 'succeeded'), SUM(p.status = 'failed'), SUM(p.status = 'refunded') FROM payments p JOIN invoices i ON i.invoice_id = p.invoice_id WHERE i.currency = 'EUR' AND strftime('%Y', p.paid_at) = '2025' AND p.amount_cents > 4800 GROUP BY p.method",
+      "sql": "SELECT p.method, SUM(p.status = 'succeeded'), SUM(p.status = 'failed'), SUM(p.status = 'refunded') FROM payments p JOIN invoices i ON i.invoice_id = p.invoice_id WHERE i.currency = 'EUR' AND strftime('%Y', p.paid_at) = '2025' AND p.amount_cents > 4800 GROUP BY p.method",
+      "correct": true,
+      "reason": "match"
+     },
+     {
+      "task_id": "sql-c986e9b4bd4f",
+      "raw": "SELECT name, created_at FROM accounts WHERE industry = 'media' AND created_at > '2024-05-16'",
+      "sql": "SELECT name, created_at FROM accounts WHERE industry = 'media' AND created_at > '2024-05-16'",
+      "correct": true,
+      "reason": "match"
+     },
+     {
+      "task_id": "sql-3b9fbf6a11e7",
+      "raw": "SELECT DISTINCT u.email FROM users u JOIN support_tickets t ON t.user_id = u.user_id WHERE t.priority = 'urgent' AND t.category = 'account_access' AND u.role = 'viewer'",
+      "sql": "SELECT DISTINCT u.email FROM users u JOIN support_tickets t ON t.user_id = u.user_id WHERE t.priority = 'urgent' AND t.category = 'account_access' AND u.role = 'viewer'",
+      "correct": true,
+      "reason": "match"
+     },
+     {
+      "task_id": "sql-09edc745f6c6",
+      "raw": "SELECT account_id, COUNT(*) FROM invoices WHERE amount_cents IS NULL AND status = 'open' AND currency = 'USD' AND strftime('%Y', issued_date) = '2023' GROUP BY account_id HAVING COUNT(*) >= 1",
+      "sql": "SELECT account_id, COUNT(*) FROM invoices WHERE amount_cents IS NULL AND status = 'open' AND currency = 'USD' AND strftime('%Y', issued_date) = '2023' GROUP BY account_id HAVING COUNT(*) >= 1",
+      "correct": true,
+      "reason": "match"
+     },
+     {
+      "task_id": "sql-90fe1874267a",
+      "raw": "SELECT a.account_id, MAX(u.last_login_at) FROM accounts a JOIN users u ON u.account_id = a.account_id WHERE a.industry = 'fintech' AND a.country = 'CA' AND u.deleted_at IS NULL GROUP BY a.account_id HAVING MAX(u.last_login_at) > '2025-03-15'",
+      "sql": "SELECT a.account_id, MAX(u.last_login_at) FROM accounts a JOIN users u ON u.account_id = a.account_id WHERE a.industry = 'fintech' AND a.country = 'CA' AND u.deleted_at IS NULL GROUP BY a.account_id HAVING MAX(u.last_login_at) > '2025-03-15'",
+      "correct": true,
+      "reason": "match"
+     },
+     {
+      "task_id": "sql-61b9b4b1bf5b",
+      "raw": "SELECT i.invoice_id FROM invoices i WHERE i.status = 'open' AND i.currency = 'USD' AND i.issued_date BETWEEN '2024-07-22' AND '2025-02-20' AND i.amount_cents > (SELECT AVG(j.amount_cents) FROM invoices j WHERE j.account_id = i.account_id AND j.currency = 'USD')",
+      "sql": "SELECT i.invoice_id FROM invoices i WHERE i.status = 'open' AND i.currency = 'USD' AND i.issued_date BETWEEN '2024-07-22' AND '2025-02-20' AND i.amount_cents > (SELECT AVG(j.amount_cents) FROM invoices j WHERE j.account_id = i.account_id AND j.currency = 'USD')",
+      "correct": true,
+      "reason": "match"
+     },
+     {
+      "task_id": "sql-e905a160fce8",
+      "raw": "SELECT user_id, SUM(event_count) AS total FROM feature_usage WHERE feature = 'api' GROUP BY user_id ORDER BY total DESC, user_id ASC LIMIT 8",
+      "sql": "SELECT user_id, SUM(event_count) AS total FROM feature_usage WHERE feature = 'api' GROUP BY user_id ORDER BY total DESC, user_id ASC LIMIT 8",
+      "correct": true,
+      "reason": "match (ordered)"
+     },
+     {
+      "task_id": "sql-fcefa0fb2fe9",
+      "raw": "SELECT month, total, SUM(total) OVER (ORDER BY month) AS running FROM (SELECT strftime('%Y-%m', paid_at) AS month, SUM(amount_cents) AS total FROM payments WHERE status = 'succeeded' AND strftime('%Y', paid_at) = '2024' GROUP BY month) ORDER BY month",
+      "sql": "SELECT month, total, SUM(total) OVER (ORDER BY month) AS running FROM (SELECT strftime('%Y-%m', paid_at) AS month, SUM(amount_cents) AS total FROM payments WHERE status = 'succeeded' AND strftime('%Y', paid_at) = '2024' GROUP BY month) ORDER BY month",
+      "correct": true,
+      "reason": "match (ordered)"
+     },
+     {
+      "task_id": "sql-41833ead579b",
+      "raw": "SELECT f.feature, SUM(f.event_count) FROM feature_usage f JOIN users u ON u.user_id = f.user_id JOIN accounts a ON a.account_id = u.account_id WHERE u.role = 'admin' AND a.industry = 'fintech' AND f.used_on >= '2025-02-09' GROUP BY f.feature",
+      "sql": "SELECT f.feature, SUM(f.event_count) FROM feature_usage f JOIN users u ON u.user_id = f.user_id JOIN accounts a ON a.account_id = u.account_id WHERE u.role = 'admin' AND a.industry = 'fintech' AND f.used_on >= '2025-02-09' GROUP BY f.feature",
+      "correct": true,
+      "reason": "match"
+     },
+     {
+      "task_id": "sql-eee4e47cc29a",
+      "raw": "SELECT u.user_id FROM users u JOIN accounts a ON a.account_id = u.account_id WHERE u.role = 'member' AND a.country = 'IN' AND u.deleted_at IS NULL AND NOT EXISTS (SELECT 1 FROM support_tickets t WHERE t.user_id = u.user_id)",
+      "sql": "SELECT u.user_id FROM users u JOIN accounts a ON a.account_id = u.account_id WHERE u.role = 'member' AND a.country = 'IN' AND u.deleted_at IS NULL AND NOT EXISTS (SELECT 1 FROM support_tickets t WHERE t.user_id = u.user_id)",
+      "correct": true,
+      "reason": "match"
+     },
+     {
+      "task_id": "sql-9e7d3f68c7ea",
+      "raw": "SELECT CASE WHEN amount_cents IS NULL THEN 'unknown' WHEN amount_cents < 10000 THEN 'small' WHEN amount_cents < 100000 THEN 'medium' ELSE 'large' END AS bucket, COUNT(*) FROM invoices WHERE strftime('%Y', issued_date) = '2023' GROUP BY bucket",
+      "sql": "SELECT CASE WHEN amount_cents IS NULL THEN 'unknown' WHEN amount_cents < 10000 THEN 'small' WHEN amount_cents < 100000 THEN 'medium' ELSE 'large' END AS bucket, COUNT(*) FROM invoices WHERE strftime('%Y', issued_date) = '2023' GROUP BY bucket",
+      "correct": true,
+      "reason": "match"
+     },
+     {
+      "task_id": "sql-c8247dbb13db",
+      "raw": "SELECT name, created_at FROM accounts WHERE industry = 'education' AND created_at > '2023-06-15'",
+      "sql": "SELECT name, created_at FROM accounts WHERE industry = 'education' AND created_at > '2023-06-15'",
+      "correct": true,
+      "reason": "match"
+     },
+     {
+      "task_id": "sql-b6557712aae0",
+      "raw": "SELECT p.payment_id, a.name FROM payments p JOIN invoices i ON i.invoice_id = p.invoice_id JOIN accounts a ON a.account_id = i.account_id WHERE p.method = 'ach' AND p.status = 'failed' AND p.amount_cents > 1300",
+      "sql": "SELECT p.payment_id, a.name FROM payments p JOIN invoices i ON i.invoice_id = p.invoice_id JOIN accounts a ON a.account_id = i.account_id WHERE p.method = 'ach' AND p.status = 'failed' AND p.amount_cents > 1300",
+      "correct": true,
+      "reason": "match"
+     },
+     {
+      "task_id": "sql-7bc3485d82c5",
+      "raw": "SELECT status, ROUND(AVG(COALESCE(amount_cents, 0)), 2) FROM invoices WHERE currency = 'EUR' AND issued_date BETWEEN '2023-03-18' AND '2024-04-06' GROUP BY status",
+      "sql": "SELECT status, ROUND(AVG(COALESCE(amount_cents, 0)), 2) FROM invoices WHERE currency = 'EUR' AND issued_date BETWEEN '2023-03-18' AND '2024-04-06' GROUP BY status",
+      "correct": true,
+      "reason": "match"
+     },
+     {
+      "task_id": "sql-99739a422beb",
+      "raw": "SELECT a.account_id, COUNT(*) FROM accounts a JOIN users u ON u.account_id = a.account_id WHERE a.deleted_at IS NULL AND u.deleted_at IS NULL AND a.country = 'CA' GROUP BY a.account_id",
+      "sql": "SELECT a.account_id, COUNT(*) FROM accounts a JOIN users u ON u.account_id = a.account_id WHERE a.deleted_at IS NULL AND u.deleted_at IS NULL AND a.country = 'CA' GROUP BY a.account_id",
+      "correct": true,
+      "reason": "match"
+     },
+     {
+      "task_id": "sql-53d2d31b7925",
+      "raw": "SELECT i.invoice_id FROM invoices i WHERE i.status = 'overdue' AND i.currency = 'USD' AND i.issued_date BETWEEN '2023-10-09' AND '2024-03-02' AND i.amount_cents > (SELECT AVG(j.amount_cents) FROM invoices j WHERE j.account_id = i.account_id AND j.currency = 'USD')",
+      "sql": "SELECT i.invoice_id FROM invoices i WHERE i.status = 'overdue' AND i.currency = 'USD' AND i.issued_date BETWEEN '2023-10-09' AND '2024-03-02' AND i.amount_cents > (SELECT AVG(j.amount_cents) FROM invoices j WHERE j.account_id = i.account_id AND j.currency = 'USD')",
+      "correct": true,
+      "reason": "match"
+     },
+     {
+      "task_id": "sql-a68b74f7e758",
+      "raw": "SELECT ticket_id, opened_at FROM support_tickets WHERE category = 'how_to' ORDER BY opened_at DESC, ticket_id DESC LIMIT 9",
+      "sql": "SELECT ticket_id, opened_at FROM support_tickets WHERE category = 'how_to' ORDER BY opened_at DESC, ticket_id DESC LIMIT 9",
+      "correct": true,
+      "reason": "match (ordered)"
+     },
+     {
+      "task_id": "sql-4ae25678b000",
+      "raw": "SELECT account_id, ticket_id, opened_at FROM (SELECT account_id, ticket_id, opened_at, ROW_NUMBER() OVER (PARTITION BY account_id ORDER BY opened_at, ticket_id) AS rn FROM support_tickets WHERE category = 'how_to' AND priority = 'low' AND opened_at > '2025-05-01') WHERE rn = 1",
+      "sql": "SELECT account_id, ticket_id, opened_at FROM (SELECT account_id, ticket_id, opened_at, ROW_NUMBER() OVER (PARTITION BY account_id ORDER BY opened_at, ticket_id) AS rn FROM support_tickets WHERE category = 'how_to' AND priority = 'low' AND opened_at > '2025-05-01') WHERE rn = 1",
+      "correct": true,
+      "reason": "match"
+     },
+     {
+      "task_id": "sql-2ad5e3044d5e",
+      "raw": "SELECT f.feature, SUM(f.event_count) FROM feature_usage f JOIN users u ON u.user_id = f.user_id JOIN accounts a ON a.account_id = u.account_id WHERE u.role = 'viewer' AND a.industry = 'retail' AND f.used_on >= '2025-01-21' GROUP BY f.feature",
+      "sql": "SELECT f.feature, SUM(f.event_count) FROM feature_usage f JOIN users u ON u.user_id = f.user_id JOIN accounts a ON a.account_id = u.account_id WHERE u.role = 'viewer' AND a.industry = 'retail' AND f.used_on >= '2025-01-21' GROUP BY f.feature",
+      "correct": true,
+      "reason": "match"
+     },
+     {
+      "task_id": "sql-9a9644accbc3",
+      "raw": "SELECT i.invoice_id FROM invoices i LEFT JOIN payments p ON p.invoice_id = i.invoice_id WHERE i.status = 'overdue' AND strftime('%Y-%m', i.issued_date) = '2024-05' AND p.payment_id IS NULL",
+      "sql": "SELECT i.invoice_id FROM invoices i LEFT JOIN payments p ON p.invoice_id = i.invoice_id WHERE i.status = 'overdue' AND strftime('%Y-%m', i.issued_date) = '2024-05' AND p.payment_id IS NULL",
+      "correct": true,
+      "reason": "match"
+     },
+     {
+      "task_id": "sql-4f21bf7a4f78",
+      "raw": "SELECT p.tier, CASE WHEN s.seats <= 7 THEN 'small' WHEN s.seats <= 24 THEN 'mid' ELSE 'large' END AS size, COUNT(*) FROM subscriptions s JOIN plans p ON p.plan_id = s.plan_id WHERE s.status = 'past_due' GROUP BY p.tier, size",
+      "sql": "SELECT p.tier, CASE WHEN s.seats <= 7 THEN 'small' WHEN s.seats <= 24 THEN 'mid' ELSE 'large' END AS size, COUNT(*) FROM subscriptions s JOIN plans p ON p.plan_id = s.plan_id WHERE s.status = 'past_due' GROUP BY p.tier, size",
+      "correct": true,
+      "reason": "match"
+     },
+     {
+      "task_id": "sql-1dc1e95d1192",
+      "raw": "SELECT name, created_at FROM accounts WHERE industry = 'healthcare' AND created_at > '2023-05-06'",
+      "sql": "SELECT name, created_at FROM accounts WHERE industry = 'healthcare' AND created_at > '2023-05-06'",
+      "correct": true,
+      "reason": "match"
+     },
+     {
+      "task_id": "sql-e40ca87883d2",
+      "raw": "SELECT t.ticket_id, u.full_name, a.name FROM support_tickets t JOIN users u ON u.user_id = t.user_id JOIN accounts a ON a.account_id = t.account_id WHERE t.priority = 'high' AND a.industry = 'energy' AND t.opened_at > '2022-08-22'",
+      "sql": "SELECT t.ticket_id, u.full_name, a.name FROM support_tickets t JOIN users u ON u.user_id = t.user_id JOIN accounts a ON a.account_id = t.account_id WHERE t.priority = 'high' AND a.industry = 'energy' AND t.opened_at > '2022-08-22'",
+      "correct": true,
+      "reason": "match"
+     },
+     {
+      "task_id": "sql-643c563e0fc6",
+      "raw": "SELECT status, ROUND(AVG(COALESCE(amount_cents, 0)), 2) FROM invoices WHERE currency = 'USD' AND issued_date BETWEEN '2024-08-26' AND '2025-09-20' GROUP BY status",
+      "sql": "SELECT status, ROUND(AVG(COALESCE(amount_cents, 0)), 2) FROM invoices WHERE currency = 'USD' AND issued_date BETWEEN '2024-08-26' AND '2025-09-20' GROUP BY status",
+      "correct": true,
+      "reason": "match"
+     },
+     {
+      "task_id": "sql-a21893acbc36",
+      "raw": "SELECT a.account_id, MAX(u.last_login_at) FROM accounts a JOIN users u ON u.account_id = a.account_id WHERE a.industry = 'logistics' AND a.country = 'IN' AND u.deleted_at IS NULL GROUP BY a.account_id HAVING MAX(u.last_login_at) > '2024-06-02'",
+      "sql": "SELECT a.account_id, MAX(u.last_login_at) FROM accounts a JOIN users u ON u.account_id = a.account_id WHERE a.industry = 'logistics' AND a.country = 'IN' AND u.deleted_at IS NULL GROUP BY a.account_id HAVING MAX(u.last_login_at) > '2024-06-02'",
+      "correct": true,
+      "reason": "match"
+     },
+     {
+      "task_id": "sql-77c45a818494",
+      "raw": "SELECT i.invoice_id FROM invoices i WHERE i.status = 'open' AND i.currency = 'USD' AND i.issued_date BETWEEN '2025-05-31' AND '2026-01-18' AND i.amount_cents > (SELECT AVG(j.amount_cents) FROM invoices j WHERE j.account_id = i.account_id AND j.currency = 'USD')",
+      "sql": "SELECT i.invoice_id FROM invoices i WHERE i.status = 'open' AND i.currency = 'USD' AND i.issued_date BETWEEN '2025-05-31' AND '2026-01-18' AND i.amount_cents > (SELECT AVG(j.amount_cents) FROM invoices j WHERE j.account_id = i.account_id AND j.currency = 'USD')",
+      "correct": true,
+      "reason": "match"
+     },
+     {
+      "task_id": "sql-73c7a4ff32f4",
+      "raw": "SELECT user_id, SUM(event_count) AS total FROM feature_usage WHERE feature = 'exports' GROUP BY user_id ORDER BY total DESC, user_id ASC LIMIT 7",
+      "sql": "SELECT user_id, SUM(event_count) AS total FROM feature_usage WHERE feature = 'exports' GROUP BY user_id ORDER BY total DESC, user_id ASC LIMIT 7",
+      "correct": true,
+      "reason": "match (ordered)"
+     },
+     {
+      "task_id": "sql-a5cc9a7df7f7",
+      "raw": "SELECT account_id, country FROM (SELECT a.account_id, a.country, NTILE(3) OVER (PARTITION BY a.country ORDER BY COUNT(u.user_id) DESC, a.account_id) AS b FROM accounts a LEFT JOIN users u ON u.account_id = a.account_id WHERE a.status = 'churned' AND a.industry = 'logistics' GROUP BY a.account_id) WHERE b = 1",
+      "sql": "SELECT account_id, country FROM (SELECT a.account_id, a.country, NTILE(3) OVER (PARTITION BY a.country ORDER BY COUNT(u.user_id) DESC, a.account_id) AS b FROM accounts a LEFT JOIN users u ON u.account_id = a.account_id WHERE a.status = 'churned' AND a.industry = 'logistics' GROUP BY a.account_id) WHERE b = 1",
+      "correct": true,
+      "reason": "match"
+     },
+     {
+      "task_id": "sql-53e95de0991a",
+      "raw": "SELECT a.name, COUNT(*) FROM support_tickets t JOIN accounts a ON a.account_id = t.account_id WHERE t.priority = 'low' AND t.category = 'how_to' GROUP BY a.account_id HAVING COUNT(*) > 2",
+      "sql": "SELECT a.name, COUNT(*) FROM support_tickets t JOIN accounts a ON a.account_id = t.account_id WHERE t.priority = 'low' AND t.category = 'how_to' GROUP BY a.account_id HAVING COUNT(*) > 2",
+      "correct": true,
+      "reason": "match"
+     },
+     {
+      "task_id": "sql-033e389882ca",
+      "raw": "SELECT a.account_id FROM accounts a WHERE a.industry = 'media' AND a.status = 'active' AND NOT EXISTS (SELECT 1 FROM payments p JOIN invoices i ON i.invoice_id = p.invoice_id WHERE i.account_id = a.account_id AND p.status = 'succeeded' AND p.paid_at BETWEEN '2025-05-22' AND '2026-02-14')",
+      "sql": "SELECT a.account_id FROM accounts a WHERE a.industry = 'media' AND a.status = 'active' AND NOT EXISTS (SELECT 1 FROM payments p JOIN invoices i ON i.invoice_id = p.invoice_id WHERE i.account_id = a.account_id AND p.status = 'succeeded' AND p.paid_at BETWEEN '2025-05-22' AND '2026-02-14')",
+      "correct": true,
+      "reason": "match"
+     },
+     {
+      "task_id": "sql-daeec6cb4e9d",
+      "raw": "SELECT p.method, SUM(p.status = 'succeeded'), SUM(p.status = 'failed'), SUM(p.status = 'refunded') FROM payments p JOIN invoices i ON i.invoice_id = p.invoice_id WHERE i.currency = 'EUR' AND strftime('%Y', p.paid_at) = '2025' AND p.amount_cents > 2000 GROUP BY p.method",
+      "sql": "SELECT p.method, SUM(p.status = 'succeeded'), SUM(p.status = 'failed'), SUM(p.status = 'refunded') FROM payments p JOIN invoices i ON i.invoice_id = p.invoice_id WHERE i.currency = 'EUR' AND strftime('%Y', p.paid_at) = '2025' AND p.amount_cents > 2000 GROUP BY p.method",
+      "correct": true,
+      "reason": "match"
+     },
+     {
+      "task_id": "sql-38a20f5e16c5",
+      "raw": "SELECT ticket_id FROM support_tickets WHERE priority = 'low' AND category = 'bug'",
+      "sql": "SELECT ticket_id FROM support_tickets WHERE priority = 'low' AND category = 'bug'",
+      "correct": true,
+      "reason": "match"
+     },
+     {
+      "task_id": "sql-2425db31f41f",
+      "raw": "SELECT DISTINCT a.name FROM feature_usage f JOIN users u ON u.user_id = f.user_id JOIN accounts a ON a.account_id = u.account_id WHERE f.feature = 'exports' AND f.event_count > 372 AND a.industry = 'energy'",
+      "sql": "SELECT DISTINCT a.name FROM feature_usage f JOIN users u ON u.user_id = f.user_id JOIN accounts a ON a.account_id = u.account_id WHERE f.feature = 'exports' AND f.event_count > 372 AND a.industry = 'energy'",
+      "correct": true,
+      "reason": "match"
+     },
+     {
+      "task_id": "sql-6b6a30bb4c1a",
+      "raw": "SELECT i.invoice_id FROM invoices i JOIN subscriptions s ON s.subscription_id = i.subscription_id WHERE i.status = 'overdue' AND i.currency = 'EUR' AND strftime('%Y', i.issued_date) = '2023' AND (s.discount_pct IS NULL OR s.discount_pct < 16)",
+      "sql": "SELECT i.invoice_id FROM invoices i JOIN subscriptions s ON s.subscription_id = i.subscription_id WHERE i.status = 'overdue' AND i.currency = 'EUR' AND strftime('%Y', i.issued_date) = '2023' AND (s.discount_pct IS NULL OR s.discount_pct < 16)",
+      "correct": true,
+      "reason": "match"
+     },
+     {
+      "task_id": "sql-51b8b2daf356",
+      "raw": "SELECT role, COUNT(*) FROM users WHERE deleted_at IS NULL AND created_at >= '2022-01-01' GROUP BY role",
+      "sql": "SELECT role, COUNT(*) FROM users WHERE deleted_at IS NULL AND created_at >= '2022-01-01' GROUP BY role",
+      "correct": true,
+      "reason": "match"
+     },
+     {
+      "task_id": "sql-0e1ab5803024",
+      "raw": "SELECT a.account_id FROM accounts a JOIN subscriptions s ON s.account_id = a.account_id WHERE a.country = 'US' AND s.plan_id = 3 AND s.status = 'active' AND s.start_date = (SELECT MAX(s2.start_date) FROM subscriptions s2 WHERE s2.account_id = a.account_id)",
+      "sql": "SELECT a.account_id FROM accounts a JOIN subscriptions s ON s.account_id = a.account_id WHERE a.country = 'US' AND s.plan_id = 3 AND s.status = 'active' AND s.start_date = (SELECT MAX(s2.start_date) FROM subscriptions s2 WHERE s2.account_id = a.account_id)",
+      "correct": true,
+      "reason": "match"
+     },
+     {
+      "task_id": "sql-de48c472083e",
+      "raw": "SELECT ticket_id, opened_at FROM support_tickets WHERE category = 'bug' ORDER BY opened_at DESC, ticket_id DESC LIMIT 4",
+      "sql": "SELECT ticket_id, opened_at FROM support_tickets WHERE category = 'bug' ORDER BY opened_at DESC, ticket_id DESC LIMIT 4",
+      "correct": true,
+      "reason": "match (ordered)"
+     },
+     {
+      "task_id": "sql-ed300add266d",
+      "raw": "SELECT usage_id, used_on, event_count, SUM(event_count) OVER (ORDER BY used_on, usage_id) FROM feature_usage WHERE user_id = 385 ORDER BY used_on, usage_id",
+      "sql": "SELECT usage_id, used_on, event_count, SUM(event_count) OVER (ORDER BY used_on, usage_id) FROM feature_usage WHERE user_id = 385 ORDER BY used_on, usage_id",
+      "correct": true,
+      "reason": "match (ordered)"
+     },
+     {
+      "task_id": "sql-6ee26e3fdc62",
+      "raw": "SELECT f.feature, SUM(f.event_count) FROM feature_usage f JOIN users u ON u.user_id = f.user_id JOIN accounts a ON a.account_id = u.account_id WHERE u.role = 'admin' AND a.industry = 'media' AND f.used_on >= '2025-08-02' GROUP BY f.feature",
+      "sql": "SELECT f.feature, SUM(f.event_count) FROM feature_usage f JOIN users u ON u.user_id = f.user_id JOIN accounts a ON a.account_id = u.account_id WHERE u.role = 'admin' AND a.industry = 'media' AND f.used_on >= '2025-08-02' GROUP BY f.feature",
+      "correct": true,
+      "reason": "match"
+     },
+     {
+      "task_id": "sql-853d99724295",
+      "raw": "SELECT u.user_id FROM users u JOIN accounts a ON a.account_id = u.account_id WHERE u.role = 'admin' AND a.country = 'DE' AND NOT EXISTS (SELECT 1 FROM support_tickets t WHERE t.user_id = u.user_id)",
+      "sql": "SELECT u.user_id FROM users u JOIN accounts a ON a.account_id = u.account_id WHERE u.role = 'admin' AND a.country = 'DE' AND NOT EXISTS (SELECT 1 FROM support_tickets t WHERE t.user_id = u.user_id)",
+      "correct": true,
+      "reason": "match"
+     },
+     {
+      "task_id": "sql-7dcd87be8845",
+      "raw": "SELECT p.method, SUM(p.status = 'succeeded'), SUM(p.status = 'failed'), SUM(p.status = 'refunded') FROM payments p JOIN invoices i ON i.invoice_id = p.invoice_id WHERE i.currency = 'EUR' AND strftime('%Y', p.paid_at) = '2025' AND p.amount_cents > 4200 GROUP BY p.method",
+      "sql": "SELECT p.method, SUM(p.status = 'succeeded'), SUM(p.status = 'failed'), SUM(p.status = 'refunded') FROM payments p JOIN invoices i ON i.invoice_id = p.invoice_id WHERE i.currency = 'EUR' AND strftime('%Y', p.paid_at) = '2025' AND p.amount_cents > 4200 GROUP BY p.method",
+      "correct": true,
+      "reason": "match"
+     },
+     {
+      "task_id": "sql-499af19ad46d",
+      "raw": "SELECT COUNT(*) FROM users WHERE role = 'viewer'",
+      "sql": "SELECT COUNT(*) FROM users WHERE role = 'viewer'",
+      "correct": true,
+      "reason": "match"
+     }
+    ]
+   }
+  },
+  "base": {
+   "train64": {
+    "n": 64,
+    "accuracy": 0.265625,
+    "items": [
+     {
+      "task_id": "sql-92b5d8a0d841",
+      "raw": "SELECT p.tier, SUM(i.amount_cents) AS total_succeeded_payment_cents\nFROM plans p\nJOIN subscriptions s ON p.plan_id = s.plan_id\nJOIN invoices i ON s.account_id = i.account_id\nWHERE i.currency = 'EUR'\nAND i.status = 'paid'\nAND i.issued_date BETWEEN '2023-07-16' AND '2024-04-13'\nGROUP BY p.tier;",
+      "sql": "SELECT p.tier, SUM(i.amount_cents) AS total_succeeded_payment_cents\nFROM plans p\nJOIN subscriptions s ON p.plan_id = s.plan_id\nJOIN invoices i ON s.account_id = i.account_id\nWHERE i.currency = 'EUR'\nAND i.status = 'paid'\nAND i.issued_date BETWEEN '2023-07-16' AND '2024-04-13'\nGROUP BY p.tier",
+      "correct": false,
+      "reason": "row count mismatch: got 4, expected 3"
+     },
+     {
+      "task_id": "sql-2567d499a79e",
+      "raw": "SELECT account_id\nFROM accounts\nWHERE industry = 'logistics'\nAND EXISTS (\n    SELECT 1\n    FROM users\n    WHERE user_id IN (\n        SELECT user_id\n        FROM users\n        WHERE account_id = accounts.account_id\n        AND role = 'member'\n    )\n    AND EXISTS (\n        SELECT 1\n        FROM feature_usage\n        WHERE user_id = users.user_id\n        AND feature = 'sso'\n    )\n)\nAND NOT EXISTS (\n    SELECT 1\n    FROM feature_usage\n    WHERE user_id IN (\n        SELECT user_id\n        FROM users\n        WHERE account_id = accounts.account_id\n        AND role = 'member'\n    )\n    AND feature = 'audit_log'\n);",
+      "sql": "SELECT account_id\nFROM accounts\nWHERE industry = 'logistics'\nAND EXISTS (\n    SELECT 1\n    FROM users\n    WHERE user_id IN (\n        SELECT user_id\n        FROM users\n        WHERE account_id = accounts.account_id\n        AND role = 'member'\n    )\n    AND EXISTS (\n        SELECT 1\n        FROM feature_usage\n        WHERE user_id = users.user_id\n        AND feature = 'sso'\n    )\n)\nAND NOT EXISTS (\n    SELECT 1\n    FROM feature_usage\n    WHERE user_id IN (\n        SELECT user_id\n        FROM users\n        WHERE account_id = accounts.account_id\n        AND role = 'member'\n    )\n    AND feature = 'audit_log'\n)",
+      "correct": false,
+      "reason": "row count mismatch: got 1, expected 5"
+     },
+     {
+      "task_id": "sql-0906f774b19a",
+      "raw": "SELECT priority, COUNT(*) AS closed, COUNT(*) - COUNT(CASE WHEN closed_at IS NULL THEN 1 ELSE 0 END) AS not_closed\nFROM support_tickets\nGROUP BY priority;",
+      "sql": "SELECT priority, COUNT(*) AS closed, COUNT(*) - COUNT(CASE WHEN closed_at IS NULL THEN 1 ELSE 0 END) AS not_closed\nFROM support_tickets\nGROUP BY priority",
+      "correct": false,
+      "reason": "row contents differ: 4 unexpected, 4 missing"
+     },
+     {
+      "task_id": "sql-5c24d7cb33e6",
+      "raw": "SELECT accounts.name FROM accounts WHERE accounts.status = 'trial' AND accounts.country = 'IN';",
+      "sql": "SELECT accounts.name FROM accounts WHERE accounts.status = 'trial' AND accounts.country = 'IN'",
+      "correct": true,
+      "reason": "match"
+     },
+     {
+      "task_id": "sql-55c11133f5f7",
+      "raw": "SELECT a.name, s.seats\nFROM accounts a\nJOIN subscriptions s ON a.account_id = s.account_id\nWHERE s.tier = 'enterprise'\n  AND s.seats > 23\n  AND a.status = 'suspended';",
+      "sql": "SELECT a.name, s.seats\nFROM accounts a\nJOIN subscriptions s ON a.account_id = s.account_id\nWHERE s.tier = 'enterprise'\n  AND s.seats > 23\n  AND a.status = 'suspended'",
+      "correct": false,
+      "reason": "candidate error (syntax): no such column: s.tier"
+     },
+     {
+      "task_id": "sql-1a222e66f0c3",
+      "raw": "SELECT i.invoice_id\nFROM invoices i\nWHERE i.status = 'paid'\n  AND i.currency = 'USD'\n  AND i.issued_date BETWEEN '2024-01-01' AND '2024-12-31'\n  AND i.subscription_id IS NOT NULL\n  AND i.discount_pct IS NULL\n  OR i.discount_pct < 16;",
+      "sql": "SELECT i.invoice_id\nFROM invoices i\nWHERE i.status = 'paid'\n  AND i.currency = 'USD'\n  AND i.issued_date BETWEEN '2024-01-01' AND '2024-12-31'\n  AND i.subscription_id IS NOT NULL\n  AND i.discount_pct IS NULL\n  OR i.discount_pct < 16",
+      "correct": false,
+      "reason": "candidate error (syntax): no such column: i.discount_pct"
+     },
+     {
+      "task_id": "sql-e2557a5ab42b",
+      "raw": "SELECT a.account_id, u.last_login_at\nFROM accounts a\nJOIN users u ON a.account_id = u.account_id\nWHERE a.country = 'JP'\n  AND a.industry = 'logistics'\n  AND a.status = 'active'\n  AND u.last_login_at > '2024-07-23' \n  AND u.deleted_at IS NULL;",
+      "sql": "SELECT a.account_id, u.last_login_at\nFROM accounts a\nJOIN users u ON a.account_id = u.account_id\nWHERE a.country = 'JP'\n  AND a.industry = 'logistics'\n  AND a.status = 'active'\n  AND u.last_login_at > '2024-07-23' \n  AND u.deleted_at IS NULL",
+      "correct": false,
+      "reason": "row count mismatch: got 0, expected 1"
+     },
+     {
+      "task_id": "sql-0409ea0bc671",
+      "raw": "SELECT \n    strftime('%Y-%m', issued_date) AS month,\n    COUNT(*) AS count\nFROM \n    invoices\nWHERE \n    currency = 'USD'\n    AND status = 'overdue'\n    AND strftime('%Y', issued_date) = '2023'\nGROUP BY \n    strftime('%Y-%m', issued_date)\nHAVING \n    COUNT(*) > (SELECT AVG(count) FROM (\n        SELECT COUNT(*) AS count\n        FROM invoices\n        WHERE currency = 'USD'\n            AND status = 'overdue'\n            AND strftime('%Y', issued_date) = '2023'\n        GROUP BY strftime('%Y-%m', issued_date)\n    )) + 1;",
+      "sql": "SELECT \n    strftime('%Y-%m', issued_date) AS month,\n    COUNT(*) AS count\nFROM \n    invoices\nWHERE \n    currency = 'USD'\n    AND status = 'overdue'\n    AND strftime('%Y', issued_date) = '2023'\nGROUP BY \n    strftime('%Y-%m', issued_date)\nHAVING \n    COUNT(*) > (SELECT AVG(count) FROM (\n        SELECT COUNT(*) AS count\n        FROM invoices\n        WHERE currency = 'USD'\n            AND status = 'overdue'\n            AND strftime('%Y', issued_date) = '2023'\n        GROUP BY strftime('%Y-%m', issued_date)\n    )) + 1",
+      "correct": true,
+      "reason": "match"
+     },
+     {
+      "task_id": "sql-bb7defbd49fe",
+      "raw": "SELECT invoice_id, amount_cents\nFROM invoices\nWHERE currency = 'EUR'\n  AND status = 'paid'\n  AND issued_date BETWEEN '2024-02-18' AND '2024-11-08'\nORDER BY amount_cents DESC, invoice_id DESC\nLIMIT 5;",
+      "sql": "SELECT invoice_id, amount_cents\nFROM invoices\nWHERE currency = 'EUR'\n  AND status = 'paid'\n  AND issued_date BETWEEN '2024-02-18' AND '2024-11-08'\nORDER BY amount_cents DESC, invoice_id DESC\nLIMIT 5",
+      "correct": true,
+      "reason": "match (ordered)"
+     },
+     {
+      "task_id": "sql-29fe77bef977",
+      "raw": "SELECT \n  a.account_id,\n  p.payment_id,\n  p.amount_cents - (SELECT p2.amount_cents FROM payments p2 WHERE p2.payment_id = (SELECT MIN(payment_id) FROM payments WHERE payment_id < p.payment_id AND payment_id IN (SELECT payment_id FROM payments WHERE status = 'succeeded' AND currency = 'EUR' AND account_id = a.account_id)) AND p2.account_id = a.account_id) AS increase\nFROM \n  payments p\nJOIN \n  accounts a ON p.account_id = a.account_id\nWHERE \n  p.status = 'succeeded'\n  AND p.currency = 'EUR'\nORDER BY \n  a.account_id,\n  p.payment_id;",
+      "sql": "SELECT \n  a.account_id,\n  p.payment_id,\n  p.amount_cents - (SELECT p2.amount_cents FROM payments p2 WHERE p2.payment_id = (SELECT MIN(payment_id) FROM payments WHERE payment_id < p.payment_id AND payment_id IN (SELECT payment_id FROM payments WHERE status = 'succeeded' AND currency = 'EUR' AND account_id = a.account_id)) AND p2.account_id = a.account_id) AS increase\nFROM \n  payments p\nJOIN \n  accounts a ON p.account_id = a.account_id\nWHERE \n  p.status = 'succeeded'\n  AND p.currency = 'EUR'\nORDER BY \n  a.account_id,\n  p.payment_id",
+      "correct": false,
+      "reason": "candidate error (syntax): no such column: currency"
+     },
+     {
+      "task_id": "sql-4ae137723a45",
+      "raw": "SELECT p.tier, SUM(i.amount_cents) AS total_succeeded_payment_cents\nFROM plans p\nJOIN subscriptions s ON p.plan_id = s.plan_id\nJOIN invoices i ON s.account_id = i.account_id\nWHERE i.currency = 'EUR'\nAND i.status = 'paid'\nAND i.issued_date BETWEEN '2024-06-28' AND '2025-01-07'\nGROUP BY p.tier;",
+      "sql": "SELECT p.tier, SUM(i.amount_cents) AS total_succeeded_payment_cents\nFROM plans p\nJOIN subscriptions s ON p.plan_id = s.plan_id\nJOIN invoices i ON s.account_id = i.account_id\nWHERE i.currency = 'EUR'\nAND i.status = 'paid'\nAND i.issued_date BETWEEN '2024-06-28' AND '2025-01-07'\nGROUP BY p.tier",
+      "correct": false,
+      "reason": "row count mismatch: got 4, expected 3"
+     },
+     {
+      "task_id": "sql-bf72029bda76",
+      "raw": "SELECT a.account_id\nFROM accounts a\nJOIN subscriptions s ON a.account_id = s.account_id\nJOIN payments p ON s.subscription_id = p.subscription_id\nWHERE a.industry = 'education'\n  AND a.status = 'churned'\n  AND p.status = 'succeeded'\n  AND s.end_date >= '2024-07-04'\n  AND s.end_date < '2025-07-24'",
+      "sql": "SELECT a.account_id\nFROM accounts a\nJOIN subscriptions s ON a.account_id = s.account_id\nJOIN payments p ON s.subscription_id = p.subscription_id\nWHERE a.industry = 'education'\n  AND a.status = 'churned'\n  AND p.status = 'succeeded'\n  AND s.end_date >= '2024-07-04'\n  AND s.end_date < '2025-07-24'",
+      "correct": false,
+      "reason": "candidate error (syntax): no such column: p.subscription_id"
+     },
+     {
+      "task_id": "sql-482948046c15",
+      "raw": "SELECT method, \n       COUNT(CASE WHEN status = 'succeeded' THEN 1 END) AS succeeded, \n       COUNT(CASE WHEN status = 'failed' THEN 1 END) AS failed, \n       COUNT(CASE WHEN status = 'refunded' THEN 1 END) AS refunded \nFROM payments \nWHERE currency = 'EUR' \n  AND issued_date BETWEEN '2025-01-01' AND '2025-12-31' \n  AND amount_cents > 2400 \nGROUP BY method;",
+      "sql": "SELECT method, \n       COUNT(CASE WHEN status = 'succeeded' THEN 1 END) AS succeeded, \n       COUNT(CASE WHEN status = 'failed' THEN 1 END) AS failed, \n       COUNT(CASE WHEN status = 'refunded' THEN 1 END) AS refunded \nFROM payments \nWHERE currency = 'EUR' \n  AND issued_date BETWEEN '2025-01-01' AND '2025-12-31' \n  AND amount_cents > 2400 \nGROUP BY method",
+      "correct": false,
+      "reason": "candidate error (syntax): no such column: currency"
+     },
+     {
+      "task_id": "sql-c7d2624dd3ea",
+      "raw": "SELECT ticket_id FROM support_tickets WHERE priority = 'low' AND category = 'how_to';",
+      "sql": "SELECT ticket_id FROM support_tickets WHERE priority = 'low' AND category = 'how_to'",
+      "correct": true,
+      "reason": "match"
+     },
+     {
+      "task_id": "sql-aa9b79c7a7d5",
+      "raw": "SELECT invoice_id, accounts.name\nFROM invoices\nJOIN accounts ON invoices.account_id = accounts.account_id\nWHERE invoices.status = 'paid'\nAND invoices.issued_date LIKE '2023%';",
+      "sql": "SELECT invoice_id, accounts.name\nFROM invoices\nJOIN accounts ON invoices.account_id = accounts.account_id\nWHERE invoices.status = 'paid'\nAND invoices.issued_date LIKE '2023%'",
+      "correct": true,
+      "reason": "match"
+     },
+     {
+      "task_id": "sql-874820627730",
+      "raw": "SELECT \n  ROUND(\n    (p.seat_limit * p.monthly_price_cents * (1 - (discount_pct / 100.0)))::REAL,\n    2\n  ) AS estimated_revenue\nFROM \n  plans p\nJOIN \n  subscriptions s ON p.plan_id = s.plan_id\nJOIN \n  accounts a ON s.account_id = a.account_id\nWHERE \n  a.country = 'DE'\n  AND a.status = 'active'\n  AND a.created_at >= '2023-01-01' \n  AND s.status = 'active'",
+      "sql": "SELECT \n  ROUND(\n    (p.seat_limit * p.monthly_price_cents * (1 - (discount_pct / 100.0)))::REAL,\n    2\n  ) AS estimated_revenue\nFROM \n  plans p\nJOIN \n  subscriptions s ON p.plan_id = s.plan_id\nJOIN \n  accounts a ON s.account_id = a.account_id\nWHERE \n  a.country = 'DE'\n  AND a.status = 'active'\n  AND a.created_at >= '2023-01-01' \n  AND s.status = 'active'",
+      "correct": false,
+      "reason": "candidate error (runtime): unrecognized token: \":\""
+     },
+     {
+      "task_id": "sql-5367929785c9",
+      "raw": "SELECT status, COUNT(*) FROM accounts WHERE deleted_at IS NOT NULL AND created_at >= '2024-01-01' GROUP BY status;",
+      "sql": "SELECT status, COUNT(*) FROM accounts WHERE deleted_at IS NOT NULL AND created_at >= '2024-01-01' GROUP BY status",
+      "correct": true,
+      "reason": "match"
+     },
+     {
+      "task_id": "sql-0f064d24cab4",
+      "raw": "SELECT a.account_id, COUNT(u.user_id) AS user_count\nFROM accounts a\nJOIN users u ON a.account_id = u.account_id\nWHERE a.country = 'DE'\nAND a.created_at <= '2025-01-01'\nAND a.status = 'active'\nAND COUNT(u.user_id) > (\n    SELECT AVG(user_count) FROM (\n        SELECT COUNT(*) AS user_count\n        FROM users\n        WHERE account_id IN (\n            SELECT account_id FROM accounts\n            WHERE country = 'DE'\n            AND status = 'active'\n        )\n    )\n)",
+      "sql": "SELECT a.account_id, COUNT(u.user_id) AS user_count\nFROM accounts a\nJOIN users u ON a.account_id = u.account_id\nWHERE a.country = 'DE'\nAND a.created_at <= '2025-01-01'\nAND a.status = 'active'\nAND COUNT(u.user_id) > (\n    SELECT AVG(user_count) FROM (\n        SELECT COUNT(*) AS user_count\n        FROM users\n        WHERE account_id IN (\n            SELECT account_id FROM accounts\n            WHERE country = 'DE'\n            AND status = 'active'\n        )\n    )\n)",
+      "correct": false,
+      "reason": "candidate error (runtime): misuse of aggregate: COUNT()"
+     },
+     {
+      "task_id": "sql-be8faa5c5b98",
+      "raw": "SELECT users.user_id, COUNT(*) AS total\nFROM users\nJOIN feature_usage ON users.user_id = feature_usage.user_id\nWHERE feature_usage.feature = 'sso'\nGROUP BY users.user_id\nORDER BY total DESC, users.user_id ASC\nLIMIT 4;",
+      "sql": "SELECT users.user_id, COUNT(*) AS total\nFROM users\nJOIN feature_usage ON users.user_id = feature_usage.user_id\nWHERE feature_usage.feature = 'sso'\nGROUP BY users.user_id\nORDER BY total DESC, users.user_id ASC\nLIMIT 4",
+      "correct": false,
+      "reason": "row contents differ: 4 unexpected, 4 missing"
+     },
+     {
+      "task_id": "sql-7fba20fef219",
+      "raw": "SELECT \n  a.account_id,\n  p.payment_id,\n  p.amount_cents - (SELECT p2.amount_cents FROM payments p2 WHERE p2.payment_id = (SELECT MIN(payment_id) FROM payments WHERE payment_id < p.payment_id AND payment_id IN (SELECT payment_id FROM payments WHERE status = 'succeeded' AND currency = 'EUR' AND account_id = a.account_id)) AND p2.account_id = a.account_id) AS increase\nFROM \n  payments p\nJOIN \n  accounts a ON p.account_id = a.account_id\nWHERE \n  p.status = 'succeeded'\n  AND p.currency = 'EUR'\nORDER BY \n  a.account_id,\n  p.payment_id;",
+      "sql": "SELECT \n  a.account_id,\n  p.payment_id,\n  p.amount_cents - (SELECT p2.amount_cents FROM payments p2 WHERE p2.payment_id = (SELECT MIN(payment_id) FROM payments WHERE payment_id < p.payment_id AND payment_id IN (SELECT payment_id FROM payments WHERE status = 'succeeded' AND currency = 'EUR' AND account_id = a.account_id)) AND p2.account_id = a.account_id) AS increase\nFROM \n  payments p\nJOIN \n  accounts a ON p.account_id = a.account_id\nWHERE \n  p.status = 'succeeded'\n  AND p.currency = 'EUR'\nORDER BY \n  a.account_id,\n  p.payment_id",
+      "correct": false,
+      "reason": "candidate error (syntax): no such column: currency"
+     },
+     {
+      "task_id": "sql-957d1577aca3",
+      "raw": "SELECT p.tier, SUM(p.amount_cents) AS total_paid\nFROM invoices i\nJOIN payments p ON i.invoice_id = p.invoice_id\nWHERE i.currency = 'EUR'\nAND i.issued_date BETWEEN '2023-01-31' AND '2023-06-15'\nAND p.status = 'succeeded'\nGROUP BY p.tier;",
+      "sql": "SELECT p.tier, SUM(p.amount_cents) AS total_paid\nFROM invoices i\nJOIN payments p ON i.invoice_id = p.invoice_id\nWHERE i.currency = 'EUR'\nAND i.issued_date BETWEEN '2023-01-31' AND '2023-06-15'\nAND p.status = 'succeeded'\nGROUP BY p.tier",
+      "correct": false,
+      "reason": "candidate error (syntax): no such column: p.tier"
+     },
+     {
+      "task_id": "sql-994ebb09509e",
+      "raw": "SELECT a.name FROM accounts a JOIN support_tickets st ON a.account_id = st.account_id WHERE st.ticket_id IS NULL;",
+      "sql": "SELECT a.name FROM accounts a JOIN support_tickets st ON a.account_id = st.account_id WHERE st.ticket_id IS NULL",
+      "correct": false,
+      "reason": "row count mismatch: got 0, expected 3"
+     },
+     {
+      "task_id": "sql-34de3e11af07",
+      "raw": "SELECT method, \n       COUNT(*) AS succeeded, \n       COUNT(CASE WHEN status = 'failed' THEN 1 END) AS failed, \n       COUNT(CASE WHEN status = 'refunded' THEN 1 END) AS refunded \nFROM payments \nWHERE status IN ('succeeded', 'failed', 'refunded') \n  AND invoice_id IN (SELECT invoice_id FROM invoices WHERE currency = 'EUR' AND issued_date BETWEEN '2025-01-01' AND '2025-12-31') \n  AND amount_cents > 4800 \nGROUP BY method;",
+      "sql": "SELECT method, \n       COUNT(*) AS succeeded, \n       COUNT(CASE WHEN status = 'failed' THEN 1 END) AS failed, \n       COUNT(CASE WHEN status = 'refunded' THEN 1 END) AS refunded \nFROM payments \nWHERE status IN ('succeeded', 'failed', 'refunded') \n  AND invoice_id IN (SELECT invoice_id FROM invoices WHERE currency = 'EUR' AND issued_date BETWEEN '2025-01-01' AND '2025-12-31') \n  AND amount_cents > 4800 \nGROUP BY method",
+      "correct": false,
+      "reason": "row contents differ: 4 unexpected, 4 missing"
+     },
+     {
+      "task_id": "sql-c986e9b4bd4f",
+      "raw": "SELECT accounts.name, accounts.created_at\nFROM accounts\nWHERE accounts.country = 'US' AND accounts.industry = 'media' AND accounts.created_at > '2024-05-16';",
+      "sql": "SELECT accounts.name, accounts.created_at\nFROM accounts\nWHERE accounts.country = 'US' AND accounts.industry = 'media' AND accounts.created_at > '2024-05-16'",
+      "correct": false,
+      "reason": "row count mismatch: got 3, expected 15"
+     },
+     {
+      "task_id": "sql-3b9fbf6a11e7",
+      "raw": "SELECT DISTINCT email FROM users WHERE role = 'viewer' AND EXISTS (SELECT 1 FROM support_tickets WHERE account_id = users.account_id AND priority = 'urgent' AND status = 'closed');",
+      "sql": "SELECT DISTINCT email FROM users WHERE role = 'viewer' AND EXISTS (SELECT 1 FROM support_tickets WHERE account_id = users.account_id AND priority = 'urgent' AND status = 'closed')",
+      "correct": false,
+      "reason": "row count mismatch: got 27, expected 1"
+     },
+     {
+      "task_id": "sql-09edc745f6c6",
+      "raw": "SELECT accounts.account_id, COUNT(*) AS null_amount_open_usd_invoices\nFROM accounts\nJOIN invoices ON accounts.account_id = invoices.account_id\nWHERE invoices.currency = 'USD'\nAND invoices.status = 'open'\nAND invoices.amount_cents IS NULL\nAND accounts.account_id IN (\n    SELECT account_id\n    FROM subscriptions\n    WHERE subscriptions.account_id IN (\n        SELECT account_id\n        FROM accounts\n        WHERE accounts.status = 'active'\n        AND accounts.parent_account_id IS NULL\n    )\n    AND subscriptions.status = 'active'\n    AND subscriptions.seats > 0\n)\nAND invoices.issued_date BETWEEN '2023-01-01' AND '2023-12-31'",
+      "sql": "SELECT accounts.account_id, COUNT(*) AS null_amount_open_usd_invoices\nFROM accounts\nJOIN invoices ON accounts.account_id = invoices.account_id\nWHERE invoices.currency = 'USD'\nAND invoices.status = 'open'\nAND invoices.amount_cents IS NULL\nAND accounts.account_id IN (\n    SELECT account_id\n    FROM subscriptions\n    WHERE subscriptions.account_id IN (\n        SELECT account_id\n        FROM accounts\n        WHERE accounts.status = 'active'\n        AND accounts.parent_account_id IS NULL\n    )\n    AND subscriptions.status = 'active'\n    AND subscriptions.seats > 0\n)\nAND invoices.issued_date BETWEEN '2023-01-01' AND '2023-12-31'",
+      "correct": true,
+      "reason": "match"
+     },
+     {
+      "task_id": "sql-90fe1874267a",
+      "raw": "SELECT a.account_id, u.last_login_at\nFROM accounts a\nJOIN users u ON a.account_id = u.account_id\nWHERE a.industry = 'fintech'\nAND a.country = 'CA'\nAND a.status = 'active'\nAND u.status = 'active'\nAND u.last_login_at > '2025-03-15'\nORDER BY u.last_login_at DESC;",
+      "sql": "SELECT a.account_id, u.last_login_at\nFROM accounts a\nJOIN users u ON a.account_id = u.account_id\nWHERE a.industry = 'fintech'\nAND a.country = 'CA'\nAND a.status = 'active'\nAND u.status = 'active'\nAND u.last_login_at > '2025-03-15'\nORDER BY u.last_login_at DESC",
+      "correct": false,
+      "reason": "candidate error (syntax): no such column: u.status"
+     },
+     {
+      "task_id": "sql-61b9b4b1bf5b",
+      "raw": "SELECT invoice_id\nFROM invoices\nWHERE currency = 'USD'\nAND issued_date BETWEEN '2024-07-22' AND '2025-02-20'\nAND status = 'open'\nAND amount_cents IS NOT NULL\nAND (SELECT AVG(amount_cents) FROM invoices WHERE currency = 'USD' AND account_id = invoices.account_id) < amount_cents\nORDER BY invoice_id;",
+      "sql": "SELECT invoice_id\nFROM invoices\nWHERE currency = 'USD'\nAND issued_date BETWEEN '2024-07-22' AND '2025-02-20'\nAND status = 'open'\nAND amount_cents IS NOT NULL\nAND (SELECT AVG(amount_cents) FROM invoices WHERE currency = 'USD' AND account_id = invoices.account_id) < amount_cents\nORDER BY invoice_id",
+      "correct": false,
+      "reason": "row count mismatch: got 3, expected 2"
+     },
+     {
+      "task_id": "sql-e905a160fce8",
+      "raw": "SELECT users.user_id, COUNT(feature_usage.event_count) AS total\nFROM users\nJOIN feature_usage ON users.user_id = feature_usage.user_id\nWHERE feature_usage.feature = 'api'\nGROUP BY users.user_id\nORDER BY total DESC, users.user_id ASC\nLIMIT 8;",
+      "sql": "SELECT users.user_id, COUNT(feature_usage.event_count) AS total\nFROM users\nJOIN feature_usage ON users.user_id = feature_usage.user_id\nWHERE feature_usage.feature = 'api'\nGROUP BY users.user_id\nORDER BY total DESC, users.user_id ASC\nLIMIT 8",
+      "correct": false,
+      "reason": "row contents differ: 8 unexpected, 8 missing"
+     },
+     {
+      "task_id": "sql-fcefa0fb2fe9",
+      "raw": "SELECT \n    strftime('%Y-%m', issued_date) AS month,\n    SUM(CASE WHEN status = 'paid' THEN amount_cents ELSE 0 END) AS monthly_succeeded,\n    SUM(CASE WHEN status = 'paid' THEN amount_cents ELSE 0 END) AS cumulative_succeeded\nFROM \n    payments\nWHERE \n    strftime('%Y', issued_date) = '2024'\nGROUP BY \n    strftime('%Y-%m', issued_date)\nORDER BY \n    month;",
+      "sql": "SELECT \n    strftime('%Y-%m', issued_date) AS month,\n    SUM(CASE WHEN status = 'paid' THEN amount_cents ELSE 0 END) AS monthly_succeeded,\n    SUM(CASE WHEN status = 'paid' THEN amount_cents ELSE 0 END) AS cumulative_succeeded\nFROM \n    payments\nWHERE \n    strftime('%Y', issued_date) = '2024'\nGROUP BY \n    strftime('%Y-%m', issued_date)\nORDER BY \n    month",
+      "correct": false,
+      "reason": "candidate error (syntax): no such column: issued_date"
+     },
+     {
+      "task_id": "sql-41833ead579b",
+      "raw": "SELECT feature, SUM(event_count) AS total_event_count\nFROM feature_usage\nJOIN users ON users.user_id = feature_usage.user_id\nWHERE users.role = 'admin'\nAND users.industry = 'fintech'\nAND users.created_at >= '2025-02-09' \nGROUP BY feature;",
+      "sql": "SELECT feature, SUM(event_count) AS total_event_count\nFROM feature_usage\nJOIN users ON users.user_id = feature_usage.user_id\nWHERE users.role = 'admin'\nAND users.industry = 'fintech'\nAND users.created_at >= '2025-02-09' \nGROUP BY feature",
+      "correct": false,
+      "reason": "candidate error (syntax): no such column: users.industry"
+     },
+     {
+      "task_id": "sql-eee4e47cc29a",
+      "raw": "SELECT user_id\nFROM users\nWHERE role = 'member'\nAND deleted_at IS NULL\nAND account_id IN (\n    SELECT account_id\n    FROM accounts\n    WHERE deleted_at IS NULL\n    AND account_id NOT IN (\n        SELECT user_id\n        FROM support_tickets\n        WHERE user_id IS NOT NULL\n    )\n);",
+      "sql": "SELECT user_id\nFROM users\nWHERE role = 'member'\nAND deleted_at IS NULL\nAND account_id IN (\n    SELECT account_id\n    FROM accounts\n    WHERE deleted_at IS NULL\n    AND account_id NOT IN (\n        SELECT user_id\n        FROM support_tickets\n        WHERE user_id IS NOT NULL\n    )\n)",
+      "correct": false,
+      "reason": "row count mismatch: got 153, expected 18"
+     },
+     {
+      "task_id": "sql-9e7d3f68c7ea",
+      "raw": "SELECT \n    issued_date, \n    CASE \n        WHEN amount_cents IS NULL THEN 'unknown'\n        WHEN amount_cents < 100000 THEN 'small'\n        WHEN amount_cents < 1000000 THEN 'medium'\n        ELSE 'large'\n    END AS bucket, \n    COUNT(*) AS count\nFROM invoices\nWHERE issued_date BETWEEN '2023-01-01' AND '2023-12-31'\nGROUP BY issued_date, bucket;",
+      "sql": "SELECT \n    issued_date, \n    CASE \n        WHEN amount_cents IS NULL THEN 'unknown'\n        WHEN amount_cents < 100000 THEN 'small'\n        WHEN amount_cents < 1000000 THEN 'medium'\n        ELSE 'large'\n    END AS bucket, \n    COUNT(*) AS count\nFROM invoices\nWHERE issued_date BETWEEN '2023-01-01' AND '2023-12-31'\nGROUP BY issued_date, bucket",
+      "correct": false,
+      "reason": "column count mismatch: got 3, expected 2"
+     },
+     {
+      "task_id": "sql-c8247dbb13db",
+      "raw": "SELECT name, created_at FROM accounts WHERE industry = 'education' AND created_at > '2023-06-15';",
+      "sql": "SELECT name, created_at FROM accounts WHERE industry = 'education' AND created_at > '2023-06-15'",
+      "correct": true,
+      "reason": "match"
+     },
+     {
+      "task_id": "sql-b6557712aae0",
+      "raw": "SELECT payments.payment_id, accounts.name\nFROM payments\nJOIN invoices ON payments.invoice_id = invoices.invoice_id\nJOIN accounts ON invoices.account_id = accounts.account_id\nWHERE payments.status = 'failed' AND payments.method = 'ach' AND invoices.amount_cents > 1300;",
+      "sql": "SELECT payments.payment_id, accounts.name\nFROM payments\nJOIN invoices ON payments.invoice_id = invoices.invoice_id\nJOIN accounts ON invoices.account_id = accounts.account_id\nWHERE payments.status = 'failed' AND payments.method = 'ach' AND invoices.amount_cents > 1300",
+      "correct": false,
+      "reason": "row count mismatch: got 35, expected 38"
+     },
+     {
+      "task_id": "sql-7bc3485d82c5",
+      "raw": "SELECT ROUND(AVG(amount_cents), 2) AS avg_amount\nFROM invoices\nWHERE currency = 'EUR'\n  AND issued_date BETWEEN '2023-03-18' AND '2024-04-06'\n  AND amount_cents IS NOT NULL;",
+      "sql": "SELECT ROUND(AVG(amount_cents), 2) AS avg_amount\nFROM invoices\nWHERE currency = 'EUR'\n  AND issued_date BETWEEN '2023-03-18' AND '2024-04-06'\n  AND amount_cents IS NOT NULL",
+      "correct": false,
+      "reason": "column count mismatch: got 1, expected 2"
+     },
+     {
+      "task_id": "sql-99739a422beb",
+      "raw": "SELECT a.account_id, COUNT(DISTINCT u.user_id) AS count\nFROM accounts a\nJOIN users u ON a.account_id = u.account_id\nWHERE a.deleted_at IS NULL AND u.deleted_at IS NULL\nAND a.country = 'CA'\nGROUP BY a.account_id\nHAVING COUNT(DISTINCT u.user_id) > 0;",
+      "sql": "SELECT a.account_id, COUNT(DISTINCT u.user_id) AS count\nFROM accounts a\nJOIN users u ON a.account_id = u.account_id\nWHERE a.deleted_at IS NULL AND u.deleted_at IS NULL\nAND a.country = 'CA'\nGROUP BY a.account_id\nHAVING COUNT(DISTINCT u.user_id) > 0",
+      "correct": true,
+      "reason": "match"
+     },
+     {
+      "task_id": "sql-53d2d31b7925",
+      "raw": "SELECT invoice_id\nFROM invoices\nWHERE currency = 'USD'\nAND issued_date BETWEEN '2023-10-09' AND '2024-03-02'\nAND status = 'overdue'\nAND amount_cents IS NOT NULL\nAND (SELECT AVG(amount_cents) FROM invoices WHERE currency = 'USD' AND account_id = invoices.account_id) IS NOT NULL\nAND amount_cents > (SELECT AVG(amount_cents) FROM invoices WHERE currency = 'USD' AND account_id = invoices.account_id)",
+      "sql": "SELECT invoice_id\nFROM invoices\nWHERE currency = 'USD'\nAND issued_date BETWEEN '2023-10-09' AND '2024-03-02'\nAND status = 'overdue'\nAND amount_cents IS NOT NULL\nAND (SELECT AVG(amount_cents) FROM invoices WHERE currency = 'USD' AND account_id = invoices.account_id) IS NOT NULL\nAND amount_cents > (SELECT AVG(amount_cents) FROM invoices WHERE currency = 'USD' AND account_id = invoices.account_id)",
+      "correct": false,
+      "reason": "row count mismatch: got 1, expected 2"
+     },
+     {
+      "task_id": "sql-a68b74f7e758",
+      "raw": "SELECT ticket_id, opened_at\nFROM support_tickets\nWHERE category = 'how_to'\nORDER BY opened_at DESC, ticket_id DESC\nLIMIT 9;",
+      "sql": "SELECT ticket_id, opened_at\nFROM support_tickets\nWHERE category = 'how_to'\nORDER BY opened_at DESC, ticket_id DESC\nLIMIT 9",
+      "correct": true,
+      "reason": "match (ordered)"
+     },
+     {
+      "task_id": "sql-4ae25678b000",
+      "raw": "SELECT a.account_id, t.ticket_id, t.opened_at\nFROM accounts a\nJOIN support_tickets t ON a.account_id = t.account_id\nWHERE t.priority = 'low'\nAND t.opened_at > '2025-05-01'\nORDER BY t.opened_at\nLIMIT 1;",
+      "sql": "SELECT a.account_id, t.ticket_id, t.opened_at\nFROM accounts a\nJOIN support_tickets t ON a.account_id = t.account_id\nWHERE t.priority = 'low'\nAND t.opened_at > '2025-05-01'\nORDER BY t.opened_at\nLIMIT 1",
+      "correct": false,
+      "reason": "row count mismatch: got 1, expected 15"
+     },
+     {
+      "task_id": "sql-2ad5e3044d5e",
+      "raw": "SELECT feature, COUNT(*) AS total_usage\nFROM feature_usage\nWHERE user_id IN (\n    SELECT user_id\n    FROM users\n    WHERE role = 'viewer' AND industry = 'retail'\n)\nAND used_on >= '2025-01-21' \nGROUP BY feature;",
+      "sql": "SELECT feature, COUNT(*) AS total_usage\nFROM feature_usage\nWHERE user_id IN (\n    SELECT user_id\n    FROM users\n    WHERE role = 'viewer' AND industry = 'retail'\n)\nAND used_on >= '2025-01-21' \nGROUP BY feature",
+      "correct": false,
+      "reason": "candidate error (syntax): no such column: industry"
+     },
+     {
+      "task_id": "sql-9a9644accbc3",
+      "raw": "SELECT invoice_id\nFROM invoices\nWHERE status = 'overdue'\n  AND issued_date BETWEEN '2024-05-01' AND '2024-05-31'\n  AND invoice_id NOT IN (\n    SELECT invoice_id\n    FROM payments\n    WHERE invoice_id IS NOT NULL\n);",
+      "sql": "SELECT invoice_id\nFROM invoices\nWHERE status = 'overdue'\n  AND issued_date BETWEEN '2024-05-01' AND '2024-05-31'\n  AND invoice_id NOT IN (\n    SELECT invoice_id\n    FROM payments\n    WHERE invoice_id IS NOT NULL\n)",
+      "correct": true,
+      "reason": "match"
+     },
+     {
+      "task_id": "sql-4f21bf7a4f78",
+      "raw": "SELECT plans.tier, \n       CASE \n         WHEN plans.seat_limit <= 7 THEN 'small'\n         WHEN plans.seat_limit <= 24 THEN 'mid'\n         ELSE 'large'\n       END AS size_label, \n       COUNT(*) AS past_due_count\nFROM subscriptions\nWHERE status = 'past_due'\nGROUP BY plans.tier, size_label;",
+      "sql": "SELECT plans.tier, \n       CASE \n         WHEN plans.seat_limit <= 7 THEN 'small'\n         WHEN plans.seat_limit <= 24 THEN 'mid'\n         ELSE 'large'\n       END AS size_label, \n       COUNT(*) AS past_due_count\nFROM subscriptions\nWHERE status = 'past_due'\nGROUP BY plans.tier, size_label",
+      "correct": false,
+      "reason": "candidate error (syntax): no such column: plans.tier"
+     },
+     {
+      "task_id": "sql-1dc1e95d1192",
+      "raw": "SELECT accounts.name, accounts.created_at\nFROM accounts\nWHERE accounts.industry = 'healthcare'\nAND accounts.created_at > '2023-05-06';",
+      "sql": "SELECT accounts.name, accounts.created_at\nFROM accounts\nWHERE accounts.industry = 'healthcare'\nAND accounts.created_at > '2023-05-06'",
+      "correct": true,
+      "reason": "match"
+     },
+     {
+      "task_id": "sql-e40ca87883d2",
+      "raw": "SELECT ticket_id, users.full_name, accounts.name\nFROM support_tickets\nJOIN users ON support_tickets.user_id = users.user_id\nJOIN accounts ON support_tickets.account_id = accounts.account_id\nWHERE support_tickets.priority = 'high'\nAND accounts.industry = 'energy'\nAND support_tickets.opened_at > '2022-08-22';",
+      "sql": "SELECT ticket_id, users.full_name, accounts.name\nFROM support_tickets\nJOIN users ON support_tickets.user_id = users.user_id\nJOIN accounts ON support_tickets.account_id = accounts.account_id\nWHERE support_tickets.priority = 'high'\nAND accounts.industry = 'energy'\nAND support_tickets.opened_at > '2022-08-22'",
+      "correct": true,
+      "reason": "match"
+     },
+     {
+      "task_id": "sql-643c563e0fc6",
+      "raw": "SELECT ROUND(AVG(amount_cents), 2) AS avg_amount\nFROM invoices\nWHERE issued_date BETWEEN '2024-08-26' AND '2025-09-20'\n  AND currency = 'USD'\n  AND amount_cents IS NOT NULL;",
+      "sql": "SELECT ROUND(AVG(amount_cents), 2) AS avg_amount\nFROM invoices\nWHERE issued_date BETWEEN '2024-08-26' AND '2025-09-20'\n  AND currency = 'USD'\n  AND amount_cents IS NOT NULL",
+      "correct": false,
+      "reason": "column count mismatch: got 1, expected 2"
+     },
+     {
+      "task_id": "sql-a21893acbc36",
+      "raw": "SELECT a.account_id, u.last_login_at\nFROM accounts a\nJOIN users u ON a.account_id = u.account_id\nWHERE a.country = 'IN'\n  AND a.status = 'active'\n  AND u.last_login_at > '2024-06-02'\n  AND u.deleted_at IS NULL\nORDER BY u.last_login_at DESC\nLIMIT 1;",
+      "sql": "SELECT a.account_id, u.last_login_at\nFROM accounts a\nJOIN users u ON a.account_id = u.account_id\nWHERE a.country = 'IN'\n  AND a.status = 'active'\n  AND u.last_login_at > '2024-06-02'\n  AND u.deleted_at IS NULL\nORDER BY u.last_login_at DESC\nLIMIT 1",
+      "correct": false,
+      "reason": "row count mismatch: got 1, expected 2"
+     },
+     {
+      "task_id": "sql-77c45a818494",
+      "raw": "SELECT invoice_id\nFROM invoices\nWHERE currency = 'USD'\n  AND issued_date BETWEEN '2025-05-31' AND '2026-01-18'\n  AND status = 'paid'\n  AND amount_cents > (\n    SELECT AVG(amount_cents)\n    FROM invoices\n    WHERE account_id = invoices.account_id\n      AND currency = 'USD'\n      AND status = 'paid'\n  );",
+      "sql": "SELECT invoice_id\nFROM invoices\nWHERE currency = 'USD'\n  AND issued_date BETWEEN '2025-05-31' AND '2026-01-18'\n  AND status = 'paid'\n  AND amount_cents > (\n    SELECT AVG(amount_cents)\n    FROM invoices\n    WHERE account_id = invoices.account_id\n      AND currency = 'USD'\n      AND status = 'paid'\n  )",
+      "correct": false,
+      "reason": "row count mismatch: got 23, expected 4"
+     },
+     {
+      "task_id": "sql-73c7a4ff32f4",
+      "raw": "SELECT u.user_id, SUM(fu.event_count) AS total_events\nFROM users u\nJOIN feature_usage fu ON u.user_id = fu.user_id\nWHERE fu.feature = 'exports'\nGROUP BY u.user_id\nORDER BY total_events DESC\nLIMIT 7;",
+      "sql": "SELECT u.user_id, SUM(fu.event_count) AS total_events\nFROM users u\nJOIN feature_usage fu ON u.user_id = fu.user_id\nWHERE fu.feature = 'exports'\nGROUP BY u.user_id\nORDER BY total_events DESC\nLIMIT 7",
+      "correct": true,
+      "reason": "match (ordered)"
+     },
+     {
+      "task_id": "sql-a5cc9a7df7f7",
+      "raw": "SELECT a.account_id, a.country\nFROM accounts a\nWHERE a.status = 'churned' AND a.industry = 'logistics'\nORDER BY COUNT(a.account_id) OVER (PARTITION BY a.country ORDER BY a.account_id)\nOFFSET 0\nFETCH FIRST 1/3 ROWS ONLY;",
+      "sql": "SELECT a.account_id, a.country\nFROM accounts a\nWHERE a.status = 'churned' AND a.industry = 'logistics'\nORDER BY COUNT(a.account_id) OVER (PARTITION BY a.country ORDER BY a.account_id)\nOFFSET 0\nFETCH FIRST 1/3 ROWS ONLY",
+      "correct": false,
+      "reason": "candidate error (syntax): near \"OFFSET\": syntax error"
+     },
+     {
+      "task_id": "sql-53e95de0991a",
+      "raw": "SELECT accounts.name, COUNT(*) AS ticket_count\nFROM accounts\nJOIN support_tickets ON accounts.account_id = support_tickets.account_id\nWHERE support_tickets.priority = 'low'\nGROUP BY accounts.account_id\nHAVING COUNT(*) > 2;",
+      "sql": "SELECT accounts.name, COUNT(*) AS ticket_count\nFROM accounts\nJOIN support_tickets ON accounts.account_id = support_tickets.account_id\nWHERE support_tickets.priority = 'low'\nGROUP BY accounts.account_id\nHAVING COUNT(*) > 2",
+      "correct": false,
+      "reason": "row count mismatch: got 12, expected 2"
+     },
+     {
+      "task_id": "sql-033e389882ca",
+      "raw": "SELECT a.account_id\nFROM accounts a\nJOIN subscriptions s ON a.account_id = s.account_id\nJOIN payments p ON s.subscription_id = p.subscription_id\nWHERE a.industry = 'media'\nAND a.status = 'active'\nAND p.status = 'succeeded'\nAND p.paid_at BETWEEN '2025-05-22' AND '2026-02-14';",
+      "sql": "SELECT a.account_id\nFROM accounts a\nJOIN subscriptions s ON a.account_id = s.account_id\nJOIN payments p ON s.subscription_id = p.subscription_id\nWHERE a.industry = 'media'\nAND a.status = 'active'\nAND p.status = 'succeeded'\nAND p.paid_at BETWEEN '2025-05-22' AND '2026-02-14'",
+      "correct": false,
+      "reason": "candidate error (syntax): no such column: p.subscription_id"
+     },
+     {
+      "task_id": "sql-daeec6cb4e9d",
+      "raw": "SELECT method, \n       COUNT(*) AS succeeded, \n       COUNT(CASE WHEN status = 'failed' THEN 1 END) AS failed, \n       COUNT(CASE WHEN status = 'refunded' THEN 1 END) AS refunded \nFROM payments \nWHERE status IN ('succeeded', 'failed', 'refunded') \n  AND invoice_id IN (SELECT invoice_id FROM invoices WHERE currency = 'EUR' AND issued_date BETWEEN '2025-01-01' AND '2025-12-31' AND amount_cents > 2000) \nGROUP BY method;",
+      "sql": "SELECT method, \n       COUNT(*) AS succeeded, \n       COUNT(CASE WHEN status = 'failed' THEN 1 END) AS failed, \n       COUNT(CASE WHEN status = 'refunded' THEN 1 END) AS refunded \nFROM payments \nWHERE status IN ('succeeded', 'failed', 'refunded') \n  AND invoice_id IN (SELECT invoice_id FROM invoices WHERE currency = 'EUR' AND issued_date BETWEEN '2025-01-01' AND '2025-12-31' AND amount_cents > 2000) \nGROUP BY method",
+      "correct": false,
+      "reason": "row contents differ: 4 unexpected, 4 missing"
+     },
+     {
+      "task_id": "sql-38a20f5e16c5",
+      "raw": "SELECT ticket_id FROM support_tickets WHERE priority = 'low' AND category = 'bug' AND status = 'open';",
+      "sql": "SELECT ticket_id FROM support_tickets WHERE priority = 'low' AND category = 'bug' AND status = 'open'",
+      "correct": false,
+      "reason": "row count mismatch: got 6, expected 27"
+     },
+     {
+      "task_id": "sql-2425db31f41f",
+      "raw": "SELECT DISTINCT accounts.name\nFROM accounts\nJOIN users ON accounts.account_id = users.account_id\nJOIN feature_usage ON users.user_id = feature_usage.user_id\nWHERE accounts.industry = 'energy'\nAND feature_usage.feature = 'exports'\nAND feature_usage.used_on IN (\n    SELECT used_on\n    FROM feature_usage\n    WHERE feature = 'exports'\n    GROUP BY used_on\n    HAVING COUNT(*) > 372\n)\nAND users.role = 'member'\nAND accounts.country = 'US';",
+      "sql": "SELECT DISTINCT accounts.name\nFROM accounts\nJOIN users ON accounts.account_id = users.account_id\nJOIN feature_usage ON users.user_id = feature_usage.user_id\nWHERE accounts.industry = 'energy'\nAND feature_usage.feature = 'exports'\nAND feature_usage.used_on IN (\n    SELECT used_on\n    FROM feature_usage\n    WHERE feature = 'exports'\n    GROUP BY used_on\n    HAVING COUNT(*) > 372\n)\nAND users.role = 'member'\nAND accounts.country = 'US'",
+      "correct": false,
+      "reason": "row count mismatch: got 0, expected 2"
+     },
+     {
+      "task_id": "sql-6b6a30bb4c1a",
+      "raw": "SELECT invoice_id\nFROM invoices\nWHERE currency = 'EUR'\n  AND issued_date BETWEEN '2023-01-01' AND '2023-12-31'\n  AND status = 'overdue'\n  AND subscription_id IS NULL\n  OR discount_pct < 16;",
+      "sql": "SELECT invoice_id\nFROM invoices\nWHERE currency = 'EUR'\n  AND issued_date BETWEEN '2023-01-01' AND '2023-12-31'\n  AND status = 'overdue'\n  AND subscription_id IS NULL\n  OR discount_pct < 16",
+      "correct": false,
+      "reason": "candidate error (syntax): no such column: discount_pct"
+     },
+     {
+      "task_id": "sql-51b8b2daf356",
+      "raw": "SELECT role, COUNT(*) AS count\nFROM users\nWHERE deleted_at IS NULL\n  AND created_at >= '2022-01-01'\nGROUP BY role;",
+      "sql": "SELECT role, COUNT(*) AS count\nFROM users\nWHERE deleted_at IS NULL\n  AND created_at >= '2022-01-01'\nGROUP BY role",
+      "correct": true,
+      "reason": "match"
+     },
+     {
+      "task_id": "sql-0e1ab5803024",
+      "raw": "SELECT a.account_id\nFROM accounts a\nJOIN subscriptions s ON a.account_id = s.account_id\nWHERE a.country = 'US'\nAND s.plan_id = 3\nAND s.status = 'active'\nORDER BY s.start_date DESC\nLIMIT 1;",
+      "sql": "SELECT a.account_id\nFROM accounts a\nJOIN subscriptions s ON a.account_id = s.account_id\nWHERE a.country = 'US'\nAND s.plan_id = 3\nAND s.status = 'active'\nORDER BY s.start_date DESC\nLIMIT 1",
+      "correct": false,
+      "reason": "row count mismatch: got 1, expected 2"
+     },
+     {
+      "task_id": "sql-de48c472083e",
+      "raw": "SELECT ticket_id, opened_at\nFROM support_tickets\nORDER BY opened_at DESC, ticket_id DESC\nLIMIT 4;",
+      "sql": "SELECT ticket_id, opened_at\nFROM support_tickets\nORDER BY opened_at DESC, ticket_id DESC\nLIMIT 4",
+      "correct": false,
+      "reason": "row contents differ: 3 unexpected, 3 missing"
+     },
+     {
+      "task_id": "sql-ed300add266d",
+      "raw": "SELECT usage_id, used_on, event_count, \n       SUM(event_count) OVER (ORDER BY used_on, usage_id) AS running_total\nFROM feature_usage\nWHERE user_id = 385\nORDER BY used_on, usage_id;",
+      "sql": "SELECT usage_id, used_on, event_count, \n       SUM(event_count) OVER (ORDER BY used_on, usage_id) AS running_total\nFROM feature_usage\nWHERE user_id = 385\nORDER BY used_on, usage_id",
+      "correct": true,
+      "reason": "match (ordered)"
+     },
+     {
+      "task_id": "sql-6ee26e3fdc62",
+      "raw": "SELECT feature, COUNT(*) AS event_count\nFROM feature_usage\nWHERE user_id IN (\n    SELECT user_id\n    FROM users\n    WHERE role = 'admin' AND industry = 'media'\n    AND created_at >= '2025-08-02'\n)\nGROUP BY feature;",
+      "sql": "SELECT feature, COUNT(*) AS event_count\nFROM feature_usage\nWHERE user_id IN (\n    SELECT user_id\n    FROM users\n    WHERE role = 'admin' AND industry = 'media'\n    AND created_at >= '2025-08-02'\n)\nGROUP BY feature",
+      "correct": false,
+      "reason": "candidate error (syntax): no such column: industry"
+     },
+     {
+      "task_id": "sql-853d99724295",
+      "raw": "SELECT users.user_id\nFROM users\nWHERE users.role = 'admin'\n  AND users.status = 'active'\n  AND users.country = 'DE'\n  AND users.account_id IN (\n    SELECT accounts.account_id\n    FROM accounts\n    WHERE accounts.country = 'DE'\n  )\n  AND users.user_id NOT IN (\n    SELECT support_tickets.user_id\n    FROM support_tickets\n    WHERE support_tickets.status = 'open'\n      AND support_tickets.category = 'account_access'\n      AND support_tickets.priority = 'low'\n      AND support_tickets.account_id = users.account_id\n  );",
+      "sql": "SELECT users.user_id\nFROM users\nWHERE users.role = 'admin'\n  AND users.status = 'active'\n  AND users.country = 'DE'\n  AND users.account_id IN (\n    SELECT accounts.account_id\n    FROM accounts\n    WHERE accounts.country = 'DE'\n  )\n  AND users.user_id NOT IN (\n    SELECT support_tickets.user_id\n    FROM support_tickets\n    WHERE support_tickets.status = 'open'\n      AND support_tickets.category = 'account_access'\n      AND support_tickets.priority = 'low'\n      AND support_tickets.account_id = users.account_id\n  )",
+      "correct": false,
+      "reason": "candidate error (syntax): no such column: users.status"
+     },
+     {
+      "task_id": "sql-7dcd87be8845",
+      "raw": "SELECT method, \n       COUNT(*) AS succeeded, \n       COUNT(CASE WHEN status = 'failed' THEN 1 END) AS failed, \n       COUNT(CASE WHEN status = 'refunded' THEN 1 END) AS refunded \nFROM payments \nWHERE status IN ('succeeded', 'failed', 'refunded') \n  AND invoice_id IN (SELECT invoice_id FROM invoices WHERE currency = 'EUR' AND issued_date BETWEEN '2025-01-01' AND '2025-12-31') \n  AND amount_cents > 4200 \nGROUP BY method;",
+      "sql": "SELECT method, \n       COUNT(*) AS succeeded, \n       COUNT(CASE WHEN status = 'failed' THEN 1 END) AS failed, \n       COUNT(CASE WHEN status = 'refunded' THEN 1 END) AS refunded \nFROM payments \nWHERE status IN ('succeeded', 'failed', 'refunded') \n  AND invoice_id IN (SELECT invoice_id FROM invoices WHERE currency = 'EUR' AND issued_date BETWEEN '2025-01-01' AND '2025-12-31') \n  AND amount_cents > 4200 \nGROUP BY method",
+      "correct": false,
+      "reason": "row contents differ: 4 unexpected, 4 missing"
+     },
+     {
+      "task_id": "sql-499af19ad46d",
+      "raw": "SELECT COUNT(*) FROM users WHERE role = 'viewer';",
+      "sql": "SELECT COUNT(*) FROM users WHERE role = 'viewer'",
+      "correct": true,
+      "reason": "match"
+     }
+    ]
+   },
+   "provenance": {
+    "source": "recovered stdout of sandbox ops (GET /v1/operations/{id}/subprocesses/1)",
+    "ops": [
+     "01a1060a-49e5-7305-8975-710e20cc7193",
+     "01a1060a-4c44-72c3-be96-6b637e03534f",
+     "01a1060a-4c57-7624-b537-0651b30b8aa4",
+     "01a1060a-4c59-7262-97aa-73eb4f8a0bd5",
+     "01a1060a-4c5e-7334-8cfc-f70b5068dab5",
+     "01a1060a-4c91-7575-bf10-2d450bf9914d",
+     "01a1060a-4c95-761e-88a9-f05159f3ed3a",
+     "01a1060b-1b51-76db-b509-779218d665df",
+     "01a1060b-c550-7487-b8d8-748e9ec859f6",
+     "01a1060c-1aa2-727d-8856-6c71ead26dc2",
+     "01a1060c-359c-73ae-99da-fe49b5ac71af",
+     "01a1060c-cbab-733a-9517-a5e14dc2b28a",
+     "01a1060d-3a38-7001-b38f-54340e352966",
+     "01a1060d-45ee-75fa-b961-b9c71367f467",
+     "01a1060d-4a4a-73c0-a7f0-335fa38178c8",
+     "01a1060d-868b-76d0-8a28-81803a7cdcd7",
+     "01a1060d-8698-71a5-b86c-a1c13cc68f51",
+     "01a1060d-86ac-7575-9815-6dbcb195fa8f",
+     "01a1060d-f985-752b-a131-a21465d24f2c",
+     "01a1060e-22e7-733d-8fdf-ae7579ea2031",
+     "01a1060e-3283-70a3-9e74-87164d334bd2",
+     "01a1060e-8b52-7427-9492-af7531920232",
+     "01a1060e-a4b3-718b-b3ed-ac49929ea360",
+     "01a1060e-d175-7418-8f69-b579052fadaf",
+     "01a1060e-f237-76ae-877b-395ab8f3f7f9",
+     "01a1060f-46a6-74e5-b0c9-595e34f6fd39",
+     "01a1060f-527f-75e3-b315-9803e8fdd0dc",
+     "01a1060f-58ed-7406-ba1c-f697a7e357c7",
+     "01a1060f-8a02-75c9-af3d-cc7be5251b4a",
+     "01a10611-e85b-74c9-8211-b42cb9a72814",
+     "01a10709-ea35-704a-b42a-04c3ba74fd4c",
+     "01a1070a-0580-7780-a5b8-9c443a0950f5"
+    ],
+    "batches": 34,
+    "prompts_matched": 64
+   }
+  }
+ }
+}

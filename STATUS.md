@@ -1,13 +1,16 @@
 # STATUS
 
-**Date:** 2026-10-03 · **Phase:** proof mode (feature freeze; grounding prompt of 2026-10-03). The baseline is in `GROUND_TRUTH.md` · **Result claims:** none.
+**Date:** 2026-10-04 · **Phase:** proof mode (feature freeze; grounding prompt of 2026-10-03). The baseline is in `GROUND_TRUTH.md` · **Result claims:** none.
 
 ## Proof phase (2026-10-03)
 - **Phase 0, GROUND_TRUTH.md: done** (21 claims, each with path, command and output).
-- **P1.1-P1.10 (free): done except P1.3.** Root cause of the smoke REJECTs, proven from the provider's job objects: 3/6/9 optimizer steps at defaults (lr 1e-5, batch 8, packing on, r8/α8). Token-ID parity train vs eval 200/200, no truncation (train max 1,074 of 8,192 tokens; gold SQL max 111 of 160), extraction clean, final checkpoint evaluated. P1.3 (loss masking) is being inferred from base loss vs step-1 loss.
+- **P1.1-P1.10 (free): done except P1.3.** Root cause of the smoke REJECTs, proven from the provider's job objects: 3/6/9 optimizer steps at defaults (lr 1e-5, batch 8, packing on, r8/α8). Token-ID parity train vs eval 200/200, no truncation (train max 1,074 of 8,192 tokens; gold SQL max 111 of 160), extraction clean, final checkpoint evaluated. P1.3: loss is on the completion only (base completion loss 0.80/0.76 vs full 1.86; job step-1 0.771).
 - **P3 (free): PASS.** Verifier 1321/1321 gold, 1193/1193 equivalent wraps, 8/8 pairs. Teacher-as-student PROMOTE, base-as-student REJECT on recorded vectors. Power at true ratio 0.95 is 1.00 (n=300) and 0.95 (n=100).
 - **Fixes before P1.11 (SDD Task 1):** pick the max-step checkpoint (P1.8), report cap hits (P1.5), planned-steps floor 50 → 300 (P1.7).
-- **Next: P1.11 overfit (paid, needs your approval and your console balance before and after).**
+- **P2 (automated part): done** (`p2_data.json`). Labels 276/276; 3/276 drift on a perturbed DB (all null_handling); own-mutation filter recall 88.9%/93.8% (below the 95% bar; equivalent mutants not yet classified); no exact leakage, gated held-out skeleton overlap 98% (disclosed). Open: your 30-row spot-check (`.distillery/proofs/p2_spotcheck.md`).
+- **P1.11 overfit: PASS** (2026-10-04, `p1_11_overfit.json`). Qwen3-1.7B, 64 rows, 320 steps, 615,460 trained tokens: adapter 64/64 vs base 17/64 in the sandbox (merged serving). First scoring attempt crashed: the per-job timeout (210 s for a batch of 2, sized for 0.6B) was too tight for 1.7B; fixed in `441b361` (90 s/sample, timed-out jobs retry with 2x timeout). Base scores rebuilt from recovered sandbox stdout (no re-run).
+- **P5 harness (dry): PASS** for stage latency (max 1.43 s), tree, report, kill/resume; per-stage spend, live job adoption and forced failure still need the live run.
+- **Next: P1.12 pilot (paid; pre-register the config in DECISIONS.md first; needs your approval and console balance).** Cost measurement: there is no billing API; read the console Usage tab (Fine-tuning and Sandboxes) for 2026-10-04 to price P1.11 (615,460 tokens; sandbox `consumed_cpu` per op from `GET /v1/operations`).
 
 ### Spend ladder (dollar amounts need your console balance; the fine-tune and sandbox prices are still unknown)
 | Step | What is billed | Size |
