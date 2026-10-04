@@ -6,7 +6,7 @@ train_loss is close to the BASE model's loss on the same rows. We compute the ba
 on the exact rows the job trained on; whichever matches the reported step-1 loss is the masking.
 
 Run (needs torch + transformers; not project deps):
-  python docs/proofs/p1_lossmask.py RUN_DIR TEMPLATE [--model Qwen/Qwen3-0.6B]
+  python docs/proofs/p1_lossmask.py RUN_DIR TEMPLATE [--model Qwen/Qwen3-0.6B] [--rows N]
 """
 
 import json
@@ -19,15 +19,18 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 run_dir, template = Path(sys.argv[1]), Path(sys.argv[2]).read_text()
 model_id = sys.argv[sys.argv.index("--model") + 1] if "--model" in sys.argv else "Qwen/Qwen3-0.6B"
 tok = AutoTokenizer.from_pretrained(model_id)
-model = AutoModelForCausalLM.from_pretrained(model_id, torch_dtype=torch.bfloat16).eval()
+model = AutoModelForCausalLM.from_pretrained(
+    model_id, dtype=torch.float32
+).eval()  # bf16 on CPU is ~10x slower
 rows = [
     json.loads(x)
     for f in sorted(run_dir.glob("round1/train.jsonl"))
     for x in f.read_text().splitlines()
-]
+][: int(sys.argv[sys.argv.index("--rows") + 1]) if "--rows" in sys.argv else None]
 
 tot = {"full": [0.0, 0], "completion": [0.0, 0], "completion_no_think_block": [0.0, 0]}
-for r in rows:
+for k, r in enumerate(rows):
+    print(f"row {k + 1}/{len(rows)}", file=sys.stderr, flush=True)
     msgs = r["messages"]
     full = tok.apply_chat_template(msgs, chat_template=template, tokenize=False)
     prefix = tok.apply_chat_template(
