@@ -1,0 +1,405 @@
+{
+  "mode": "live",
+  "scale": "gated",
+  "budget_usd": 8.0,
+  "kill_stage": "finetune_r1",
+  "started": "2026-10-04T15:51:30Z",
+  "checks": {
+    "A1_stage_transitions_visible_within_5s": {
+      "result": "FAIL",
+      "done_latency_s": {},
+      "pre_restart_done_latency_s": {
+        "schema:done": 0.784,
+        "questions:done": 0.0,
+        "gold_crosscheck:done": 0.768,
+        "verifier_selftest:done": 0.29,
+        "split:done": 0.29,
+        "headroom:done": 0.92,
+        "teacher_data:done": 0.0,
+        "paraphrase:done": 0.281
+      },
+      "running_latency_s": {
+        "questions:running": 0.784,
+        "gold_crosscheck:running": 0.0,
+        "verifier_selftest:running": 0.768,
+        "headroom:running": 0.29,
+        "teacher_data:running": 0.92,
+        "paraphrase:running": 0.0,
+        "finetune_r1:running": 0.537
+      },
+      "note": "pre-restart stages were watched on the first page; post-restart on a new page"
+    },
+    "RUN_COMPLETED": {
+      "result": "FAIL",
+      "end_state": "failed",
+      "status": "failed"
+    },
+    "B1_resumes_to_completion": {
+      "result": "FAIL",
+      "resubmit_status": 202
+    },
+    "B2_completed_stages_not_rerun": {
+      "result": "FAIL",
+      "completed_stages_rerun": []
+    },
+    "B3_job_adopted_not_recreated": {
+      "result": "PASS",
+      "adopted_events": [
+        {
+          "name": "finetune_job_adopted",
+          "job_id": "ftjob-4676999d7acd4b058e776abc1170373f",
+          "round": 1
+        }
+      ],
+      "finetune_job_started_events": 1,
+      "distinct_job_ids": 1,
+      "closed_events": [
+        {
+          "name": "finetune_job_closed",
+          "job_id": "ftjob-4676999d7acd4b058e776abc1170373f",
+          "outcome": "aborted"
+        }
+      ],
+      "note": "STRICT per the task: adoption + exactly one job. Code reality (orchestrator._cancel_orphans runs BEFORE _adoptable_job): after a SIGKILL the unclosed job is cancelled (orphan_cancelled) and a second job is created; adoption only fires for a job closed as 'aborted' whose provider status is still active/succeeded."
+    },
+    "B3b_no_two_jobs_running_at_once": {
+      "result": "PASS",
+      "note": "weaker: every job started before the last was explicitly closed (cancelled) before another was created"
+    },
+    "B4_no_duplicate_charge_rows": {
+      "result": "FAIL",
+      "spend": {
+        "rows": 2923,
+        "by_kind": {
+          "sandbox": 1,
+          "llm": 2922
+        },
+        "identical_row_dupes": 0
+      },
+      "finetune_charge_rows": 0,
+      "distinct_jobs": 1
+    },
+    "A2_spend_meter_matches_real_spend_rows": {
+      "result": "PASS",
+      "spend_rows": 2923,
+      "spend_total_usd": 1.667401,
+      "spend_by_kind_usd": {
+        "sandbox": 0.0,
+        "llm": 1.667408
+      },
+      "final_meter_usd": 1.66740102,
+      "meter_values_seen": [
+        0.0,
+        0.000336,
+        0.0047811,
+        0.0074361,
+        0.0104019,
+        0.0120411,
+        0.0145056,
+        0.0181113,
+        0.0227661,
+        0.0239826,
+        0.0273651,
+        0.0331005,
+        0.0339642,
+        0.0343341,
+        0.0362694,
+        0.0386478,
+        0.0422151,
+        0.0475146,
+        0.0481344,
+        0.049291800000000004,
+        0.0514149,
+        0.0570579,
+        0.0586275,
+        0.0622509,
+        0.0649242,
+        0.0675066,
+        0.0678387,
+        0.0687216,
+        0.0732114,
+        0.0746682,
+        0.0789213,
+        0.0794622,
+        0.0858951,
+        0.0879771,
+        0.0904059,
+        0.09417,
+        0.0975765,
+        0.0993123,
+        0.1002273,
+        0.1038312,
+        0.1045119,
+        0.1094433,
+        0.1125174,
+        0.1137915,
+        0.1166694,
+        0.1193838,
+        0.1244808,
+        0.1269168,
+        0.1293537,
+        0.1302387,
+        0.1321788,
+        0.1336047,
+        0.1363431,
+        0.1399107,
+        0.1431768,
+        0.1461729,
+        0.1486959,
+        0.1539459,
+        0.1555278,
+        0.1565376,
+        0.1619181,
+        0.164946,
+        0.1659642,
+        0.1673181,
+        0.1689165,
+        0.1718079,
+        0.176931,
+        0.1800378,
+        0.1808655,
+        0.18384,
+        0.1844319,
+        0.1905768,
+        0.1947246,
+        0.1960296,
+        0.1982526,
+        0.1991724,
+        0.2003553,
+        0.2018922,
+        0.2071434,
+        0.2079609,
+        0.2118966,
+        0.2159316,
+        0.2176887,
+        0.2211444,
+        0.2251485,
+        0.2277897,
+        0.2285988,
+        0.2296686,
+        0.2308677,
+        0.2336022,
+        0.2353767,
+        0.2373816,
+        0.241251,
+        0.2434008,
+        0.2499627,
+        0.2509659,
+        0.2541048,
+        0.2595948,
+        0.2606478,
+        0.263595,
+        0.2670375,
+        0.27069,
+        0.2726055,
+        0.276222,
+        0.2788707,
+        0.2800821,
+        0.2838147,
+        0.2876298,
+        0.2927442,
+        0.2933838,
+        0.2942724,
+        0.2968668,
+        0.3000117,
+        0.3045255,
+        0.3076647,
+        0.3086682,
+        0.3128982,
+        0.3141321,
+        0.3197385,
+        0.321114,
+        0.324603,
+        0.326886,
+        0.3272109,
+        0.3280569,
+        0.3309168,
+        0.3358263,
+        0.3371904,
+        0.3409686,
+        0.3423876,
+        0.3458043,
+        0.3501909,
+        0.3530703,
+        0.3542154,
+        0.3574818,
+        0.359988,
+        0.3612228,
+        0.3645495,
+        0.3659526,
+        0.3701349,
+        0.3730659,
+        0.3756876,
+        0.3767778,
+        0.3811179,
+        0.3834444,
+        0.3898155,
+        0.3915795,
+        0.3923367,
+        0.3932796,
+        0.3948033,
+        0.395349,
+        0.3974388,
+        0.4041135,
+        0.4063701,
+        0.4089573,
+        0.4116951,
+        0.4155087,
+        0.4167135,
+        0.4216377,
+        0.4244781,
+        0.4253205,
+        0.4262748,
+        0.42651114,
+        0.426939,
+        0.42740514,
+        0.42776826,
+        0.42800706,
+        0.42844308,
+        0.42884856,
+        0.42933564,
+        0.42951552,
+        0.43002618,
+        0.4302036,
+        0.43042206,
+        0.4309182,
+        0.43125414,
+        0.4319592,
+        0.433005,
+        0.43441686,
+        0.43448772,
+        0.43525104,
+        0.4359537,
+        0.4363647,
+        0.43656348,
+        0.4373622,
+        0.4375788,
+        0.43809552,
+        0.4391148,
+        0.43933644,
+        0.43962996,
+        0.44008026,
+        0.4408233,
+        0.44104878,
+        0.44147748,
+        0.44196318,
+        0.44258454,
+        0.44370234,
+        0.4451655,
+        0.44714292,
+        0.4487289,
+        0.44888274
+      ],
+      "budget_cap_usd": 8.0
+    }
+  },
+  "notes": [],
+  "stop_before_start": false,
+  "preflight_config": {
+    "api_key_set": true,
+    "admin_token_set": true,
+    "run_cap_usd": 8.0,
+    "project_cap_usd": 19.5,
+    "student": "Qwen/Qwen3-1.7B",
+    "prices_for_roles": {
+      "planner": true,
+      "teacher": true,
+      "triage": true
+    },
+    "finetune_price_for_student": true,
+    "finetune_usd_per_mtok": 0.4,
+    "sandbox_usd_per_s": 0.0,
+    "ok": true
+  },
+  "run_id": "sql-gated-20261004T155134Z-66ff347c",
+  "end_state": "failed",
+  "kill_resume": {
+    "killed_driver_pid": 123267,
+    "stage_rows_at_kill": [
+      [
+        "schema",
+        "complete"
+      ],
+      [
+        "questions",
+        "complete"
+      ],
+      [
+        "gold_crosscheck",
+        "complete"
+      ],
+      [
+        "verifier_selftest",
+        "complete"
+      ],
+      [
+        "split",
+        "complete"
+      ],
+      [
+        "headroom",
+        "complete"
+      ],
+      [
+        "teacher_data",
+        "complete"
+      ],
+      [
+        "paraphrase",
+        "complete"
+      ],
+      [
+        "finetune_r1",
+        "running"
+      ]
+    ],
+    "finetune_events_at_kill": [
+      {
+        "name": "finetune_job_started",
+        "job_id": "ftjob-4676999d7acd4b058e776abc1170373f",
+        "round": 1
+      }
+    ],
+    "spend_at_kill": {
+      "rows": 2923,
+      "by_kind": {
+        "sandbox": 1,
+        "llm": 2922
+      },
+      "identical_row_dupes": 0
+    },
+    "t_kill": "2026-10-04T16:49:05Z",
+    "resubmit_status": 202,
+    "resubmit_body": "{\"run_id\":\"sql-gated-20261004T155134Z-66ff347c\"}",
+    "stage_updated_at_before_kill": {
+      "schema": "2026-10-04T15:51:36.903323+00:00",
+      "verifier_selftest": "2026-10-04T15:53:38.626184+00:00",
+      "paraphrase": "2026-10-04T16:48:41.784602+00:00",
+      "headroom": "2026-10-04T16:27:44.363835+00:00",
+      "teacher_data": "2026-10-04T16:31:06.566714+00:00",
+      "questions": "2026-10-04T15:51:38.647168+00:00",
+      "gold_crosscheck": "2026-10-04T15:52:01.059468+00:00",
+      "finetune_r1": "2026-10-04T16:48:42.048374+00:00",
+      "split": "2026-10-04T15:53:38.689974+00:00"
+    },
+    "finetune_events_final": [
+      {
+        "name": "finetune_job_started",
+        "job_id": "ftjob-4676999d7acd4b058e776abc1170373f",
+        "round": 1
+      },
+      {
+        "name": "finetune_job_adopted",
+        "job_id": "ftjob-4676999d7acd4b058e776abc1170373f",
+        "round": 1
+      },
+      {
+        "name": "finetune_job_closed",
+        "job_id": "ftjob-4676999d7acd4b058e776abc1170373f",
+        "outcome": "aborted"
+      }
+    ],
+    "distinct_finetune_job_ids_started": 1,
+    "finetune_job_started_events": 1
+  }
+}

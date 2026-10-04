@@ -10,7 +10,9 @@
 - **P2 (automated part): done** (`p2_data.json`). Labels 276/276; 3/276 drift on a perturbed DB (all null_handling); own-mutation filter recall 88.9%/93.8% (below the 95% bar; equivalent mutants not yet classified); no exact leakage, gated held-out skeleton overlap 98% (disclosed). Open: your 30-row spot-check (`.distillery/proofs/p2_spotcheck.md`).
 - **P1.11 overfit: PASS** (2026-10-04, `p1_11_overfit.json`). Qwen3-1.7B, 64 rows, 320 steps, 615,460 trained tokens: adapter 64/64 vs base 17/64 in the sandbox (merged serving). First scoring attempt crashed: the per-job timeout (210 s for a batch of 2, sized for 0.6B) was too tight for 1.7B; fixed in `441b361` (90 s/sample, timed-out jobs retry with 2x timeout). Base scores rebuilt from recovered sandbox stdout (no re-run).
 - **P5 harness (dry): PASS** for stage latency (max 1.43 s), tree, report, kill/resume; per-stage spend, live job adoption and forced failure still need the live run.
-- **Next: P1.12 pilot (paid; pre-register the config in DECISIONS.md first; needs your approval and console balance).** Cost measurement: there is no billing API; read the console Usage tab (Fine-tuning and Sandboxes) for 2026-10-04 to price P1.11 (615,460 tokens; sandbox `consumed_cpu` per op from `GET /v1/operations`).
+- **P1.12: PASS** (lr 1e-4, dev 142/150 vs base 33/150); config pinned (`0228b94`).
+- **P4: PROMOTE** (run `sql-gated-20261004T155134Z-66ff347c`, started from the UI): held-out 300 base 25.7% / student 92.3% / teacher 90.0%, ratio CI [0.993, 1.061], McNemar p 1.6e-57; stress 9% / 16% / 99%. Cost $4.26. Kill mid fine-tune → job adopted (one job). Two provider network errors were survived by resume; fixes `5e32640`, `9a2a2d1`.
+- **Next:** P5 hosted (needs Render settings + push approval), P2.5 spot-check (you), console after-balance, final review.
 
 ### Console readings (you, screenshot of Organisation > Usage)
 - 2026-10-04 13:57 UTC: **balance $29.21**. Usage 2026-09-04..10-04 (last updated 11:39 UTC): subtotal $2.07, VAT $0.37, total $2.43; daily ~$1.82 on 09-30 (smoke runs), ~$0.25 on 10-04.

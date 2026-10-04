@@ -1,0 +1,148 @@
+{
+ "run_id": "sql-gated-20261004T155134Z-66ff347c",
+ "started_from": "UI (local API, Playwright), live gated run, max_rounds 1",
+ "decision": "PROMOTE",
+ "decision_reasons": [
+  "ratio lower bound 0.993 >= 0.85 (point 1.026)",
+  "McNemar exact p=0.0000 < 0.05 (student-only 202, base-only 2)"
+ ],
+ "gate_heldout": {
+  "n": 300,
+  "base_acc": 0.25666666666666665,
+  "student_acc": 0.9233333333333333,
+  "teacher_acc": 0.9,
+  "ratio_point": 1.025925925925926,
+  "ratio_lo": 0.9927536231884058,
+  "ratio_hi": 1.0610687022900764,
+  "mcnemar_p": 1.6266184059419292e-57,
+  "student_only_vs_base": 202,
+  "base_only_vs_student": 2,
+  "student_ci": [
+   0.8875898961498251,
+   0.9483723882133924
+  ],
+  "thresholds": {
+   "bootstrap_resamples": 10000,
+   "mcnemar_alpha": 0.05,
+   "ratio_lower_bound_min": 0.85,
+   "seed": 1234
+  }
+ },
+ "heldout_sealed_sha256": "cf92bf60e3c734f63035273395e629f3dafe0afab8397c4b01e2976f683dd878",
+ "heldout_skeleton_overlap_rate": 0.9467,
+ "stress": {
+  "n": 100,
+  "families": [
+   "date_math",
+   "set_ops"
+  ],
+  "accuracy": {
+   "base": 0.09,
+   "student": 0.16,
+   "teacher": 0.99
+  },
+  "accuracy_by_family": {
+   "date_math": {
+    "base": 0.03225806451612903,
+    "student": 0.20967741935483872,
+    "teacher": 0.9838709677419355
+   },
+   "set_ops": {
+    "base": 0.18421052631578946,
+    "student": 0.07894736842105263,
+    "teacher": 1.0
+   }
+  },
+  "note": "reserved families, never in train/dev/gate; reported separately, not a gate input",
+  "sha256": "1ba7bcde6e2db4f29da897ab88c4a7f200eb6c96d3d3610da9ad3c1d2a172896"
+ },
+ "dev": {
+  "base": 0.22
+ },
+ "artifact": {
+  "adapter_sha256": "4bebc793ba4158532adc33ca5085f37003aad46b679db9085cc89864fa8f553f",
+  "checkpoint_id": "ftckpt_c772015b-461f-4514-97af-d50aee97f62c",
+  "job_id": "ftjob-4676999d7acd4b058e776abc1170373f",
+  "trained_base_model": "Qwen/Qwen3-1.7B",
+  "trained_checkpoint_name": "ft:Qwen/Qwen3-1.7B-2026-10-04:org_placeholder:distillery-sql-gated-20261004T155134Z-66ff347c-r1:IDPlaceholder:ckpt-step-1488"
+ },
+ "finetune": [
+  {
+   "job_id": "ftjob-4676999d7acd4b058e776abc1170373f",
+   "trained_tokens": 5842530,
+   "trained_steps": 1488,
+   "hyperparameters": {
+    "batch_size": 4,
+    "context_length": 8192,
+    "learning_rate": 0.0001,
+    "learning_rate_multiplier": null,
+    "lora": true,
+    "lora_alpha": 32,
+    "lora_dropout": 0.0,
+    "lora_r": 16,
+    "max_grad_norm": 1.0,
+    "n_epochs": 3,
+    "packing": false,
+    "warmup_ratio": 0.0,
+    "weight_decay": 0.0
+   }
+  }
+ ],
+ "finetune_job_events": [
+  [
+   "finetune_job_started",
+   {
+    "job_id": "ftjob-4676999d7acd4b058e776abc1170373f",
+    "round": 1
+   }
+  ],
+  [
+   "finetune_job_adopted",
+   {
+    "job_id": "ftjob-4676999d7acd4b058e776abc1170373f",
+    "round": 1
+   }
+  ],
+  [
+   "finetune_job_closed",
+   {
+    "job_id": "ftjob-4676999d7acd4b058e776abc1170373f",
+    "outcome": "aborted"
+   }
+  ],
+  [
+   "finetune_job_adopted",
+   {
+    "job_id": "ftjob-4676999d7acd4b058e776abc1170373f",
+    "round": 1
+   }
+  ],
+  [
+   "finetune_job_closed",
+   {
+    "job_id": "ftjob-4676999d7acd4b058e776abc1170373f",
+    "outcome": "succeeded"
+   }
+  ]
+ ],
+ "cost": {
+  "run_total_usd": 4.258206120000003,
+  "finetune_usd": "$2.3370 [billed-basis (measured tokens x console price)]; rounds run: 1",
+  "llm_by_model": {
+   "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B": {
+    "calls": 684,
+    "input_tokens": 126538,
+    "output_tokens": 753151,
+    "usd": 0.18834852
+   },
+   "nvidia/nemotron-3-super-120b-a12b": {
+    "calls": 2638,
+    "input_tokens": 2537916,
+    "output_tokens": 1079412,
+    "usd": 1.7328456
+   }
+  },
+  "basis": "ESTIMATES, not billed amounts. LLM lines: measured token counts x the configured price table (price source: Token Factory GET /v1/models?verbose=true pricing field (the API's own price, per-token x 1e6)); fine-tune: billed-basis (measured tokens x console price); sandbox compute: billed-basis (measured seconds x console price)"
+ },
+ "note": "examples omitted: they contain sealed held-out questions (kept out of git)."
+}
