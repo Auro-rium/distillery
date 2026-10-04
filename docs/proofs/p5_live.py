@@ -17,7 +17,15 @@ Checks (JSON summary written to --out):
      meter is present and moves; the experiment tree is rendered; the report screen matches report.json.
   B  kill the worker (and the API) mid-stage, restart, resubmit the same run id, assert it resumes without
      re-running completed stages and without duplicate charge rows.
-  C  forced stage failure: only if a fault-injection hook exists in src/ (none is added here).
+  C  forced failure, no product code: `--fail-image TAG` starts a SECOND local API whose live-run child
+     is configured with fake credentials, DISTILLERY_SANDBOX_URL pointing at a closed port and
+     DISTILLERY_SANDBOX_IMAGE=TAG. A dry run CANNOT exercise this (build_dry_run uses FakeSandbox and never
+     reads DISTILLERY_SANDBOX_IMAGE), so the failure is induced on the live-run code path
+     (make_live_deps -> ContreeSandbox.ensure_image) with fake credentials: zero spend, the real sandbox
+     client really fails (connection refused) before any stage or paid job exists.
+     Asserts: run ends failed, UI shows the reason, SSE event log ends with done/failed, no spend rows.
+     The cancel/orphan_cancelled assertion needs an open fine-tune job, so it is live-only (N/A here).
+     Result is merged into --out under "C_forced_failure" (`--only-c` runs just this check).
 """
 
 from __future__ import annotations
@@ -50,8 +58,9 @@ def free_port() -> int:
 
 
 class Server:
-    def __init__(self, root: Path, log: Path) -> None:
+    def __init__(self, root: Path, log: Path, extra_env: dict[str, str] | None = None) -> None:
         self.root, self.log, self.port = root, log, free_port()
+        self.extra_env = extra_env or {}
         self.proc: subprocess.Popen[bytes] | None = None
 
     @property
@@ -62,6 +71,7 @@ class Server:
         env = {**os.environ, "DISTILLERY_HOME": str(self.root), "PYTHONUNBUFFERED": "1"}
         for k in ("NEBIUS_API_KEY", "DISTILLERY_ADMIN_TOKEN"):
             env.pop(k, None)  # zero spend: dry only
+        env.update(self.extra_env)
         self.proc = subprocess.Popen(  # noqa: S603
             [str(REPO / ".venv/bin/python"), "-m", "distillery", "--root", str(self.root), "serve",
              "--port", str(self.port)],
@@ -235,6 +245,93 @@ def experiments(db: Path, run_id: str) -> list[dict[str, Any]]:
     return out
 
 
+def sse_events(base: str, run_id: str, timeout_s: float = 20.0) -> list[tuple[str, dict[str, Any]]]:
+    """Read the run's SSE stream until its `done` event (or timeout); returns (event, data) pairs."""
+    import urllib.request
+
+    out: list[tuple[str, dict[str, Any]]] = []
+    ev = None
+    t0 = time.time()
+    with urllib.request.urlopen(f"{base}/api/runs/{run_id}/events", timeout=timeout_s) as r:  # noqa: S310
+        for raw in r:
+            line = raw.decode().rstrip("\n")
+            if line.startswith("event:"):
+                ev = line[6:].strip()
+            elif line.startswith("data:") and ev:
+                out.append((ev, json.loads(line[5:])))
+                if ev == "done" or time.time() - t0 > timeout_s:
+                    break
+    return out
+
+
+def forced_failure(page: Page, proof: Path, fail_image: str) -> dict[str, Any]:
+    """Check C: see module docstring. Returns evidence including per-assertion booleans."""
+    token = "p5-fake-admin-token"  # noqa: S105  (throwaway, local server only)
+    root = proof / "home_fail"
+    if root.exists():
+        import shutil
+
+        shutil.rmtree(root)
+    closed = free_port()  # nothing listens here
+    env = {
+        "NEBIUS_API_KEY": "fake-key-not-a-secret", "NEBIUS_BASE_URL": "http://127.0.0.1:9/v1",
+        "NEBIUS_AI_PROJECT": "fake-project", "DISTILLERY_ADMIN_TOKEN": token,
+        "DISTILLERY_SANDBOX_URL": f"http://127.0.0.1:{closed}", "DISTILLERY_SANDBOX_IMAGE": fail_image,
+    }  # fmt: skip
+    srv = Server(root, proof / "server_fail.log", env)
+    srv.start()
+    ev: dict[str, Any] = {
+        "induced": {
+            "DISTILLERY_SANDBOX_IMAGE": fail_image,
+            "DISTILLERY_SANDBOX_URL": env["DISTILLERY_SANDBOX_URL"],
+            "credentials": "fake (zero spend)",
+            "path": "live run child -> make_live_deps -> ContreeSandbox.ensure_image (real client, closed port)",
+        }
+    }
+    try:
+        run_id = start_from_ui(page, srv.url, True, token)
+        ev["run_id"] = run_id
+        t0, detail = time.time(), {}
+        while time.time() - t0 < 60:
+            detail = page.request.get(f"{srv.url}/api/runs/{run_id}").json()
+            if detail.get("status") == "failed":
+                break
+            time.sleep(0.3)
+        reason = str((detail.get("run") or detail).get("error") or "")
+        ev["api_status"], ev["api_error"] = detail.get("status"), reason
+        page.goto(f"{srv.url}/runs/{run_id}")
+        page.wait_for_selector("text=Run error", timeout=15000)
+        ui_text = " ".join(page.inner_text("main").split())
+        ev["ui_text"] = ui_text[:500]
+        events = sse_events(srv.url, run_id)
+        ev["sse_events_tail"] = events[-5:]
+        done = [d for n, d in events if n == "done"]
+        db = root / "index.sqlite"
+        spend = q(db, "SELECT count(*) FROM spend WHERE run_id=?", (run_id,))
+        jobs = [
+            e for e in experiments(db, run_id)
+            if e["name"] in ("finetune_job_started", "finetune_job_closed")
+        ]  # fmt: skip
+        ev["spend_rows"], ev["finetune_events"] = spend, jobs
+        ev["assertions"] = {
+            "run_ends_failed": detail.get("status") == "failed",
+            "api_has_reason": "exit code" in reason,
+            "ui_shows_reason": bool(reason) and reason[:60] in ui_text,
+            "event_log_has_failure": bool(done) and done[-1].get("status") == "failed",
+            "no_spend_rows": not spend or spend[0][0] == 0,
+            "no_open_paid_job": not jobs,
+        }
+        ev["live_only"] = {
+            "cancel_event_for_open_finetune_job": "N/A here: the failure happens before any fine-tune job "
+            "exists. Needs a real live run failing after finetune_job_started; expect an experiments row "
+            "finetune_job_closed outcome=orphan_cancelled (orchestrator._cancel_orphans) and a ceiling-only ledger",
+            "ledger_correct_after_paid_failure": "needs paid spend rows; live only",
+        }
+    finally:
+        srv.kill()
+    return ev
+
+
 def fault_hooks() -> list[str]:
     pat = re.compile(r"(FAULT|INJECT_|FAIL_STAGE|DISTILLERY_FAIL|CHAOS)", re.I)
     hits = []
@@ -243,6 +340,28 @@ def fault_hooks() -> list[str]:
             if pat.search(line):
                 hits.append(f"{p.relative_to(REPO)}:{i}: {line.strip()}")
     return hits
+
+
+def only_c(a: argparse.Namespace, proof: Path) -> int:
+    tag = a.fail_image or "docker://distillery-nonexistent-image:fail"
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(channel=a.chrome or None, headless=not a.headed)
+        ctx = browser.new_context(viewport={"width": 1280, "height": 900})
+        try:
+            ev = forced_failure(ctx.new_page(), proof, tag)
+        finally:
+            ctx.close()
+            browser.close()
+    asserts = ev["assertions"]
+    ev["result"] = "PASS" if all(asserts.values()) else "FAIL"
+    for k, v in asserts.items():
+        print(f"{'PASS' if v else 'FAIL':5} C.{k}")
+    out = Path(a.out)
+    data = json.loads(out.read_text()) if out.exists() else {}
+    data["C_forced_failure"] = ev
+    out.write_text(json.dumps(data, indent=2, default=str))
+    print(f"merged C_forced_failure into {out}")
+    return 0 if ev["result"] == "PASS" else 1
 
 
 def main() -> int:  # noqa: C901, PLR0912, PLR0915
@@ -258,6 +377,14 @@ def main() -> int:  # noqa: C901, PLR0912, PLR0915
         default=None,
         help="stage to kill in (default: paraphrase in dry, finetune_r1 live)",
     )
+    ap.add_argument(
+        "--fail-image", default=None, metavar="TAG",
+        help="run check C: 2nd local API whose live-run child gets DISTILLERY_SANDBOX_IMAGE=TAG (+ fake "
+        "credentials, unreachable DISTILLERY_SANDBOX_URL) so the sandbox step really fails; zero spend",
+    )  # fmt: skip
+    ap.add_argument(
+        "--only-c", action="store_true", help="run only check C and merge it into --out"
+    )
     ap.add_argument("--headed", action="store_true")
     ap.add_argument("--chrome", default="chrome", help="playwright channel; '' = bundled chromium")
     ap.add_argument("--proof-dir", default=str(REPO / ".distillery/proofs/p5"))
@@ -265,6 +392,8 @@ def main() -> int:  # noqa: C901, PLR0912, PLR0915
     a = ap.parse_args()
     proof = Path(a.proof_dir)
     proof.mkdir(parents=True, exist_ok=True)
+    if a.only_c:
+        return only_c(a, proof)
     live = a.live
     summary: dict[str, Any] = {"mode": "live" if live else "dry", "started": time.strftime("%FT%TZ", time.gmtime()),
                                "checks": {}, "notes": []}  # fmt: skip
@@ -463,7 +592,13 @@ def main() -> int:  # noqa: C901, PLR0912, PLR0915
 
             # ---------------- C: forced failure ----------------
             hooks = fault_hooks()
-            if hooks:
+            if a.fail_image:
+                ev_c = forced_failure(ctx.new_page(), proof, a.fail_image)
+                summary["C_forced_failure"] = ev_c
+                verdict(
+                    "C_failure_ui_reason_and_cancel_event", all(ev_c["assertions"].values()), **ev_c
+                )
+            elif hooks:
                 verdict(
                     "C_failure_ui_reason_and_cancel_event",
                     None,
