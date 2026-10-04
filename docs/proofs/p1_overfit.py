@@ -179,7 +179,7 @@ def run(args: argparse.Namespace) -> int:
 
     from distillery.cli import SANDBOX_BASE_IMAGE
     from distillery.config import load_config
-    from distillery.evaluator import diagnose_generate
+    from distillery.evaluator import diagnose_generate, identical_rate
     from distillery.finetune import FineTuneClient, JobInfo
     from distillery.sandbox import ContreeSandbox
     from distillery.sandbox_executor import AsyncBridge
@@ -279,15 +279,38 @@ def run(args: argparse.Namespace) -> int:
                 batch_size=2, concurrency=10, max_new_tokens=160, images=images,
             )  # fmt: skip
 
-        try:
-            servers = {"base": make_server(()), "adapter": make_server(adapter_files)}
-            result = diagnose_generate(
-                servers, {"train64": items}, LocalExecutor(),
-                db_ref=str(db_path), schema_ddl=schema_ddl(0),
-            )  # fmt: skip
-        finally:
-            for s in servers.values():
-                s.close()
+        # One model at a time, adapter first (it decides the verdict); each model's scores are
+        # cached in out-dir as soon as they exist, so a crash never discards finished work.
+        models: dict[str, Any] = {}
+        for name, files_ in (("adapter", adapter_files), ("base", ())):
+            cache = out / f"score_{name}.json"
+            if cache.exists():
+                models[name] = json.loads(cache.read_text())
+                print(f"{name}: reusing cached scores from {cache}", flush=True)
+                continue
+            servers[name] = make_server(files_)
+            try:
+                models[name] = diagnose_generate(
+                    {name: servers[name]}, {"train64": items}, LocalExecutor(),
+                    db_ref=str(db_path), schema_ddl=schema_ddl(0),
+                )["models"][name]  # fmt: skip
+            finally:
+                servers[name].close()
+            cache.write_text(json.dumps(models[name]))
+            print(f"{name}: accuracy {models[name]['train64']['accuracy']:.3f}", flush=True)
+        base_items, ad_items = (
+            models["base"]["train64"]["items"],
+            models["adapter"]["train64"]["items"],
+        )
+        result = {
+            "models": models,
+            "identical_to_base": {
+                "adapter": {
+                    f: identical_rate([r[f] for r in base_items], [r[f] for r in ad_items])
+                    for f in ("raw", "sql")
+                }
+            },
+        }
 
     def timing_sum(server: Any, k: str) -> float:
         return sum(float(t.get(k) or 0) for t in getattr(server, "timings", []))
