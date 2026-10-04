@@ -171,3 +171,21 @@ No human question file had been supplied when the user approved the run and aske
 ## 2026-10-03 (amendment): planned-steps floor 50 -> 300 (proof P1.7)
 The smoke runs trained 3, 6 and 9 optimizer steps at provider defaults, far below what the plan intends (steps >= 300). `PipelineConfig.min_planned_steps` now defaults to 300, so any non-dry run planning fewer than 300 optimizer steps is refused before upload (dry runs are exempt).
 - **Consequence:** at the pinned batch 16 x 3 epochs a run needs >= 1,600 rows. With fewer, rows, epochs or batch size must change deliberately, decided by proof P1.12 and pre-registered before the run; a short run is refused, not silently undertrained.
+
+## 2026-10-04 (pre-registration, recorded BEFORE any pilot job or pilot data exists): P1.12 hyperparameter pilot
+**Why.** P1.11 passed (Qwen3-1.7B, 64 rows, lr 2e-4, r16/α32, batch 2, 320 steps: adapter 64/64 vs base 17/64), so training works and the smoke failure was undertraining. The pinned configuration (lr 1e-4, r16/α16, batch 16, 3 epochs) gives fewer than 300 steps unless a run has >= 1,600 rows, and it has never been run. P1.12 chooses the learning rate on dev data, once, before P4. This amends the "no sweep" line of the training configuration; nothing else (gate, thresholds, sets, templates, seeds) changes.
+
+**Data.** Source: run `gated-1p7b-r1`, `split["train"]` only (650 tasks). 300 tasks chosen round-robin over sorted families, tasks within a family in a `random.Random(1234)` shuffle (the P1.11 procedure). Completion = the task's template `gold_sql` (no teacher spend; P4 trains on teacher SQL as registered, and that difference is accepted). Prompt = `to_training_row`/`build_messages` (eval-identical formatting, proven P1.2). Selection: `split["dev"]` (150 tasks, never trained on). Sealed sets (held-out, stress, human) are not touched.
+
+**Arms (2, fixed; the third grid point 5e-4 is dropped in advance because P1.11 fit at 2e-4 and valid loss was already noisy there).** Common: LoRA r 16, alpha 32, dropout 0.0, batch 4, n_epochs 4, packing false, warmup 0.0, weight decay 0.0, max grad norm 1.0, context 8192 (batch x context = 32,768, the provider minimum). Planned steps = 300/4 x 4 = **300**. Arm A: learning rate **1e-4**. Arm B: learning rate **2e-4**. Each job is scored at its final (max step_number) checkpoint; no early stopping, no checkpoint picking.
+
+**Scoring.** Base and both arms generate on the 150 dev prompts through the production sandbox path (merged serving, greedy, 160 new tokens) and are scored by `execution_match` (proven P3.1). Metric: dev accuracy, with a 95% Wilson interval per model.
+
+**Decision rule (fixed now).**
+1. An arm qualifies only if its Wilson interval lies entirely above base's (non-overlapping).
+2. The winner is the qualifying arm with the higher dev accuracy; on a tie (equal counts), the lower learning rate.
+3. If no arm qualifies, stop and report (grounding prompt), with no third arm and no rerun.
+
+**Carried into P4 (fixed now).** P4 uses the winner's learning rate with r 16, alpha 32, batch 4, packing false, context 8192 and the registered 3 epochs; at the P4 data size (>= 1,600 teacher rows) that is >= 1,200 planned steps. P4's own pre-flight estimate is approved separately.
+
+**Cost (estimate, approval required).** About 300 x 966 tokens x 4 epochs ≈ 1.16M trained tokens per arm, 2.32M for both (P1.11 was 0.615M). Sandbox: 150 dev prompts x 3 models at batch 2 = 225 generation jobs (P1.11: 32 jobs used load 288 s + generation 1,305 s). Dollar figures need the console prices from P1.11.
