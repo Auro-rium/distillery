@@ -370,3 +370,13 @@ def test_live_gated_run_is_one_round_and_others_keep_cli_default(monkeypatch, tm
     ex(w.Job("r3", "gated", dry_run=True), lambda _line: None)
     assert seen[0][-2:] == ["--max-rounds", "1"]
     assert "--max-rounds" not in seen[1] and "--max-rounds" not in seen[2]
+
+
+def test_worker_log_lines_lose_ansi_colour_codes() -> None:
+    """P5: the UI 'Run error' panel showed raw escape codes from a child traceback."""
+    from distillery.server import worker as w
+
+    wk = w.Worker(lambda job, log: 0, secrets=("sekret",))
+    job = w.Job("r", "tiny", dry_run=True)
+    wk._log(job, "\x1b[1;35mContreeTransportError\x1b[0m: sekret failed")
+    assert job.logs == ["ContreeTransportError: [redacted] failed"]

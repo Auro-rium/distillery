@@ -5,6 +5,7 @@ from __future__ import annotations
 import functools
 import os
 import queue
+import re
 import signal
 import subprocess  # noqa: S404 - runs our own CLI with a fixed argv, never a shell
 import sys
@@ -14,6 +15,7 @@ from dataclasses import dataclass, field
 
 MAX_LOG_LINES = 2000
 KILL_AFTER_INTERRUPT_S = 30.0
+_ANSI = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]")  # colour codes from child tracebacks
 
 
 class RunConflictError(RuntimeError):
@@ -201,7 +203,7 @@ class Worker:
 
     def _log(self, job: Job, line: str) -> None:
         with self._lock:
-            job.logs.append(redact(line, self._secrets))
+            job.logs.append(redact(_ANSI.sub("", line), self._secrets))
             del job.logs[:-MAX_LOG_LINES]
 
     def _loop(self) -> None:
