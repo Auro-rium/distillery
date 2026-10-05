@@ -39,8 +39,7 @@ from distillery.orchestrator import DRY_PREFIX, Deps, PipelineConfig, Scale
 from distillery.sandbox import FakeSandbox
 from distillery.sandbox_executor import AsyncBridge
 from distillery.student import FakeStudent, StudentServer
-from distillery.taskpacks.base import PackTask, get_pack
-from distillery.taskpacks.sql.executor import LocalExecutor
+from distillery.taskpacks.base import Pack, PackTask, get_pack
 
 FAKE_MODELS = {
     "planner": "fake-planner",
@@ -61,7 +60,12 @@ DEFAULT_ERROR_RATES: dict[str, float] = {
     "fake-student-base": 0.65,
 }
 DEFAULT_STUDENT_ERROR_RATES: tuple[float, ...] = (0.45, 0.25, 0.10)
-_WRONG_SQL = "SELECT 1"
+_WRONG_SQL = "SELECT 1"  # the SQL pack's ``dry_wrong_answer``; other packs bring their own
+
+
+def _fenced(pack: Pack, answer: str) -> str:
+    """A fake model's reply: one fenced block in the pack's answer language."""
+    return f"```{pack.language}\n{answer}\n```"
 
 
 DRY_RUN_CAP_USD = (
@@ -100,11 +104,14 @@ class GoldOracle:
 
 
 def question_of(messages: Sequence[Mapping[str, Any]]) -> str | None:
-    """Recover the question from a prompt built by ``prompts.build_messages``."""
+    """Recover the question (SQL: ``Question: ...``; tool-call: the trailing ``Goal: ...``) from a
+    prompt built by a pack's ``build_messages`` or ``paraphrase_messages``."""
     for m in reversed(messages):  # the LAST turn: few-shot prompts carry earlier example turns
         content = str(m.get("content", ""))
         if "Question: " in content:
             return content.split("Question: ", 1)[1].split("\n\n/no_think", 1)[0].strip()
+        if "\n\nGoal: " in content:
+            return content.rsplit("\n\nGoal: ", 1)[1].split("\n\n/no_think", 1)[0].strip()
     return None
 
 
@@ -118,7 +125,9 @@ class FakeTransport:
         *,
         schema_glitch_rate: float = 0.03,
         salt: str = "fake",
+        pack: Pack | None = None,
     ) -> None:
+        self.pack = pack or get_pack("sql")
         self.oracle = oracle
         self.error_rates = dict(DEFAULT_ERROR_RATES if error_rates is None else error_rates)
         self.schema_glitch_rate = schema_glitch_rate
@@ -180,8 +189,8 @@ class FakeTransport:
         ):
             return "sorry, here is your query"  # invalid JSON: exercises the schema-retry path
         wrong = _unit(self.salt, model, question, temperature) < self.error_rates.get(model, 0.0)
-        sql = _WRONG_SQL if wrong else self.oracle.gold(question)
-        return f"```sql\n{sql}\n```"
+        answer = self.pack.dry_wrong_answer if wrong else self.oracle.gold(question)
+        return _fenced(self.pack, answer)
 
     def _paraphrases(self, question: str) -> str:
         """Deterministic fake paraphrases (a fixed set of wrappers). Some answers repeat the
@@ -380,7 +389,9 @@ class FakeStudentFactory:
         *,
         garbage: bool = False,
         salt: str = "student",
+        pack: Pack | None = None,
     ) -> None:
+        self.pack = pack or get_pack("sql")
         self.oracle = oracle
         self.error_rates = tuple(error_rates)
         self.garbage = garbage
@@ -396,12 +407,12 @@ class FakeStudentFactory:
 
         def respond(messages: Sequence[dict[str, Any]]) -> str:
             if self.garbage:
-                return "I am unable to write SQL."
+                return f"I am unable to write {self.pack.answer_label}."
             q = question_of(messages)
             if q is None:
                 raise AssertionError("FakeStudent: unrecognised prompt")
             bad = _unit(self.salt, trained.adapter_sha256, q) < rate
-            return f"```sql\n{_WRONG_SQL if bad else self.oracle.gold(q)}\n```"
+            return _fenced(self.pack, self.pack.dry_wrong_answer if bad else self.oracle.gold(q))
 
         server = FakeStudent(respond)
         self.servers.append(server)
@@ -411,7 +422,10 @@ class FakeStudentFactory:
 class FakeBaseFactory:
     """Serves a fake un-tuned base model (constant error rate, FAKE) as a ``StudentServer``."""
 
-    def __init__(self, oracle: GoldOracle, error_rate: float, *, salt: str = "base") -> None:
+    def __init__(
+        self, oracle: GoldOracle, error_rate: float, *, salt: str = "base", pack: Pack | None = None
+    ) -> None:
+        self.pack = pack or get_pack("sql")
         self.oracle = oracle
         self.error_rate = error_rate
         self.salt = salt
@@ -423,7 +437,7 @@ class FakeBaseFactory:
             if q is None:
                 raise AssertionError("FakeBase: unrecognised prompt")
             bad = _unit(self.salt, q) < self.error_rate
-            return f"```sql\n{_WRONG_SQL if bad else self.oracle.gold(q)}\n```"
+            return _fenced(self.pack, self.pack.dry_wrong_answer if bad else self.oracle.gold(q))
 
         server = FakeStudent(respond)
         self.servers.append(server)
@@ -464,20 +478,21 @@ def build_dry_run(
     pack: str = "sql",
     **pipeline_overrides: Any,
 ) -> DryRun:
-    get_pack(pack)  # unknown pack names fail here, before anything is built
+    pk = get_pack(pack)  # unknown pack names fail here, before anything is built
     pipeline_overrides["pack"] = pack
     oracle = GoldOracle()
     human_path = pipeline_overrides.get("human_set_path")
     if human_path is not None:  # fakes must know the human gold, like every other task set
         confirmed = read_confirmed(human_path)
-        oracle.observe_gold({str(it["question"]): str(it["gold_sql"]) for it in confirmed.items})
-    transport = FakeTransport(oracle, error_rates)
+        oracle.observe_gold({str(it["question"]): str(it[pk.gold_field]) for it in confirmed.items})
+    transport = FakeTransport(oracle, error_rates, pack=pk)
     ft = FakeFineTune(fail_rounds=fail_rounds, state_path=finetune_state)
     base = FakeBaseFactory(
         oracle,
         (error_rates or {}).get("fake-student-base", DEFAULT_ERROR_RATES["fake-student-base"]),
+        pack=pk,
     )
-    students = FakeStudentFactory(oracle, student_error_rates, garbage=garbage_student)
+    students = FakeStudentFactory(oracle, student_error_rates, garbage=garbage_student, pack=pk)
     sandbox = FakeSandbox()
     config = Config(
         run_cap_usd=run_cap_usd,
@@ -490,7 +505,7 @@ def build_dry_run(
     deps = Deps(
         transport=transport,
         finetune=ft,
-        executor=LocalExecutor(),
+        executor=pk.local_executor(),
         bridge=bridge,
         student_factory=students,
         base_factory=base,

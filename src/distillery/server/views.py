@@ -5,6 +5,18 @@ from __future__ import annotations
 
 from typing import Any
 
+from distillery.taskpacks.base import get_pack
+
+
+def _pack_language(name: str) -> str:
+    """Code-block language of a pack's answers ("sql", "json"); an unknown pack name falls back
+    to the name itself (a report from a newer build)."""
+    try:
+        return get_pack(name).language
+    except ValueError:
+        return name
+
+
 EXAMPLE_KINDS = ("fixed", "still_wrong", "regressed", "all")
 
 
@@ -165,5 +177,9 @@ def detail_from_report(
             "finetune_ceiling_usd": None,
         },
         "sandbox": {"operations": None, "concurrency_peak": None},
-        "verifier": {"language": report.get("pack", "sql"), "code": None, "selftest": None},
+        "verifier": {
+            "language": _pack_language(report.get("pack", "sql")),
+            "code": None,
+            "selftest": None,
+        },
     }

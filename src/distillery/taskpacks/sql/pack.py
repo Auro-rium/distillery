@@ -13,11 +13,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from distillery import prompts
+from distillery import paraphrase, prompts
 from distillery.store import atomic_write_bytes, sha256_hex
-from distillery.taskpacks.base import ChatMessages, Env, GenReport, Role
+from distillery.taskpacks.base import BatchExecutor, ChatMessages, Env, GenReport, Role
 from distillery.taskpacks.sql import questions as q
 from distillery.taskpacks.sql import schema as sql_schema
+from distillery.taskpacks.sql.executor import LocalExecutor
 from distillery.taskpacks.sql.runner import ExecOutcome, run_select
 from distillery.taskpacks.sql.verifier import VerifyResult, compare_outcomes, corrupt_sql
 
@@ -36,6 +37,13 @@ class SqlPack:
     answer_key = "sql"
     student_max_new_tokens = 160  # S4 recipe
     default_skeleton_cap: int | None = q.DEFAULT_SKELETON_CAP
+    dry_wrong_answer = "SELECT 1"
+
+    def local_executor(self) -> BatchExecutor:
+        return LocalExecutor()
+
+    def paraphrase_messages(self, question: str, n: int) -> ChatMessages:
+        return paraphrase.paraphrase_messages(question, n)
 
     def build_env(self, seed: int, dest: Path) -> Env:
         data = sql_schema.build_database(seed)

@@ -6,6 +6,7 @@ import copy
 import json
 import random
 from collections import Counter
+from pathlib import Path
 
 import pytest
 
@@ -343,9 +344,9 @@ def test_gold_roundtrips_through_extraction(
 # ---- prompts / pack ----------------------------------------------------------------------------
 
 
-def test_prefix_identical_across_roles_and_row_shape() -> None:
+def test_prefix_identical_across_roles_and_row_shape(tmp_path: Path) -> None:
     pack = ToolcallPack()
-    env = pack.build_env(2)
+    env = pack.build_env(2, tmp_path / "env.json")
     task = pack.generate_tasks(env.ref, 5, 1).tasks[0]
     msgs = [
         pack.build_messages(task.question, env.context_text, role=r)
@@ -361,16 +362,16 @@ def test_prefix_identical_across_roles_and_row_shape() -> None:
         pack.to_training_row(task, " ", context_text="c")
 
 
-def test_pack_end_to_end_and_executor_shape() -> None:
+def test_pack_end_to_end_and_executor_shape(tmp_path: Path) -> None:
     pack = ToolcallPack()
-    env = pack.build_env(4)
+    env = pack.build_env(4, tmp_path / "env.json")
     tasks = pack.generate_tasks(env.ref, 80, 3).tasks
     outs = pack.executor.run_batch(env.ref, [t.gold_answer for t in tasks] + ["junk"])
     assert len(outs) == len(tasks) + 1 and all(o.ok for o in outs[:-1]) and not outs[-1].ok
     assert pack.compare(outs[0], outs[0]).ok and not pack.compare(outs[-1], outs[0]).ok
     assert pack.selftest(tasks, env.ref, seed=1)["corruptions_tested"] > 0
-    assert pack.corrupt(tasks[0], env.ref, random.Random(1))
-    assert pack.families == Q.FAMILIES and pack.answer_label == "tool calls"
+    assert pack.corrupt(tasks[0].gold_answer, env.ref, random.Random(1))
+    assert pack.families() == Q.FAMILIES and pack.answer_label == "tool calls"
     msgs = pack.analysis_prompt(
         [
             {

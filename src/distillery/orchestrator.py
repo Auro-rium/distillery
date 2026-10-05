@@ -75,9 +75,8 @@ from distillery.sandbox import Sandbox
 from distillery.sandbox_executor import AsyncBridge
 from distillery.store import Store, atomic_write_bytes, canonical_json, sha256_hex
 from distillery.student import StudentServer
-from distillery.taskpacks.base import Pack, PackTask, get_pack
-from distillery.taskpacks.sql.executor import Executor
-from distillery.taskpacks.sql.questions import IN_DISTRIBUTION, STRESS
+from distillery.taskpacks.base import IN_DISTRIBUTION, STRESS, Pack, PackTask, get_pack
+from distillery.taskpacks.base import BatchExecutor as Executor
 
 log = logging.getLogger(__name__)
 
@@ -1016,6 +1015,7 @@ class Pipeline:
         if env.sha256 != res["db_sha256"]:
             raise PipelineError("schema build is not deterministic: sha256 differs from record")
         self.ddl = env.context_text
+        self.db_ref = env.ref  # SQL: the db file path (unchanged); tool-call: ``toolcall:<seed>``
         return res
 
     # ---- stage 2: questions ---------------------------------------------
@@ -1166,10 +1166,14 @@ class Pipeline:
                     tested += 1
                     by_kind[v.kind] += 1
                     if not o.ok:
-                        failures.append(
-                            f"{t.task_id} [{v.kind}]: executor errored on a corruption that runs "
-                            f"locally: {o.error}"
-                        )
+                        # a corruption may legitimately fail to execute (a tool-call list that
+                        # violates a precondition is rejected, never accepted); it is a problem
+                        # only when the executor disagrees with the local reference run
+                        if self.pack.run_local(self.db_ref, v.answer).ok:
+                            failures.append(
+                                f"{t.task_id} [{v.kind}]: executor errored on a corruption that "
+                                f"runs locally: {o.error}"
+                            )
                     elif self.pack.compare(o, g_exec, t.order_matters).ok:
                         failures.append(f"{t.task_id} [{v.kind}]: corruption ACCEPTED: {v.answer}")
             if tested == 0:
@@ -1426,7 +1430,7 @@ class Pipeline:
             pseudo: list[PackTask] = []
             asked = failed = generated = 0
             if n > 0 and originals:
-                msgs = [paraphrase_mod.paraphrase_messages(t.question, n) for t in originals]
+                msgs = [self.pack.paraphrase_messages(t.question, n) for t in originals]
                 res = self.runner.map(
                     "triage", msgs, purpose=paraphrase_mod.PURPOSE, stage="paraphrase",
                     schema=paraphrase_mod.Paraphrases, temperature=0.7,

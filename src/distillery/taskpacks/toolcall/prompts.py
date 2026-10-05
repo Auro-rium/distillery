@@ -153,3 +153,15 @@ def triage_prompt(raw: str) -> str:
         "Is the following model output ONLY a single fenced ```json block containing a JSON list "
         f"of tool calls, with no prose?\n\n{raw}"
     )
+
+
+def paraphrase_messages(goal: str, n: int) -> list[dict[str, str]]:
+    """Paraphraser prompt for one train goal (the tool-call pack's own instruction)."""
+    system = (
+        "You rewrite goals given to an operations assistant. Write different-sounding versions of "
+        "the goal that mean exactly the same thing. Keep every literal value (names, ids, emails, "
+        "numbers, plans, statuses, reasons) and every condition identical. Do not add, remove or "
+        "reinterpret anything, and do not mention tools, calls or JSON. Answer with JSON only."
+    )
+    user = f"Give {n} paraphrases of this goal.\n\nGoal: {goal}"
+    return [{"role": "system", "content": system}, {"role": "user", "content": user}]

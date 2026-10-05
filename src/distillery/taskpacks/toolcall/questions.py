@@ -44,6 +44,11 @@ class ToolTask(BaseModel):
     template: str = ""
 
     @property
+    def order_matters(self) -> bool:
+        """Pack-interface name for ``requires_order`` (always False here: final states compare)."""
+        return self.requires_order
+
+    @property
     def gold_calls(self) -> list[Call]:
         import json
 
@@ -899,6 +904,16 @@ class GenerationReport:
     dropped_by_template: Counter[str] = field(default_factory=Counter)
     capped_templates: set[str] = field(default_factory=set)
     capped_families: set[str] = field(default_factory=set)
+
+    @property
+    def dropped_error(self) -> int:
+        """Pack-interface name: gold replay failed."""
+        return self.dropped_invalid
+
+    @property
+    def dropped_empty(self) -> int:
+        """Pack-interface name: gold that changes nothing."""
+        return self.dropped_noop
 
     @property
     def dropped_total(self) -> int:

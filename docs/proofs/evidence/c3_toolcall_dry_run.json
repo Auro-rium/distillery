@@ -1,0 +1,147 @@
+{
+  "caveat": "fake models and a local replay executor: proves the wiring and integrity rules, not model quality or live behaviour (no sandbox executor for tool calls yet)",
+  "command": "python -m distillery --root <tmp> run --dry-run --pack toolcall --scale tiny",
+  "gate": {
+    "accuracy": {
+      "base": 0.35,
+      "student": 0.8,
+      "teacher": 1.0
+    },
+    "decision": "REJECT",
+    "n_heldout": 20,
+    "reasons": [
+      "ratio lower bound 0.600 < 0.85 (point 0.800)",
+      "McNemar exact p=0.0117 < 0.05 (student-only 10, base-only 1)"
+    ]
+  },
+  "headroom": {
+    "base_dev_acc": 0.5,
+    "max_allowed": 0.8
+  },
+  "heldout_class_counts": {
+    "in_distribution": 20
+  },
+  "heldout_sealed_sha256": "2f7c770f2235248b91fa3bdd07e1fc5212818dd8ce6fb10c56c3859b47892e6a",
+  "label": "DRY RUN \u2014 fake models, numbers are NOT results",
+  "pack": "toolcall",
+  "rounds": [
+    {
+      "adapter_sha256": "59bb6a3201d1fa9dfa1760d23046d6f875fec348e8963113e969df990fbad620",
+      "clusters": [
+        {
+          "description": "student fails 1 dev items in family cross_entity (fake analysis)",
+          "name": "cross_entity mistakes",
+          "target_families": [
+            "cross_entity"
+          ]
+        },
+        {
+          "description": "student fails 1 dev items in family multi_step (fake analysis)",
+          "name": "multi_step mistakes",
+          "target_families": [
+            "multi_step"
+          ]
+        },
+        {
+          "description": "student fails 1 dev items in family lookup_then_act (fake analysis)",
+          "name": "lookup_then_act mistakes",
+          "target_families": [
+            "lookup_then_act"
+          ]
+        }
+      ],
+      "dev_acc": 0.7,
+      "dev_failures": 3,
+      "finetune_stage": "finetune_r1",
+      "job_id": "ftjob-02ab935271ca",
+      "round": 1,
+      "sandbox_branch": {
+        "label": "round-1",
+        "parent": "fake-base-image",
+        "uuid": "49bd32da9a6afa05bf129831f98c7219"
+      },
+      "targeted_new_rows": 8,
+      "train_rows": 148
+    },
+    {
+      "adapter_sha256": "caf4572781fa618dbfd2d786ed46b856da5ae5d2fd9bcabb2b4de3c8730d973c",
+      "clusters": [
+        {
+          "description": "student fails 2 dev items in family bulk (fake analysis)",
+          "name": "bulk mistakes",
+          "target_families": [
+            "bulk"
+          ]
+        },
+        {
+          "description": "student fails 1 dev items in family lookup_then_act (fake analysis)",
+          "name": "lookup_then_act mistakes",
+          "target_families": [
+            "lookup_then_act"
+          ]
+        }
+      ],
+      "dev_acc": 0.7,
+      "dev_failures": 3,
+      "finetune_stage": "finetune_r2",
+      "job_id": "ftjob-00ca036640ef",
+      "round": 2,
+      "sandbox_branch": {
+        "label": "round-2",
+        "parent": "49bd32da9a6afa05bf129831f98c7219",
+        "uuid": "8742a5b8eafceba548189218ff2a334c"
+      },
+      "targeted_new_rows": 4,
+      "train_rows": 156
+    },
+    {
+      "adapter_sha256": "267435901f84faa3cc8e8f5799d6c4b04edfecd3bc336be5700d7527c9abe618",
+      "clusters": [],
+      "dev_acc": 0.8,
+      "dev_failures": 2,
+      "finetune_stage": "finetune_r3",
+      "job_id": "ftjob-7136a8655d49",
+      "round": 3,
+      "train_rows": 160
+    }
+  ],
+  "run_id": "dry-toolcall-tiny",
+  "sealed_file_sha256_on_disk": {
+    "heldout.json": "2f7c770f2235248b91fa3bdd07e1fc5212818dd8ce6fb10c56c3859b47892e6a",
+    "stress.json": "5b00ba3f98c0518b3e5bc88a7fcc86251eca9fe74a70268dfbc155ddf6cc55d4"
+  },
+  "stages_completed": [
+    "analysis_r1",
+    "analysis_r2",
+    "dev_eval_r1",
+    "dev_eval_r2",
+    "dev_eval_r3",
+    "final_eval",
+    "finetune_r1",
+    "finetune_r2",
+    "finetune_r3",
+    "gold_crosscheck",
+    "headroom",
+    "paraphrase",
+    "questions",
+    "sandbox_branch_r1",
+    "sandbox_branch_r2",
+    "schema",
+    "split",
+    "targeted_r1",
+    "targeted_r2",
+    "teacher_data",
+    "verifier_selftest"
+  ],
+  "stress_families": [
+    "dependent_chain",
+    "single_call"
+  ],
+  "stress_sealed_sha256": "5b00ba3f98c0518b3e5bc88a7fcc86251eca9fe74a70268dfbc155ddf6cc55d4",
+  "teacher_data": {
+    "paraphrase_failed_verification": 5,
+    "paraphrase_verified": 109,
+    "rule": "kept only if replaying the teacher's calls reaches the template gold's final state",
+    "verified_rows_round1": 39
+  }
+}

@@ -49,7 +49,10 @@ def test_health_and_config_have_no_secrets(client: TestClient) -> None:
     assert h["ok"] is True and h["mode"] == "live" and h["version"]
     c = client.get("/api/config").json()
     assert set(c) == {"models", "thresholds", "run_cap_usd", "packs", "playground"}
-    assert c["packs"] == [{"name": "sql", "language": "sql", "answer_label": "SQL"}]
+    assert c["packs"] == [
+        {"name": "sql", "language": "sql", "answer_label": "SQL"},
+        {"name": "toolcall", "language": "json", "answer_label": "tool calls"},
+    ]
     assert set(c["models"]) == {"planner", "teacher", "triage", "student"}
     assert set(c["thresholds"]) == {"ratio_lower_bound_min", "mcnemar_alpha", "bootstrap_resamples"}
     assert set(c["playground"]) == {

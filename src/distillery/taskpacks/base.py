@@ -35,6 +35,10 @@ from typing import Any, Literal, Protocol, runtime_checkable
 Role = Literal["train", "eval_student", "eval_teacher", "eval_base"]
 ChatMessages = list[dict[str, str]]
 
+# held-out classes of the sealed items (orchestrator-level, pack independent)
+IN_DISTRIBUTION = "in_distribution"
+STRESS = "stress"
+
 
 @dataclass(frozen=True)
 class Env:
@@ -129,8 +133,13 @@ class Pack(Protocol):
     answer_key: str  # suffix of per-model example fields: gold_<key>, student_<key> ("sql")
     student_max_new_tokens: int  # default generation cap for the student on this pack
     default_skeleton_cap: int | None  # per-skeleton cap the question stage passes to generation
+    dry_wrong_answer: str  # an executable answer the verifier rejects for ANY gold (dry-run fakes)
 
     # ---- environment
+    def local_executor(self) -> BatchExecutor:
+        """An in-process executor for this pack (dry runs and tests; live runs use a sandbox)."""
+        ...
+
     def build_env(self, seed: int, dest: Path) -> Env:
         """Deterministically build the env for ``seed`` at ``dest`` (atomic write) and return it."""
         ...
@@ -191,12 +200,19 @@ class Pack(Protocol):
     def analysis_prompt(
         self, failures: Sequence[Mapping[str, Any]], allowed_families: Sequence[str]
     ) -> ChatMessages: ...
+    def paraphrase_messages(self, question: str, n: int) -> ChatMessages:
+        """Prompt asking for ``n`` paraphrases of one train question (instruction is the pack's)."""
+        ...
+
     def triage_prompt(self, raw_output: str) -> ChatMessages:
         """Ask the triage model whether a raw output is a clean, bare answer."""
         ...
 
 
-_REGISTRY: dict[str, str] = {"sql": "distillery.taskpacks.sql.pack"}
+_REGISTRY: dict[str, str] = {
+    "sql": "distillery.taskpacks.sql.pack",
+    "toolcall": "distillery.taskpacks.toolcall.pack",
+}
 
 
 def pack_names() -> tuple[str, ...]:

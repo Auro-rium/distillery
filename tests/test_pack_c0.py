@@ -18,8 +18,8 @@ from distillery.taskpacks.sql import schema as sql_schema
 from distillery.taskpacks.sql.executor import LocalExecutor
 
 
-def test_registry_lists_sql_and_rejects_unknown_names() -> None:
-    assert pack_names() == ("sql",)
+def test_registry_lists_packs_and_rejects_unknown_names() -> None:
+    assert pack_names() == ("sql", "toolcall")
     assert get_pack("sql").name == "sql"
     with pytest.raises(ValueError, match="unknown pack 'nope'"):
         get_pack("nope")
