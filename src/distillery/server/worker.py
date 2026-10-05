@@ -1,4 +1,12 @@
-"""One background worker thread that runs pipelines, one at a time."""
+"""One background worker thread that runs pipelines, one at a time, under a supervisor.
+
+Supervisor rules (plan A1): exit 75 (``EX_TEMPFAIL``, a retryable failure) or death by a signal
+the server did not send restarts the same argv after a backoff (30 s, 60 s, 120 s, ...), at most
+``MAX_RESTARTS`` times per run; the stage cache and fine-tune job adoption make that a resume.
+Exit 0, 1 or 2, a user cancel, or a server shutdown are final for this process. A shutdown sends
+SIGTERM (suspend: paid jobs are left running and are adopted on the next start); a user cancel
+sends SIGINT (paid jobs are cancelled).
+"""
 
 from __future__ import annotations
 
@@ -15,6 +23,9 @@ from dataclasses import dataclass, field
 
 MAX_LOG_LINES = 2000
 KILL_AFTER_INTERRUPT_S = 30.0
+EXIT_RETRYABLE = 75  # distillery.errors.EXIT_RETRYABLE (not imported: keep the server light)
+MAX_RESTARTS = 6
+RESTART_BACKOFF_S = 30.0
 _ANSI = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]")  # colour codes from child tracebacks
 
 
@@ -37,7 +48,11 @@ class Job:
     error: str | None = None
     logs: list[str] = field(default_factory=list)
     cancel_requested: bool = False
-    interrupt: Callable[[], None] | None = None
+    interrupt: Callable[[], None] | None = None  # SIGINT: user cancel (paid jobs cancelled)
+    suspend: Callable[[], None] | None = None  # SIGTERM: shutdown (paid jobs kept, adopted later)
+    suspend_requested: bool = False
+    restarts: int = 0
+    wake: threading.Event = field(default_factory=threading.Event, repr=False)
 
 
 Executor = Callable[[Job, Callable[[str], None]], int]
@@ -71,17 +86,25 @@ def run_child(
         except (ProcessLookupError, PermissionError):
             pass
 
-    def interrupt() -> None:
+    def _send(sig: int) -> None:
         if proc.poll() is None:
-            _signal(signal.SIGINT)
+            _signal(sig)
             t = threading.Timer(kill_after_s, lambda: _signal(signal.SIGKILL))
             t.daemon = True
             timers.append(t)
             t.start()
 
-    job.interrupt = interrupt
+    def interrupt() -> None:
+        _send(signal.SIGINT)
+
+    def suspend() -> None:
+        _send(signal.SIGTERM)
+
+    job.interrupt, job.suspend = interrupt, suspend
     if job.cancel_requested:
         interrupt()
+    elif job.suspend_requested:
+        suspend()
     try:
         for line in proc.stdout or ():
             log(line.rstrip("\n"))
@@ -128,9 +151,26 @@ def subprocess_executor(
     return run
 
 
+AuditFn = Callable[[str, str, str, dict[str, object]], None]  # actor, action, run_id, detail
+FinalFn = Callable[[Job, int | None], None]  # the run will not be restarted by this server
+
+
 class Worker:
-    def __init__(self, executor: Executor, secrets: Sequence[str] = ()) -> None:
+    def __init__(
+        self,
+        executor: Executor,
+        secrets: Sequence[str] = (),
+        *,
+        max_restarts: int = MAX_RESTARTS,
+        restart_backoff_s: float = RESTART_BACKOFF_S,
+        on_audit: AuditFn | None = None,
+        on_final: FinalFn | None = None,
+    ) -> None:
         self._executor = executor
+        self._max_restarts = max_restarts
+        self._backoff_s = restart_backoff_s
+        self._on_audit = on_audit
+        self._on_final = on_final
         self._secrets = list(secrets)
         self._queue: queue.Queue[Job | None] = queue.Queue()
         self._jobs: dict[str, Job] = {}
@@ -140,8 +180,10 @@ class Worker:
         self._thread.start()
 
     def stop(self, join_timeout_s: float = KILL_AFTER_INTERRUPT_S + 10.0) -> None:
-        """Shut down: drop queued jobs, interrupt the running one (SIGINT, then SIGKILL after the
-        executor's grace period) and join the worker thread."""
+        """Shut down: drop queued jobs, SUSPEND the running one (SIGTERM, then SIGKILL after the
+        executor's grace period) and join the worker thread. SIGTERM, unlike a user cancel, leaves
+        paid fine-tune jobs running, so a redeploy or restart does not pay for a second job: the
+        next server start re-submits the run (``create_app`` reconcile) and it adopts them."""
         with self._lock:
             self._stopping = True
             running = []
@@ -150,12 +192,13 @@ class Worker:
                     job.state = "finished"
                     job.error = "server shutting down"
                 elif job.state == "running":
-                    job.cancel_requested = True
+                    job.suspend_requested = True
                     running.append(job)
         self._queue.put(None)
         for job in running:
-            if job.interrupt is not None:
-                job.interrupt()
+            job.wake.set()  # a job waiting out a restart backoff stops waiting
+            if job.suspend is not None:
+                job.suspend()
         self._thread.join(join_timeout_s)
 
     def jobs(self) -> list[Job]:
@@ -197,6 +240,7 @@ class Worker:
                 job.state = "finished"
                 job.error = "cancelled before start"
                 return "finished"
+        job.wake.set()  # a job waiting out a restart backoff is not restarted
         if job.interrupt is not None:
             job.interrupt()
         return "cancelling"
@@ -205,6 +249,44 @@ class Worker:
         with self._lock:
             job.logs.append(redact(_ANSI.sub("", line), self._secrets))
             del job.logs[:-MAX_LOG_LINES]
+
+    def _audit(self, action: str, job: Job, **detail: object) -> None:
+        if self._on_audit is not None:
+            try:
+                self._on_audit("supervisor", action, job.run_id, dict(detail))
+            except Exception as exc:  # noqa: BLE001 - the audit log must never stop a run
+                self._log(job, f"[supervisor] audit write failed: {type(exc).__name__}: {exc}")
+
+    def _restartable(self, job: Job, code: int) -> bool:
+        if job.cancel_requested or job.suspend_requested or self._stopping:
+            return False  # a person or the server ended it: never restart
+        return code == EXIT_RETRYABLE or code < 0  # retryable failure, or killed (SIGKILL / OOM)
+
+    def _supervise(self, job: Job) -> int | None:
+        """Run the job, restarting it while the rules allow. Returns the last exit code (None if
+        the executor itself raised)."""
+        code: int | None = None
+        while True:
+            try:
+                code = self._executor(job, functools.partial(self._log, job))
+            except (OSError, RuntimeError, ValueError) as exc:
+                job.error = redact(f"{type(exc).__name__}: {exc}", self._secrets)[:500]
+                return None
+            if not self._restartable(job, code):
+                return code
+            if job.restarts >= self._max_restarts:
+                self._audit("restarts_exhausted", job, exit_code=code, restarts=job.restarts)
+                return code
+            delay = self._backoff_s * 2**job.restarts
+            job.restarts += 1
+            self._log(
+                job,
+                f"[supervisor] exit {code}: restart {job.restarts}/{self._max_restarts} in "
+                f"{delay:.0f} s (resume from the stage cache; paid jobs are adopted)",
+            )
+            self._audit("restart", job, exit_code=code, attempt=job.restarts, backoff_s=delay)
+            if job.wake.wait(delay):  # cancel or shutdown during the backoff
+                return code
 
     def _loop(self) -> None:
         while True:
@@ -216,16 +298,22 @@ class Worker:
                     continue
                 job.state = "running"
                 if self._stopping:
-                    job.cancel_requested = True
+                    job.suspend_requested = True
+            code: int | None = None
             try:
-                code = self._executor(job, functools.partial(self._log, job))
+                code = self._supervise(job)
                 if job.cancel_requested:
                     job.error = "cancelled"
-                elif code != 0:
+                elif job.suspend_requested:
+                    job.error = "suspended: server shutting down; resumes on the next start"
+                elif code is not None and code != 0:
                     last = next((ln for ln in reversed(job.logs) if ln.strip()), "")
                     job.error = f"exit code {code}: {last}"[:500]
-            except (OSError, RuntimeError, ValueError) as exc:
-                job.error = redact(f"{type(exc).__name__}: {exc}", self._secrets)[:500]
             finally:
                 with self._lock:
                     job.state = "finished"
+                if not job.suspend_requested and self._on_final is not None:
+                    try:
+                        self._on_final(job, code)
+                    except Exception as exc:  # noqa: BLE001
+                        self._log(job, f"[supervisor] final hook failed: {exc}")

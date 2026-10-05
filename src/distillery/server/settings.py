@@ -47,6 +47,9 @@ class ServerSettings:
     sse_max_streams: int = 32
     sse_max_streams_per_ip: int = 4
     max_pending_jobs: int = 5  # queued + running, enforced for anonymous dry runs
+    max_restarts: int = 6  # supervisor: restarts per run (exit 75 or killed by a signal)
+    restart_backoff_s: float = 30.0  # supervisor: first backoff, doubled per restart
+    reconcile_on_start: bool = True  # re-submit runs a previous server process left unfinished
     shutdown_grace_s: float = 30.0  # SIGINT -> SIGKILL grace for a live child (cancel + shutdown)
     # Peer addresses whose X-Forwarded-For is believed. Default: none, the header is ignored.
     trusted_proxies: tuple[str, ...] = ()

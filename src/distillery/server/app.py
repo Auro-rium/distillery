@@ -22,7 +22,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from distillery import humanset
 from distillery.evaluator import EXAMPLES_PER_KIND
 from distillery.orchestrator import DRY_PREFIX, SCALES
-from distillery.server import sse, telemetry
+from distillery.server import autonomy, sse, telemetry
 from distillery.server.evidence import (
     bundle_experiments,
     evidence_path,
@@ -145,13 +145,33 @@ def create_app(settings: ServerSettings) -> FastAPI:
     executor = settings.executor or subprocess_executor(
         str(settings.root), admin, secrets, settings.shutdown_grace_s
     )
-    worker = Worker(executor, secrets)
+    reader = RunReader(settings)  # its worker is attached below (the worker's hooks use it)
+
+    def audit(actor: str, action: str, run_id: str | None, detail: dict[str, Any]) -> None:
+        store = reader.store_for(run_id) if run_id else reader.real
+        store.add_audit(actor, action, run_id, detail)
+
+    def on_final(job: Job, code: int | None) -> None:
+        autonomy.mark_final(reader.store_for(job.run_id).run_dir(job.run_id), code, job.error)
+
+    worker = Worker(
+        executor, secrets, max_restarts=settings.max_restarts,
+        restart_backoff_s=settings.restart_backoff_s, on_audit=audit, on_final=on_final,
+    )  # fmt: skip
+    reader.worker = worker
     limiter = sse.StreamLimiter(settings.sse_max_streams, settings.sse_max_streams_per_ip)
 
     def _ip(request: Request) -> str:
         return client_ip(request, settings.trusted_proxies)
 
-    reader = RunReader(settings, worker)
+    if settings.reconcile_on_start:
+        for job in autonomy.resumable(reader.real, reader.dry):
+            try:
+                worker.submit(job)
+            except RunConflictError:
+                continue
+            audit("supervisor", "resubmit_on_start", job.run_id, {"scale": job.scale})
+
     playground = Playground(settings, reader)
     dry_limit = SlidingWindow(settings.dry_run_per_ip_per_hour, 3600.0, settings.clock)
 
@@ -413,6 +433,19 @@ def create_app(settings: ServerSettings) -> FastAPI:
             return {"run_id": run_id, "source": "unavailable", "experiments": []}
         return {"run_id": run_id, "source": "bundle", "experiments": rows}
 
+    @app.get("/api/runs/{run_id}/audit")
+    def run_audit(run_id: str) -> dict[str, Any]:
+        check_id(run_id)
+        if not local(run_id):
+            if bundle(run_id) is None:
+                raise ApiError(404, "not_found", "no such run")
+            return {"run_id": run_id, "source": "unavailable", "audit": []}
+        return {
+            "run_id": run_id,
+            "source": "store",
+            "audit": reader.store_for(run_id).list_audit(run_id),
+        }
+
     @app.get("/api/replay")
     def replay() -> list[dict[str, Any]]:
         return [
@@ -464,12 +497,20 @@ def create_app(settings: ServerSettings) -> FastAPI:
             raise ApiError(409, "run_exists", "that run already completed")
         job = Job(run_id, body.scale, body.dry_run, body.budget_usd, body.finetune_estimate_usd)
         cap = settings.max_pending_jobs if body.dry_run and not is_admin else None
+        # written BEFORE submit: a fast job may finish (and be marked final) before submit returns
+        run_dir = reader.store_for(run_id).run_dir(run_id)
+        previous = autonomy.read(run_dir)
+        autonomy.write(run_dir, job)
         try:
             worker.submit(job, max_pending=cap)
-        except QueueFullError as exc:
-            raise ApiError(429, "queue_full", str(exc), {"Retry-After": "30"}) from None
-        except RunConflictError as exc:
+        except (QueueFullError, RunConflictError) as exc:
+            autonomy.restore(run_dir, previous)  # a refused submission changes nothing
+            if isinstance(exc, QueueFullError):
+                raise ApiError(429, "queue_full", str(exc), {"Retry-After": "30"}) from None
             raise ApiError(409, "run_conflict", str(exc)) from None
+        if is_admin or not body.dry_run:
+            audit("admin", "start", run_id, {"scale": body.scale, "dry_run": body.dry_run,
+                                             "budget_usd": body.budget_usd})  # fmt: skip
         tele.incr("runs_started_dry" if body.dry_run else "runs_started_live")
         reader.reset_events(run_id)
         return {"run_id": run_id}
@@ -479,6 +520,8 @@ def create_app(settings: ServerSettings) -> FastAPI:
         check_id(run_id)
         require_admin(request)
         status = worker.cancel(run_id)
+        if status is not None:
+            audit("admin", "cancel", run_id, {"status": status})
         if status is None:
             if not local(run_id):
                 raise ApiError(404, "not_found", "no such run")
@@ -557,6 +600,8 @@ def create_app(settings: ServerSettings) -> FastAPI:
         if body.task_id not in {k["task_id"] for k in drafts["kept"]}:
             raise ApiError(422, "invalid_request", "unknown draft id")
         humanset.decide(settings.root, body.set, body.task_id, body.decision)
+        audit("admin", "humanset_decide", None,
+              {"set": body.set, "task_id": body.task_id, "decision": body.decision})  # fmt: skip
         tally = humanset.tally(drafts, humanset.read_decisions(settings.root, body.set))
         return {"decision": body.decision, "tally": tally}
 
