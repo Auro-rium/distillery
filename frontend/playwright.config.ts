@@ -43,7 +43,14 @@ export default defineConfig({
         name: `w${s.width}-${scheme}`,
         testMatch: "**/routes.e2e.ts",
         metadata: { width: s.width, scheme },
-        use: { viewport: s, colorScheme: scheme, reducedMotion: "reduce" as const, deviceScaleFactor: 1 },
+        use: {
+          viewport: s, colorScheme: scheme, reducedMotion: "reduce" as const, deviceScaleFactor: 1,
+          // The app defaults to dark regardless of the OS scheme; the light project seeds the stored choice.
+          storageState: {
+            cookies: [],
+            origins: [{ origin: BASE, localStorage: [{ name: "distillery.theme", value: scheme }] }],
+          },
+        },
       })),
     ),
     // Behaviour that does not depend on the viewport (API errors, truthfulness): run once.

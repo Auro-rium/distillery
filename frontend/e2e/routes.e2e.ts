@@ -27,6 +27,7 @@ for (const route of ROUTES) {
     test("page checks: clean console, no overflow, landmarks, label, focus ring; screenshot", async ({ page, watch }, info) => {
       await open(page, route.path);
       const { width, scheme } = info.project.metadata as { width: number; scheme: string };
+      expect(await page.evaluate(() => document.documentElement.dataset.theme), "applied theme matches the project scheme").toBe(scheme);
       fs.mkdirSync(SHOTS, { recursive: true });
       await page.screenshot({ path: path.join(SHOTS, `${route.name}-${width}-${scheme}.png`), fullPage: true, animations: "disabled" });
 

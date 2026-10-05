@@ -44,11 +44,11 @@
 .treev .tnode:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
 .tn-name { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 600 15px/1.25 var(--font-body); overflow-wrap: normal; }
 .tn-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
-.tn-dev { font: 500 1rem/1.2 var(--font-display); font-variant-numeric: tabular-nums; white-space: nowrap; overflow-wrap: normal; }
+.tn-dev { font: 500 1rem/1.2 var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; overflow-wrap: normal; }
 .tn-k { font: 500 .68rem/1 var(--font-mono); letter-spacing: .1em; text-transform: uppercase; color: var(--ink-2); }
 .tn-tag, .tn-flag { flex: none; padding: 3px 7px; border-radius: var(--radius-pill); background: var(--surface-2); color: var(--ink-2); font: 500 .7rem/1 var(--font-mono); white-space: nowrap; overflow-wrap: normal; }
 .treev .tnode.sel .tn-tag { background: var(--surface); }
-.tn-flag { margin-left: auto; background: var(--ok-bg); color: var(--ok); text-transform: uppercase; letter-spacing: .06em; }
+.tn-flag { margin-left: auto; border: 1px solid currentColor; background: var(--ok-bg); color: var(--ok); text-transform: uppercase; letter-spacing: .06em; }
 .treev .absent { font-style: italic; color: var(--ink-2); font-size: .82rem; }
 .tv-hint { margin: var(--space-3) 0 0; font-size: .8rem; }
 .tv-hint .hint-touch { display: none; }
@@ -65,7 +65,7 @@
 .nd-list { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: var(--space-3) var(--space-4); margin: 0; }
 .nd-list dt { padding-top: 3px; font-size: .86rem; color: var(--ink-2); }
 .nd-list dd { margin: 0; }
-.nd-big { font: 500 var(--step-2)/1.1 var(--font-display); font-variant-numeric: tabular-nums; }
+.nd-big { font: 500 var(--step-2)/1.1 var(--font-mono); font-variant-numeric: tabular-nums; }
 .nd-id { overflow-wrap: anywhere; }
 .nd-id .absent { font-family: var(--font-body); }
 .chips { list-style: none; display: flex; flex-wrap: wrap; gap: 6px; margin: var(--space-2) 0 0; padding: 0; }

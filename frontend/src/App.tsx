@@ -46,7 +46,7 @@ function RouteStage() {
         <Route path="/new" element={<NewRun />} />
         <Route path="/playground" element={<Playground />} />
         <Route path="/humanset" element={<Humanset />} />
-        <Route path="*" element={<EmptyState title="Page not found"><Link to="/">Back to Replay</Link></EmptyState>} />
+        <Route path="*" element={<EmptyState title="Page not found"><Link to="/">Back to Mission</Link></EmptyState>} />
       </Routes>
     </div>
   );
