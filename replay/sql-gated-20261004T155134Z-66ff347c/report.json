@@ -1,0 +1,1235 @@
+{
+  "candidate_round": 1,
+  "candidate_selection": "best DEV accuracy across rounds (ties: earliest); held-out is scored once, for that candidate only",
+  "config": {
+    "gate_thresholds": {
+      "bootstrap_resamples": 10000,
+      "mcnemar_alpha": 0.05,
+      "ratio_lower_bound_min": 0.85,
+      "seed": 1234
+    },
+    "model_ids": {
+      "planner": "nvidia/Nemotron-3-Ultra-550b-a55b",
+      "student": "Qwen/Qwen3-1.7B",
+      "teacher": "nvidia/nemotron-3-super-120b-a12b",
+      "triage": "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B"
+    },
+    "pipeline": {
+      "allow_packing": false,
+      "candidates_per_task": 1,
+      "chars_per_token": 3,
+      "chunk": 50,
+      "concurrency": 16,
+      "db_seed": 0,
+      "dev_target_acc": 0.9,
+      "dry_run": false,
+      "est_output_tokens": 256,
+      "finetune_estimate_usd": null,
+      "headroom_max_base_acc": 0.8,
+      "hyperparameters": {
+        "batch_size": 4,
+        "context_length": 8192,
+        "learning_rate": 0.0001,
+        "lora": true,
+        "lora_alpha": 32,
+        "lora_dropout": 0.0,
+        "lora_r": 16,
+        "max_grad_norm": 1.0,
+        "n_epochs": 3,
+        "packing": false,
+        "warmup_ratio": 0.0,
+        "weight_decay": 0.0
+      },
+      "max_rounds": 1,
+      "min_planned_steps": 300,
+      "oversample": 1.1,
+      "pack": "sql",
+      "paraphrase_seed": 1234,
+      "paraphrases_per_task": 3,
+      "poll_interval_s": 15.0,
+      "poll_timeout_s": 21600.0,
+      "round_extra_tasks": null,
+      "scale": {
+        "dev": 150,
+        "heldout": 300,
+        "name": "gated",
+        "stress": 100,
+        "train": 650
+      },
+      "seed": 1234,
+      "selftest_corruptions": 4,
+      "selftest_sample": 50,
+      "spot_check_n": 30,
+      "student_batch_size": 2,
+      "student_concurrency": 10,
+      "student_max_new_tokens": 160,
+      "student_sandbox_image": null,
+      "student_serving": "sandbox_cpu",
+      "train_row_cap": 2000,
+      "triage_sample": 50
+    },
+    "prices": {
+      "Qwen/Qwen3-0.6B": {
+        "date": "2026-09-30",
+        "input_per_mtok": 0.0,
+        "output_per_mtok": 0.0,
+        "source": "ASSUMED UPPER BOUND for budget guard, NOT the console price"
+      },
+      "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B": {
+        "date": "2026-10-01",
+        "input_per_mtok": 0.06,
+        "output_per_mtok": 0.24,
+        "source": "Token Factory GET /v1/models?verbose=true pricing field (the API's own price, per-token x 1e6)"
+      },
+      "nvidia/Nemotron-3-Ultra-550b-a55b": {
+        "date": "2026-10-01",
+        "input_per_mtok": 1.0,
+        "output_per_mtok": 3.0,
+        "source": "Token Factory GET /v1/models?verbose=true pricing field (the API's own price, per-token x 1e6)"
+      },
+      "nvidia/nemotron-3-super-120b-a12b": {
+        "date": "2026-10-01",
+        "input_per_mtok": 0.3,
+        "output_per_mtok": 0.9,
+        "source": "Token Factory GET /v1/models?verbose=true pricing field (the API's own price, per-token x 1e6)"
+      }
+    },
+    "seeds": {
+      "bootstrap_seed": 1234,
+      "db_seed": 0,
+      "task_seed": 1234
+    }
+  },
+  "cost": {
+    "basis": "ESTIMATES, not billed amounts. LLM lines: measured token counts x the configured price table (price source: Token Factory GET /v1/models?verbose=true pricing field (the API's own price, per-token x 1e6)); fine-tune: billed-basis (measured tokens x console price); sandbox compute: billed-basis (measured seconds x console price)",
+    "cost_per_1k_tasks": {
+      "student": {
+        "basis": "billed-basis (measured seconds x console price)",
+        "samples": 550,
+        "sandbox_seconds": 17282.73,
+        "usd_per_1k_tasks": 0.0
+      },
+      "teacher": {
+        "basis": "measured tokens x configured prices, from the teacher pass over gate + stress items",
+        "held_out_tasks": 300,
+        "input_tokens": 384154,
+        "items_scored": 400,
+        "items_scored_breakdown": {
+          "gate": 300,
+          "stress": 100
+        },
+        "output_tokens": 153941,
+        "usd": 0.2537931,
+        "usd_per_1k_tasks": 0.63448275,
+        "usd_per_1k_tasks_basis": "teacher usd / 400 items scored (gate 300, stress 100)"
+      }
+    },
+    "finetune_lines": [
+      {
+        "basis": "billed-basis (measured tokens x console price)",
+        "kind": "finetune",
+        "model": "Qwen/Qwen3-1.7B",
+        "units": 5842530,
+        "usd": 2.337012
+      }
+    ],
+    "finetune_usd": "$2.3370 [billed-basis (measured tokens x console price)]; rounds run: 1",
+    "llm_by_model": {
+      "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B": {
+        "calls": 684,
+        "input_tokens": 126538,
+        "output_tokens": 753151,
+        "usd": 0.18834852
+      },
+      "nvidia/nemotron-3-super-120b-a12b": {
+        "calls": 2638,
+        "input_tokens": 2537916,
+        "output_tokens": 1079412,
+        "usd": 1.7328456
+      }
+    },
+    "price_sources": {
+      "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B": "Token Factory GET /v1/models?verbose=true pricing field (the API's own price, per-token x 1e6)",
+      "nvidia/nemotron-3-super-120b-a12b": "Token Factory GET /v1/models?verbose=true pricing field (the API's own price, per-token x 1e6)"
+    },
+    "run_cap_usd": 8.0,
+    "run_total_usd": 4.258206120000003,
+    "sandbox_lines": [
+      {
+        "basis": "billed-basis (measured seconds x console price)",
+        "kind": "sandbox",
+        "model": "sandbox:base",
+        "units": 10727.09,
+        "usd": 0.0
+      },
+      {
+        "basis": "billed-basis (measured seconds x console price)",
+        "kind": "sandbox",
+        "model": "sandbox:student",
+        "units": 4982.53,
+        "usd": 0.0
+      },
+      {
+        "basis": "billed-basis (measured seconds x console price)",
+        "kind": "sandbox",
+        "model": "sandbox:student",
+        "units": 12300.2,
+        "usd": 0.0
+      },
+      {
+        "basis": "billed-basis (measured seconds x console price)",
+        "kind": "sandbox",
+        "model": "sandbox:base",
+        "units": 23664.62,
+        "usd": 0.0
+      }
+    ]
+  },
+  "counters": {
+    "dev_eval_r1": {
+      "dev_failures": 14,
+      "dev_n": 150,
+      "dev_unparseable": 0,
+      "student_cap_hits": 3,
+      "student_generation_errors": 0
+    },
+    "final_eval": {
+      "base_cap_hits": 12,
+      "base_generation_errors": 0,
+      "heldout_n": 300,
+      "student_cap_hits": 2,
+      "student_generation_errors": 0,
+      "unparseable_base": 0,
+      "unparseable_student": 0,
+      "unparseable_teacher": 0
+    },
+    "finetune_r1": {
+      "orphan_cancel_errors": 0,
+      "orphan_jobs_cancelled": 0,
+      "train_rows": 1981
+    },
+    "gold_crosscheck": {
+      "accepted": 1210,
+      "checked": 1210,
+      "discarded": 0,
+      "stress_accepted": 111,
+      "stress_checked": 111
+    },
+    "headroom": {
+      "base_cap_hits": 5,
+      "base_generation_errors": 0,
+      "base_unparseable": 0,
+      "dev_n": 150
+    },
+    "paraphrase": {
+      "discard_duplicate_of_original": 159,
+      "discard_duplicate_of_paraphrase": 2,
+      "discard_empty": 3,
+      "discard_over_limit": 16,
+      "failed_verification": 190,
+      "final_train_rows": 1981,
+      "generated": 1768,
+      "questions_failed": 0,
+      "questions_paraphrased": 583,
+      "rows_added": 1398,
+      "verified": 1398
+    },
+    "questions": {
+      "attempts": 1678,
+      "dropped_duplicate": 261,
+      "dropped_duplicate_question": 3,
+      "dropped_empty": 204,
+      "dropped_error": 0,
+      "dropped_skeleton_cap": 0,
+      "generated": 1210,
+      "requested": 1210,
+      "shortfall": 0,
+      "stress_generated": 111,
+      "stress_requested": 111
+    },
+    "schema": {},
+    "split": {
+      "dev": 150,
+      "heldout": 300,
+      "heldout_questions_seen_in_train": 0,
+      "heldout_skeleton_in_train": 284,
+      "input_tasks": 1210,
+      "spot_check_items": 30,
+      "stress": 100,
+      "stress_input_tasks": 111,
+      "train": 650,
+      "train_distinct_skeletons": 136,
+      "train_pool_trimmed": 100
+    },
+    "teacher_data": {
+      "candidates": 650,
+      "dropped": 67,
+      "exec_error": 18,
+      "gold_error": 0,
+      "result_mismatch": 49,
+      "tasks": 650,
+      "triage_calls": 50,
+      "triage_errors": 0,
+      "triage_flagged_dirty_format": 0,
+      "verified": 583
+    },
+    "verifier_selftest": {
+      "corruptions_tested": 199,
+      "tasks_sampled": 50,
+      "tasks_without_corruptions": 0
+    }
+  },
+  "data": {
+    "dev_tasks": 150,
+    "heldout_class_counts": {
+      "in_distribution": 300
+    },
+    "heldout_families": [],
+    "heldout_kind": "in-distribution gate set (every family also in train)",
+    "heldout_sealed_sha256": "cf92bf60e3c734f63035273395e629f3dafe0afab8397c4b01e2976f683dd878",
+    "heldout_skeleton_overlap_rate": 0.9467,
+    "heldout_tasks": 300,
+    "human": null,
+    "spot_check_file": "spot_check.json",
+    "stress_families": [
+      "date_math",
+      "set_ops"
+    ],
+    "stress_sealed_sha256": "1ba7bcde6e2db4f29da897ab88c4a7f200eb6c96d3d3610da9ad3c1d2a172896",
+    "stress_tasks": 100,
+    "teacher_verified_rows_round1": 583,
+    "train_distinct_skeletons": 136,
+    "train_tasks": 650
+  },
+  "decision": "PROMOTE",
+  "decision_human": null,
+  "decision_reasons": [
+    "ratio lower bound 0.993 >= 0.85 (point 1.026)",
+    "McNemar exact p=0.0000 < 0.05 (student-only 202, base-only 2)"
+  ],
+  "dry_run": false,
+  "evaluation": {
+    "accuracy": {
+      "base": 0.25666666666666665,
+      "student": 0.9233333333333333,
+      "teacher": 0.9
+    },
+    "accuracy_by_class": {
+      "in_distribution": {
+        "base": 0.25666666666666665,
+        "student": 0.9233333333333333,
+        "teacher": 0.9
+      }
+    },
+    "artifact": {
+      "adapter_sha256": "4bebc793ba4158532adc33ca5085f37003aad46b679db9085cc89864fa8f553f",
+      "checkpoint_id": "ftckpt_c772015b-461f-4514-97af-d50aee97f62c",
+      "job_id": "ftjob-4676999d7acd4b058e776abc1170373f",
+      "trained_base_model": "Qwen/Qwen3-1.7B",
+      "trained_checkpoint_name": "ft:Qwen/Qwen3-1.7B-2026-10-04:org_placeholder:distillery-sql-gated-20261004T155134Z-66ff347c-r1:IDPlaceholder:ckpt-step-1488"
+    },
+    "class_counts": {
+      "in_distribution": 300
+    },
+    "examples": [
+      {
+        "base_ok": false,
+        "base_sql": "SELECT \n    method, \n    COUNT(*) AS succeeded, \n    COUNT(CASE WHEN status = 'failed' THEN 1 END) AS failed, \n    COUNT(CASE WHEN status = 'refunded' THEN 1 END) AS refunded \nFROM \n    payments \nWHERE \n    paid_at LIKE '2023-%' \n    AND currency = 'EUR' \n    AND amount_cents > 600 \nGROUP BY \n    method",
+        "family": "conditional",
+        "gold_sql": "SELECT p.method, SUM(p.status = 'succeeded'), SUM(p.status = 'failed'), SUM(p.status = 'refunded') FROM payments p JOIN invoices i ON i.invoice_id = p.invoice_id WHERE i.currency = 'EUR' AND strftime('%Y', p.paid_at) = '2023' AND p.amount_cents > 600 GROUP BY p.method",
+        "heldout_class": "in_distribution",
+        "kind": "fixed",
+        "question": "Per payment method: counts of succeeded, failed and refunded payments in 2023 with amount above 600 cents on EUR invoices.",
+        "student_ok": true,
+        "student_sql": "SELECT\n    p.method,\n    SUM(CASE WHEN p.status = 'succeeded' THEN 1 ELSE 0 END) AS succeeded_count,\n    SUM(CASE WHEN p.status = 'failed'   THEN 1 ELSE 0 END) AS failed_count,\n    SUM(CASE WHEN p.status = 'refunded' THEN 1 ELSE 0 END) AS refunded_count\nFROM payments p\nJOIN invoices i ON p.invoice_id = i.invoice_id\nWHERE i.currency = 'EUR'\n  AND p.amount_cents > 600\n  AND strftime('%Y', p.paid_at) = '2023'\nGROUP BY p.method",
+        "task_id": "sql-5e6cfb27835e",
+        "teacher_ok": true,
+        "teacher_sql": "SELECT\n    p.method,\n    SUM(CASE WHEN p.status = 'succeeded' THEN 1 ELSE 0 END) AS succeeded_count,\n    SUM(CASE WHEN p.status = 'failed'   THEN 1 ELSE 0 END) AS failed_count,\n    SUM(CASE WHEN p.status = 'refunded' THEN 1 ELSE 0 END) AS refunded_count\nFROM payments p\nJOIN invoices i ON p.invoice_id = i.invoice_id\nWHERE strftime('%Y', p.paid_at) = '2023'\n  AND i.currency = 'EUR'\n  AND p.amount_cents > 600\nGROUP BY p.method"
+      },
+      {
+        "base_ok": false,
+        "base_sql": "SELECT a.account_id, a.country\nFROM accounts a\nWHERE a.status = 'trial' AND a.industry = 'media'\nORDER BY COUNT(a.account_id) OVER (ORDER BY a.account_id)\nLIMIT 1\nOFFSET 25\nFETCH NEXT 6 ROWS ONLY",
+        "family": "window",
+        "gold_sql": "SELECT account_id, country FROM (SELECT a.account_id, a.country, NTILE(4) OVER (PARTITION BY a.country ORDER BY COUNT(u.user_id) DESC, a.account_id) AS b FROM accounts a LEFT JOIN users u ON u.account_id = a.account_id WHERE a.status = 'trial' AND a.industry = 'media' GROUP BY a.account_id) WHERE b = 1",
+        "heldout_class": "in_distribution",
+        "kind": "fixed",
+        "question": "Among trial media accounts, split accounts within each country into 4 equal-sized buckets by user count (most users first, ties by account_id) using NTILE; return account_id and country for those in bucket 1.",
+        "student_ok": true,
+        "student_sql": "WITH filtered AS (\n    SELECT a.account_id,\n           a.country,\n           COUNT(u.user_id) AS user_cnt\n    FROM accounts a\n    LEFT JOIN users u\n           ON u.account_id = a.account_id\n          AND u.deleted_at IS NULL\n    WHERE a.status = 'trial'\n      AND a.industry = 'media'\n    GROUP BY a.account_id, a.country\n)\nSELECT account_id,\n       country\nFROM (\n    SELECT *,\n           NTILE(4) OVER (PARTITION BY country ORDER BY user_cnt DESC, account_id ASC) AS bucket\n    FROM filtered\n) sub\nWHERE bucket = 1",
+        "task_id": "sql-3b4e0b62b23c",
+        "teacher_ok": true,
+        "teacher_sql": "WITH acct_users AS (\n  SELECT a.account_id,\n         a.country,\n         COUNT(u.user_id) AS user_cnt\n  FROM accounts a\n  JOIN users u ON u.account_id = a.account_id\n  WHERE a.status = 'trial'\n    AND a.industry = 'media'\n  GROUP BY a.account_id, a.country\n)\nSELECT account_id, country\nFROM (\n  SELECT account_id,\n         country,\n         NTILE(4) OVER (PARTITION BY country ORDER BY user_cnt DESC, account_id ASC) AS bucket\n  FROM acct_users\n)\nWHERE bucket = 1"
+      },
+      {
+        "base_ok": false,
+        "base_sql": "SELECT \n  ROUND((p.monthly_price_cents * s.seats * (1 - s.discount_pct / 100)), 2) AS estimated_revenue\nFROM \n  plans p\nJOIN \n  subscriptions s ON p.plan_id = s.plan_id\nJOIN \n  accounts a ON s.account_id = a.account_id\nWHERE \n  a.country = 'CA'\n  AND a.created_at >= '2024-01-01'\n  AND s.status = 'active'",
+        "family": "null_handling",
+        "gold_sql": "SELECT p.name, ROUND(SUM(s.seats * p.monthly_price_cents * (1 - COALESCE(s.discount_pct, 0) / 100.0)), 2) FROM subscriptions s JOIN plans p ON p.plan_id = s.plan_id JOIN accounts a ON a.account_id = s.account_id WHERE s.status = 'active' AND a.country = 'CA' AND s.start_date >= '2024-01-01' GROUP BY p.name",
+        "heldout_class": "in_distribution",
+        "kind": "fixed",
+        "question": "Estimated monthly revenue in cents per plan name: seats * monthly price * (1 - discount/100), treating a missing discount as 0, for active subscriptions of CA accounts started in or after 2024. Round each total to 2 decimals.",
+        "student_ok": true,
+        "student_sql": "SELECT pl.name AS plan_name,\n       ROUND(SUM(s.seats * pl.monthly_price_cents * (1 - COALESCE(s.discount_pct,0)/100)), 2) AS estimated_monthly_revenue_cents\nFROM subscriptions s\nJOIN accounts a ON s.account_id = a.account_id\nJOIN plans pl ON s.plan_id = pl.plan_id\nWHERE a.country = 'CA'\n  AND s.status = 'active'\n  AND s.start_date >= '2024-01-01'\nGROUP BY pl.name",
+        "task_id": "sql-e5c7b6423b46",
+        "teacher_ok": true,
+        "teacher_sql": "SELECT p.name AS plan_name,\n       ROUND(SUM(s.seats * p.monthly_price_cents * (1 - COALESCE(s.discount_pct,0)/100)),2) AS estimated_monthly_revenue_cents\nFROM subscriptions s\nJOIN accounts a ON s.account_id = a.account_id\nJOIN plans p ON s.plan_id = p.plan_id\nWHERE a.country = 'CA'\n  AND s.status = 'active'\n  AND s.start_date >= '2024-01-01'\nGROUP BY p.name"
+      },
+      {
+        "base_ok": false,
+        "base_sql": "SELECT a.account_id, t.ticket_id, t.opened_at\nFROM accounts a\nJOIN support_tickets t ON a.account_id = t.account_id\nWHERE t.priority = 'high'\nAND t.opened_at > '2024-02-08'\nORDER BY a.account_id, t.ticket_id\nLIMIT 1",
+        "family": "window",
+        "gold_sql": "SELECT account_id, ticket_id, opened_at FROM (SELECT account_id, ticket_id, opened_at, ROW_NUMBER() OVER (PARTITION BY account_id ORDER BY opened_at, ticket_id) AS rn FROM support_tickets WHERE category = 'bug' AND priority = 'high' AND opened_at > '2024-02-08') WHERE rn = 1",
+        "heldout_class": "in_distribution",
+        "kind": "fixed",
+        "question": "Return the first high-priority bug ticket per account among tickets opened after 2024-02-08 (break ties with the smaller ticket_id): account_id, ticket_id, opened_at.",
+        "student_ok": true,
+        "student_sql": "WITH filtered AS (\n    SELECT account_id, ticket_id, opened_at\n    FROM support_tickets\n    WHERE priority = 'high'\n      AND category = 'bug'\n      AND opened_at > '2024-02-08'\n)\nSELECT account_id, ticket_id, opened_at\nFROM (\n    SELECT *,\n           ROW_NUMBER() OVER (PARTITION BY account_id ORDER BY opened_at ASC, ticket_id ASC) AS rn\n    FROM filtered\n)\nWHERE rn = 1",
+        "task_id": "sql-cf543d8e230d",
+        "teacher_ok": true,
+        "teacher_sql": "WITH filtered AS (\n    SELECT *\n    FROM support_tickets\n    WHERE priority = 'high'\n      AND category = 'bug'\n      AND opened_at > '2024-02-08'\n)\nSELECT account_id,\n       ticket_id,\n       opened_at\nFROM (\n    SELECT *,\n           ROW_NUMBER() OVER (PARTITION BY account_id\n                              ORDER BY opened_at ASC, ticket_id ASC) AS rn\n    FROM filtered\n)\nWHERE rn = 1"
+      },
+      {
+        "base_ok": false,
+        "base_sql": "SELECT invoice_id\nFROM invoices\nWHERE status = 'paid'\n  AND currency = 'USD'\n  AND issued_date BETWEEN '2024-03-19' AND '2024-11-19'\n  AND amount_cents > (\n    SELECT AVG(amount_cents)\n    FROM invoices\n    WHERE account_id = invoices.account_id\n      AND currency = 'USD'\n      AND issued_date BETWEEN '2024-03-19' AND '2024-11-19'\n  )",
+        "family": "subquery_cte",
+        "gold_sql": "SELECT i.invoice_id FROM invoices i WHERE i.status = 'paid' AND i.currency = 'USD' AND i.issued_date BETWEEN '2024-03-19' AND '2024-11-19' AND i.amount_cents > (SELECT AVG(j.amount_cents) FROM invoices j WHERE j.account_id = i.account_id AND j.currency = 'USD')",
+        "heldout_class": "in_distribution",
+        "kind": "fixed",
+        "question": "List invoice_ids of paid invoices in USD, issued 2024-03-19 to 2024-11-19, whose amount_cents exceeds the average amount_cents over that account's USD invoices.",
+        "student_ok": true,
+        "student_sql": "SELECT i.invoice_id\nFROM invoices i\nWHERE i.status = 'paid'\n  AND i.currency = 'USD'\n  AND i.issued_date BETWEEN '2024-03-19' AND '2024-11-19'\n  AND i.amount_cents IS NOT NULL\n  AND i.amount_cents > (\n    SELECT AVG(i2.amount_cents)\n    FROM invoices i2\n    WHERE i2.account_id = i.account_id\n      AND i2.currency = 'USD'\n      AND i2.amount_cents IS NOT NULL\n  )",
+        "task_id": "sql-07916cc27a6a",
+        "teacher_ok": true,
+        "teacher_sql": "WITH usd_inv AS (\n  SELECT invoice_id, account_id, amount_cents\n  FROM invoices\n  WHERE UPPER(currency) = 'USD'\n    AND status = 'paid'\n    AND issued_date BETWEEN '2024-03-19' AND '2024-11-19'\n    AND amount_cents IS NOT NULL\n),\naccount_avg AS (\n  SELECT account_id, AVG(CAST(amount_cents AS REAL)) AS avg_amount\n  FROM invoices\n  WHERE UPPER(currency) = 'USD'\n    AND amount_cents IS NOT NULL\n  GROUP BY account_id\n)\nSELECT ui.invoice_id\nFROM usd_inv ui\nJOIN account_avg aa ON ui.account_id = aa.account_id\nWHERE ui.amount_cents > aa.avg_amount"
+      },
+      {
+        "base_ok": false,
+        "base_sql": "SELECT DISTINCT email FROM users WHERE role = 'viewer' AND EXISTS (SELECT 1 FROM support_tickets WHERE ticket_id = user_id AND priority = 'normal' AND category = 'feature_request')",
+        "family": "join",
+        "gold_sql": "SELECT DISTINCT u.email FROM users u JOIN support_tickets t ON t.user_id = u.user_id WHERE t.priority = 'normal' AND t.category = 'feature_request' AND u.role = 'viewer'",
+        "heldout_class": "in_distribution",
+        "kind": "fixed",
+        "question": "List the distinct emails of viewer users who submitted a feature_request ticket with priority normal.",
+        "student_ok": true,
+        "student_sql": "SELECT DISTINCT u.email\nFROM users u\nJOIN support_tickets t ON t.user_id = u.user_id\nWHERE u.role = 'viewer'\n  AND t.category = 'feature_request'\n  AND t.priority = 'normal'",
+        "task_id": "sql-769d379a2b2c",
+        "teacher_ok": true,
+        "teacher_sql": "SELECT DISTINCT u.email\nFROM users u\nJOIN support_tickets t ON t.user_id = u.user_id\nWHERE u.role = 'viewer'\n  AND t.category = 'feature_request'\n  AND t.priority = 'normal'"
+      },
+      {
+        "base_ok": false,
+        "base_sql": "SELECT a.name, s.seats\nFROM accounts a\nJOIN subscriptions s ON a.account_id = s.account_id\nWHERE s.tier = 'enterprise'\n  AND s.seats > 30\n  AND a.status = 'trial'",
+        "family": "join",
+        "gold_sql": "SELECT a.name, s.seats FROM subscriptions s JOIN plans p ON p.plan_id = s.plan_id JOIN accounts a ON a.account_id = s.account_id WHERE p.tier = 'enterprise' AND s.seats > 30 AND a.status = 'trial'",
+        "heldout_class": "in_distribution",
+        "kind": "fixed",
+        "question": "Show account name and seats for every subscription on a enterprise-tier plan with more than 30 seats, for trial accounts.",
+        "student_ok": true,
+        "student_sql": "SELECT a.name AS account_name, s.seats\nFROM subscriptions s\nJOIN accounts a ON s.account_id = a.account_id\nJOIN plans p ON s.plan_id = p.plan_id\nWHERE p.tier = 'enterprise'\n  AND s.seats > 30\n  AND a.status = 'trial'",
+        "task_id": "sql-402c8d9951a3",
+        "teacher_ok": false,
+        "teacher_sql": "SELECT a.name AS account_name, s.seats\nFROM accounts a\nJOIN subscriptions s ON s.account_id = a.account_id\nJOIN plans p ON p.plan_id = s.plan_id\nWHERE a.status = 'trial'\n  AND p.tier = 'enterprise'\n  AND s.seats > 30\n  AND a.deleted_at IS NULL"
+      },
+      {
+        "base_ok": false,
+        "base_sql": "SELECT method, \n       COUNT(CASE WHEN status = 'succeeded' THEN 1 END) AS succeeded, \n       COUNT(CASE WHEN status = 'failed' THEN 1 END) AS failed, \n       COUNT(CASE WHEN status = 'refunded' THEN 1 END) AS refunded \nFROM payments \nWHERE currency = 'EUR' \n  AND issued_date BETWEEN '2023-01-01' AND '2023-12-31' \nGROUP BY method",
+        "family": "conditional",
+        "gold_sql": "SELECT p.method, SUM(p.status = 'succeeded'), SUM(p.status = 'failed'), SUM(p.status = 'refunded') FROM payments p JOIN invoices i ON i.invoice_id = p.invoice_id WHERE i.currency = 'EUR' AND strftime('%Y', p.paid_at) = '2023' AND p.amount_cents > 1400 GROUP BY p.method",
+        "heldout_class": "in_distribution",
+        "kind": "fixed",
+        "question": "For EUR invoices and payments made in 2023 over 1400 cents, give per method the number of succeeded, failed and refunded payments.",
+        "student_ok": true,
+        "student_sql": "SELECT\n    p.method,\n    SUM(CASE WHEN p.status = 'succeeded' THEN 1 ELSE 0 END) AS succeeded,\n    SUM(CASE WHEN p.status = 'failed'   THEN 1 ELSE 0 END) AS failed,\n    SUM(CASE WHEN p.status = 'refunded' THEN 1 ELSE 0 END) AS refunded\nFROM payments p\nJOIN invoices i ON p.invoice_id = i.invoice_id\nWHERE i.currency = 'EUR'\n  AND strftime('%Y', p.paid_at) = '2023'\n  AND p.amount_cents > 1400\nGROUP BY p.method",
+        "task_id": "sql-1b088a697c88",
+        "teacher_ok": true,
+        "teacher_sql": "SELECT\n    p.method,\n    SUM(CASE WHEN p.status = 'succeeded' THEN 1 ELSE 0 END) AS succeeded,\n    SUM(CASE WHEN p.status = 'failed'   THEN 1 ELSE 0 END) AS failed,\n    SUM(CASE WHEN p.status = 'refunded' THEN 1 ELSE 0 END) AS refunded\nFROM payments p\nJOIN invoices i ON p.invoice_id = i.invoice_id\nWHERE i.currency = 'EUR'\n  AND p.paid_at >= '2023-01-01' AND p.paid_at < '2024-01-01'\n  AND p.amount_cents > 1400\nGROUP BY p.method\nORDER BY p.method"
+      },
+      {
+        "base_ok": false,
+        "base_sql": "SELECT ticket_id, opened_at\nFROM support_tickets\nORDER BY opened_at DESC, ticket_id DESC\nLIMIT 8",
+        "family": "top_n",
+        "gold_sql": "SELECT ticket_id, opened_at FROM support_tickets WHERE category = 'feature_request' ORDER BY opened_at DESC, ticket_id DESC LIMIT 8",
+        "heldout_class": "in_distribution",
+        "kind": "fixed",
+        "question": "Show the 8 most recently opened feature_request tickets, newest first (ties by higher ticket_id). Return ticket_id and opened_at.",
+        "student_ok": true,
+        "student_sql": "SELECT ticket_id, opened_at\nFROM support_tickets\nWHERE category = 'feature_request'\nORDER BY opened_at DESC, ticket_id DESC\nLIMIT 8",
+        "task_id": "sql-eef180cf07a8",
+        "teacher_ok": true,
+        "teacher_sql": "SELECT ticket_id, opened_at\nFROM support_tickets\nWHERE category = 'feature_request'\nORDER BY opened_at DESC, ticket_id DESC\nLIMIT 8"
+      },
+      {
+        "base_ok": false,
+        "base_sql": "SELECT \n  p.tier, \n  COUNT(*) AS active_subscriptions,\n  CASE \n    WHEN p.seat_limit <= 3 THEN 'small'\n    WHEN p.seat_limit <= 16 THEN 'mid'\n    ELSE 'large'\n  END AS size_label\nFROM \n  plans p\nJOIN \n  subscriptions s ON p.plan_id = s.plan_id\nWHERE \n  s.status = 'active'\nGROUP BY \n  p.tier, \n  CASE \n    WHEN p.seat_limit <= 3 THEN 'small'\n    WHEN p.seat_limit <= 16 THEN 'mid'\n    ELSE 'large'\n  END",
+        "family": "conditional",
+        "gold_sql": "SELECT p.tier, CASE WHEN s.seats <= 3 THEN 'small' WHEN s.seats <= 16 THEN 'mid' ELSE 'large' END AS size, COUNT(*) FROM subscriptions s JOIN plans p ON p.plan_id = s.plan_id WHERE s.status = 'active' GROUP BY p.tier, size",
+        "heldout_class": "in_distribution",
+        "kind": "fixed",
+        "question": "Count active subscriptions per plan tier and size label, where size is small if seats <= 3, mid if seats <= 16, else large.",
+        "student_ok": true,
+        "student_sql": "SELECT p.tier,\n       CASE\n         WHEN s.seats <= 3 THEN 'small'\n         WHEN s.seats <= 16 THEN 'mid'\n         ELSE 'large'\n       END AS size_label,\n       COUNT(*) AS subscription_count\nFROM subscriptions s\nJOIN plans p ON s.plan_id = p.plan_id\nWHERE s.status = 'active'\nGROUP BY p.tier, size_label\nORDER BY p.tier, size_label",
+        "task_id": "sql-252ab2a2d03a",
+        "teacher_ok": true,
+        "teacher_sql": "WITH sub AS (\n    SELECT p.tier,\n           CASE\n               WHEN s.seats <= 3 THEN 'small'\n               WHEN s.seats <= 16 THEN 'mid'\n               ELSE 'large'\n           END AS size_label\n    FROM subscriptions s\n    JOIN plans p ON s.plan_id = p.plan_id\n    WHERE s.status = 'active'\n)\nSELECT tier,\n       size_label,\n       COUNT(*) AS subscription_count\nFROM sub\nGROUP BY tier, size_label\nORDER BY tier, size_label"
+      },
+      {
+        "base_ok": false,
+        "base_sql": "SELECT category, COUNT(*) AS total_tickets, SUM(CASE WHEN user_id IS NULL THEN 1 ELSE 0 END) AS no_user_tickets\nFROM support_tickets\nWHERE opened_at BETWEEN '2023-04-03' AND '2023-07-10'\nGROUP BY category",
+        "family": "null_handling",
+        "gold_sql": "SELECT category, SUM(CASE WHEN user_id IS NULL THEN 1 ELSE 0 END), COUNT(*) FROM support_tickets WHERE priority = 'low' AND opened_at >= '2023-04-03' AND opened_at < '2023-07-10' GROUP BY category",
+        "heldout_class": "in_distribution",
+        "kind": "fixed",
+        "question": "Per ticket category among low tickets opened 2023-04-03 to 2023-07-10, give the number with no user_id next to the total number of tickets.",
+        "student_ok": true,
+        "student_sql": "SELECT\n    category,\n    SUM(CASE WHEN user_id IS NULL THEN 1 ELSE 0 END) AS no_user_id_count,\n    COUNT(*) AS total_tickets\nFROM support_tickets\nWHERE priority = 'low'\n  AND opened_at >= '2023-04-03'\n  AND opened_at <= '2023-07-10'\nGROUP BY category\nORDER BY category",
+        "task_id": "sql-4d315e2bee04",
+        "teacher_ok": true,
+        "teacher_sql": "SELECT\n    st.category,\n    SUM(CASE WHEN st.user_id IS NULL THEN 1 ELSE 0 END) AS no_user_id_count,\n    COUNT(*) AS total_tickets\nFROM support_tickets st\nWHERE st.priority = 'low'\n  AND date(st.opened_at) BETWEEN '2023-04-03' AND '2023-07-10'\nGROUP BY st.category"
+      },
+      {
+        "base_ok": false,
+        "base_sql": "SELECT users.user_id\nFROM users\nWHERE users.role = 'viewer'\nAND users.deleted_at IS NULL\nAND users.account_id IN (\n    SELECT accounts.account_id\n    FROM accounts\n    WHERE accounts.country = 'JP'\n    AND accounts.status = 'active'\n    AND accounts.parent_account_id IS NULL\n    AND accounts.deleted_at IS NULL\n) AND users.user_id NOT IN (\n    SELECT user_id\n    FROM support_tickets\n    WHERE user_id IS NOT NULL\n)",
+        "family": "anti_join",
+        "gold_sql": "SELECT u.user_id FROM users u JOIN accounts a ON a.account_id = u.account_id WHERE u.role = 'viewer' AND a.country = 'JP' AND u.deleted_at IS NULL AND NOT EXISTS (SELECT 1 FROM support_tickets t WHERE t.user_id = u.user_id)",
+        "heldout_class": "in_distribution",
+        "kind": "fixed",
+        "question": "List user_ids of viewer users who are not deleted from JP accounts that do not appear as the submitter of any ticket.",
+        "student_ok": true,
+        "student_sql": "SELECT u.user_id\nFROM users u\nJOIN accounts a ON u.account_id = a.account_id\nWHERE u.role = 'viewer'\n  AND u.deleted_at IS NULL\n  AND a.country = 'JP'\n  AND u.user_id NOT IN (\n    SELECT DISTINCT t.user_id\n    FROM support_tickets t\n    WHERE t.user_id IS NOT NULL\n  )",
+        "task_id": "sql-8180c4919c4b",
+        "teacher_ok": true,
+        "teacher_sql": "SELECT u.user_id\nFROM users u\nJOIN accounts a ON u.account_id = a.account_id\nWHERE u.role = 'viewer'\n  AND u.deleted_at IS NULL\n  AND a.country = 'JP'\n  AND NOT EXISTS (\n    SELECT 1 FROM support_tickets st WHERE st.user_id = u.user_id\n  )"
+      },
+      {
+        "base_ok": false,
+        "base_sql": "SELECT \n  p.tier, \n  COUNT(*) AS cancelled_subscriptions,\n  CASE \n    WHEN p.seat_limit <= 9 THEN 'small'\n    WHEN p.seat_limit <= 27 THEN 'mid'\n    ELSE 'large'\n  END AS size_label\nFROM \n  subscriptions s\nJOIN \n  plans p ON s.plan_id = p.plan_id\nWHERE \n  s.status = 'cancelled'\nGROUP BY \n  p.tier, \n  CASE \n    WHEN p.seat_limit <= 9 THEN 'small'\n    WHEN p.seat_limit <= 27 THEN 'mid'\n    ELSE 'large'\n  END",
+        "family": "conditional",
+        "gold_sql": "SELECT p.tier, CASE WHEN s.seats <= 9 THEN 'small' WHEN s.seats <= 27 THEN 'mid' ELSE 'large' END AS size, COUNT(*) FROM subscriptions s JOIN plans p ON p.plan_id = s.plan_id WHERE s.status = 'cancelled' GROUP BY p.tier, size",
+        "heldout_class": "in_distribution",
+        "kind": "fixed",
+        "question": "Count cancelled subscriptions per plan tier and size label, where size is small if seats <= 9, mid if seats <= 27, else large.",
+        "student_ok": true,
+        "student_sql": "SELECT p.tier,\n       CASE\n         WHEN s.seats <= 9 THEN 'small'\n         WHEN s.seats <= 27 THEN 'mid'\n         ELSE 'large'\n       END AS size_label,\n       COUNT(*) AS cancelled_subscriptions\nFROM subscriptions s\nJOIN plans p ON s.plan_id = p.plan_id\nWHERE s.status = 'cancelled'\nGROUP BY p.tier, size_label\nORDER BY p.tier, size_label",
+        "task_id": "sql-09230c80d904",
+        "teacher_ok": true,
+        "teacher_sql": "SELECT p.tier,\n       CASE WHEN s.seats <= 9 THEN 'small'\n            WHEN s.seats <= 27 THEN 'mid'\n            ELSE 'large'\n       END AS size_label,\n       COUNT(*) AS cancelled_subscriptions\nFROM subscriptions s\nJOIN plans p ON s.plan_id = p.plan_id\nWHERE s.status = 'cancelled'\nGROUP BY p.tier, size_label\nORDER BY p.tier, size_label"
+      },
+      {
+        "base_ok": false,
+        "base_sql": "SELECT a.name, SUM(i.amount_cents) AS total\nFROM accounts a\nJOIN invoices i ON a.account_id = i.account_id\nJOIN payments p ON i.invoice_id = p.invoice_id\nWHERE i.status = 'paid'\nGROUP BY a.account_id\nORDER BY total DESC\nLIMIT 3",
+        "family": "top_n",
+        "gold_sql": "SELECT a.name, SUM(p.amount_cents) AS total FROM payments p JOIN invoices i ON i.invoice_id = p.invoice_id JOIN accounts a ON a.account_id = i.account_id WHERE p.status = 'succeeded' GROUP BY a.account_id ORDER BY total DESC, a.account_id ASC LIMIT 3",
+        "heldout_class": "in_distribution",
+        "kind": "fixed",
+        "question": "Top 3 accounts by total succeeded payment cents, highest first (ties by lower account_id). Return account name and total.",
+        "student_ok": true,
+        "student_sql": "SELECT a.name AS account_name, SUM(p.amount_cents) AS total\nFROM payments p\nJOIN invoices i ON p.invoice_id = i.invoice_id\nJOIN accounts a ON i.account_id = a.account_id\nWHERE p.status = 'succeeded'\nGROUP BY a.account_id, a.name\nORDER BY total DESC, a.account_id ASC\nLIMIT 3",
+        "task_id": "sql-eb7d3dd16506",
+        "teacher_ok": true,
+        "teacher_sql": "SELECT a.name AS account_name,\n       SUM(p.amount_cents) AS total_payment_cents\nFROM payments p\nJOIN invoices i ON p.invoice_id = i.invoice_id\nJOIN accounts a ON i.account_id = a.account_id\nWHERE p.status = 'succeeded'\nGROUP BY a.account_id\nORDER BY total_payment_cents DESC, a.account_id ASC\nLIMIT 3"
+      },
+      {
+        "base_ok": false,
+        "base_sql": "SELECT invoice_id\nFROM invoices\nWHERE status = 'void'\n  AND currency = 'USD'\n  AND issued_date BETWEEN '2024-01-01' AND '2024-12-31'\n  AND subscription_id IS NULL\n  AND discount_pct IS NULL\n  OR discount_pct < 16",
+        "family": "null_handling",
+        "gold_sql": "SELECT i.invoice_id FROM invoices i JOIN subscriptions s ON s.subscription_id = i.subscription_id WHERE i.status = 'void' AND i.currency = 'USD' AND strftime('%Y', i.issued_date) = '2024' AND (s.discount_pct IS NULL OR s.discount_pct < 16)",
+        "heldout_class": "in_distribution",
+        "kind": "fixed",
+        "question": "Which void invoices in USD issued in 2024 belong to subscriptions with a NULL discount or discount_pct under 16? Return invoice_id.",
+        "student_ok": true,
+        "student_sql": "SELECT i.invoice_id\nFROM invoices i\nJOIN subscriptions s ON i.subscription_id = s.subscription_id\nWHERE i.status = 'void'\n  AND i.currency = 'USD'\n  AND strftime('%Y', i.issued_date) = '2024'\n  AND (s.discount_pct IS NULL OR s.discount_pct < 16)",
+        "task_id": "sql-58f2258074e2",
+        "teacher_ok": true,
+        "teacher_sql": "SELECT i.invoice_id\nFROM invoices i\nJOIN subscriptions s ON i.subscription_id = s.subscription_id\nWHERE i.status = 'void'\n  AND i.currency = 'USD'\n  AND i.issued_date BETWEEN '2024-01-01' AND '2024-12-31'\n  AND (s.discount_pct IS NULL OR s.discount_pct < 16)"
+      },
+      {
+        "base_ok": false,
+        "base_sql": "SELECT status, AVG(amount_cents) AS avg_amount\nFROM invoices\nWHERE currency = 'EUR'\n  AND issued_date BETWEEN '2024-04-01' AND '2024-12-12'\n  AND amount_cents IS NOT NULL\nGROUP BY status\nORDER BY status",
+        "family": "null_handling",
+        "gold_sql": "SELECT status, ROUND(AVG(COALESCE(amount_cents, 0)), 2) FROM invoices WHERE currency = 'EUR' AND issued_date BETWEEN '2024-04-01' AND '2024-12-12' GROUP BY status",
+        "heldout_class": "in_distribution",
+        "kind": "fixed",
+        "question": "For each status of EUR invoices issued 2024-04-01 to 2024-12-12, average amount_cents treating NULL as zero, rounded to 2 decimals.",
+        "student_ok": true,
+        "student_sql": "SELECT status,\n       ROUND(AVG(COALESCE(amount_cents, 0)), 2) AS avg_amount_cents\nFROM invoices\nWHERE currency = 'EUR'\n  AND issued_date BETWEEN '2024-04-01' AND '2024-12-12'\nGROUP BY status",
+        "task_id": "sql-e0a987384dd3",
+        "teacher_ok": true,
+        "teacher_sql": "SELECT i.status,\n       ROUND(AVG(COALESCE(i.amount_cents, 0)), 2) AS average_amount_cents\nFROM invoices i\nWHERE i.currency = 'EUR'\n  AND i.issued_date BETWEEN '2024-04-01' AND '2024-12-12'\nGROUP BY i.status"
+      },
+      {
+        "base_ok": false,
+        "base_sql": "SELECT payments.payment_id, accounts.name\nFROM payments\nJOIN invoices ON payments.invoice_id = invoices.invoice_id\nJOIN accounts ON invoices.account_id = accounts.account_id\nWHERE payments.status = 'succeeded'\nAND payments.method = 'ach'\nAND invoices.amount_cents > 3600",
+        "family": "join",
+        "gold_sql": "SELECT p.payment_id, a.name FROM payments p JOIN invoices i ON i.invoice_id = p.invoice_id JOIN accounts a ON a.account_id = i.account_id WHERE p.method = 'ach' AND p.status = 'succeeded' AND p.amount_cents > 3600",
+        "heldout_class": "in_distribution",
+        "kind": "fixed",
+        "question": "List payment_id and account name for succeeded ach payments larger than $36.",
+        "student_ok": true,
+        "student_sql": "SELECT p.payment_id, a.name AS account_name\nFROM payments p\nJOIN invoices i ON p.invoice_id = i.invoice_id\nJOIN accounts a ON i.account_id = a.account_id\nWHERE p.method = 'ach'\n  AND p.status = 'succeeded'\n  AND p.amount_cents > 3600",
+        "task_id": "sql-228f325a23cb",
+        "teacher_ok": true,
+        "teacher_sql": "SELECT p.payment_id, a.name AS account_name\nFROM payments p\nJOIN invoices i ON p.invoice_id = i.invoice_id\nJOIN accounts a ON i.account_id = a.account_id\nWHERE p.status = 'succeeded'\n  AND p.method = 'ach'\n  AND p.amount_cents > 3600"
+      },
+      {
+        "base_ok": false,
+        "base_sql": "SELECT a.account_id, COUNT(u.user_id) AS user_count\nFROM accounts a\nJOIN users u ON a.account_id = u.account_id\nWHERE a.country = 'DE'\nAND a.status = 'suspended'\nGROUP BY a.account_id\nORDER BY user_count DESC\nLIMIT 3",
+        "family": "top_n",
+        "gold_sql": "SELECT a.account_id, COUNT(u.user_id) AS n FROM accounts a JOIN users u ON u.account_id = a.account_id WHERE a.country = 'DE' AND a.status = 'suspended' GROUP BY a.account_id ORDER BY n DESC, a.account_id ASC LIMIT 3",
+        "heldout_class": "in_distribution",
+        "kind": "fixed",
+        "question": "The 3 suspended accounts in DE with the most users, most first (ties by lower account_id). Return account_id and user count.",
+        "student_ok": true,
+        "student_sql": "SELECT a.account_id, COUNT(u.user_id) AS user_count\nFROM accounts a\nJOIN users u ON u.account_id = a.account_id\nWHERE a.country = 'DE' AND a.status = 'suspended'\nGROUP BY a.account_id\nORDER BY user_count DESC, a.account_id ASC\nLIMIT 3",
+        "task_id": "sql-0fc20f5fcdf6",
+        "teacher_ok": true,
+        "teacher_sql": "SELECT a.account_id, COUNT(u.user_id) AS user_count\nFROM accounts a\nJOIN users u ON u.account_id = a.account_id\nWHERE a.status = 'suspended'\n  AND a.country = 'DE'\nGROUP BY a.account_id\nORDER BY user_count DESC, a.account_id ASC\nLIMIT 3"
+      },
+      {
+        "base_ok": false,
+        "base_sql": "SELECT u.user_id\nFROM users u\nWHERE u.role = 'admin'\n  AND u.status = 'active'\n  AND u.country = 'CA'\n  AND u.deleted_at IS NULL\n  AND u.ticket_id IS NULL",
+        "family": "anti_join",
+        "gold_sql": "SELECT u.user_id FROM users u JOIN accounts a ON a.account_id = u.account_id WHERE u.role = 'admin' AND a.country = 'CA' AND u.deleted_at IS NULL AND NOT EXISTS (SELECT 1 FROM support_tickets t WHERE t.user_id = u.user_id)",
+        "heldout_class": "in_distribution",
+        "kind": "fixed",
+        "question": "Which non-deleted admin users in CA accounts never submitted a support ticket? Return user_id.",
+        "student_ok": true,
+        "student_sql": "SELECT u.user_id\nFROM users u\nJOIN accounts a ON u.account_id = a.account_id\nWHERE u.deleted_at IS NULL\n  AND u.role = 'admin'\n  AND a.country = 'CA'\n  AND NOT EXISTS (\n    SELECT 1 FROM support_tickets st WHERE st.user_id = u.user_id\n  )",
+        "task_id": "sql-edb68cd288f2",
+        "teacher_ok": true,
+        "teacher_sql": "SELECT u.user_id\nFROM users u\nJOIN accounts a ON u.account_id = a.account_id\nWHERE u.role = 'admin'\n  AND u.deleted_at IS NULL\n  AND a.country = 'CA'\n  AND a.deleted_at IS NULL\n  AND NOT EXISTS (\n    SELECT 1\n    FROM support_tickets st\n    WHERE st.user_id = u.user_id\n  )"
+      },
+      {
+        "base_ok": false,
+        "base_sql": "SELECT ticket_id, opened_at\nFROM support_tickets\nORDER BY opened_at DESC\nLIMIT 5",
+        "family": "top_n",
+        "gold_sql": "SELECT ticket_id, opened_at FROM support_tickets WHERE category = 'bug' ORDER BY opened_at DESC, ticket_id DESC LIMIT 5",
+        "heldout_class": "in_distribution",
+        "kind": "fixed",
+        "question": "Show the 5 most recently opened bug tickets, newest first (ties by higher ticket_id). Return ticket_id and opened_at.",
+        "student_ok": true,
+        "student_sql": "SELECT ticket_id, opened_at\nFROM support_tickets\nWHERE category = 'bug'\nORDER BY opened_at DESC, ticket_id DESC\nLIMIT 5",
+        "task_id": "sql-f9caffaf749f",
+        "teacher_ok": true,
+        "teacher_sql": "SELECT ticket_id, opened_at\nFROM support_tickets\nWHERE category = 'bug'\nORDER BY opened_at DESC, ticket_id DESC\nLIMIT 5"
+      },
+      {
+        "base_ok": false,
+        "base_sql": "SELECT\n  a.account_id,\n  ROUND(AVG(s.csat_score), 2) AS avg_csat_score\nFROM\n  accounts a\nJOIN\n  support_tickets s ON a.account_id = s.account_id\nWHERE\n  s.status = 'closed'\n  AND s.priority = 'urgent'\nGROUP BY\n  a.account_id",
+        "family": "null_handling",
+        "gold_sql": "SELECT a.name, ROUND(AVG(t.csat_score), 2) FROM support_tickets t JOIN accounts a ON a.account_id = t.account_id WHERE t.priority = 'urgent' AND t.category = 'bug' GROUP BY a.account_id HAVING COUNT(t.csat_score) >= 1",
+        "heldout_class": "in_distribution",
+        "kind": "still_wrong",
+        "question": "For urgent bug tickets, give each account's average csat_score rounded to 2 decimals if it has 1 or more non-NULL scores.",
+        "student_ok": false,
+        "student_sql": "SELECT a.account_id,\n       ROUND(AVG(t.csat_score), 2) AS average_csat_score\nFROM support_tickets t\nJOIN accounts a ON t.account_id = a.account_id\nWHERE t.priority = 'urgent'\n  AND t.category = 'bug'\nGROUP BY a.account_id\nHAVING COUNT(t.csat_score) >= 1 AND t.csat_score IS NOT NULL",
+        "task_id": "sql-2d59a7fef703",
+        "teacher_ok": false,
+        "teacher_sql": "SELECT st.account_id,\n       ROUND(AVG(st.csat_score), 2) AS avg_csat_score\nFROM support_tickets st\nWHERE st.priority = 'urgent'\n  AND st.category = 'bug'\nGROUP BY st.account_id\nHAVING COUNT(st.csat_score) >= 1"
+      },
+      {
+        "base_ok": false,
+        "base_sql": "SELECT \n  a.account_id,\n  p.payment_id,\n  p.amount_cents,\n  CASE \n    WHEN p.amount_cents > prev_amount THEN p.amount_cents - prev_amount\n    ELSE 0\n  END AS increase\nFROM \n  payments p\nJOIN (\n  SELECT \n    payment_id,\n    SUM(CASE WHEN payment_id > prev_payment_id THEN amount_cents ELSE 0 END) AS prev_amount\n  FROM \n    payments\n  WINDOW prev_payment AS (ORDER BY payment_id)\n  GROUP BY \n    payment_id\n) prev ON p.payment_id = prev.payment_id\nORDER BY \n  p.paid_at, \n  p.payment_id",
+        "family": "window",
+        "gold_sql": "SELECT account_id, payment_id, amount_cents - prev FROM (SELECT i.account_id, p.payment_id, p.amount_cents, LAG(p.amount_cents) OVER (PARTITION BY i.account_id ORDER BY p.paid_at, p.payment_id) AS prev FROM payments p JOIN invoices i ON i.invoice_id = p.invoice_id WHERE p.status = 'succeeded' AND p.method = 'ach' AND i.currency = 'USD') WHERE prev IS NOT NULL AND amount_cents - prev > 800",
+        "heldout_class": "in_distribution",
+        "kind": "still_wrong",
+        "question": "For each account's succeeded USD ach payments ordered by paid_at then payment_id, return account_id, payment_id and increase over the prior payment where the increase is above 800 cents.",
+        "student_ok": false,
+        "student_sql": "WITH filtered AS (\n    SELECT p.account_id, p.payment_id\n    FROM payments p\n    JOIN invoices i ON p.invoice_id = i.invoice_id\n    WHERE p.status = 'succeeded'\n      AND i.currency = 'USD'\n      AND p.method = 'ach'\n)\nSELECT account_id, payment_id, increase\nFROM (\n    SELECT *,\n           ROW_NUMBER() OVER (PARTITION BY account_id ORDER BY paid_at, payment_id) AS rn\n    FROM filtered\n) sub\nWHERE rn = 1\n  AND increase > 800",
+        "task_id": "sql-ddb00ac3ed3b",
+        "teacher_ok": false,
+        "teacher_sql": "WITH filtered AS (\n    SELECT p.account_id,\n           p.payment_id,\n           p.amount_cents,\n           p.paid_at\n    FROM payments p\n    JOIN invoices i ON p.invoice_id = i.invoice_id\n    WHERE p.status = 'succeeded'\n      AND p.method = 'ach'\n      AND i.currency = 'USD'\n)\nSELECT account_id,\n       payment_id,\n       increase\nFROM (\n    SELECT account_id,\n           payment_id,\n           amount_cents - LAG(amount_cents) OVER (PARTITION BY account_id ORDER BY paid_at, payment_id) AS increase\n    FROM filtered\n) sub\nWHERE increase > 800"
+      },
+      {
+        "base_ok": false,
+        "base_sql": "SELECT a.account_id, COUNT(u.user_id) AS user_count\nFROM accounts a\nJOIN users u ON a.account_id = u.account_id\nWHERE a.status = 'suspended'\nAND a.country = 'JP'\nAND a.created_at <= '2024-12-31'\nGROUP BY a.account_id\nHAVING COUNT(u.user_id) > (\n    SELECT AVG(COUNT(u2.user_id)) FROM accounts a2\n    JOIN users u2 ON a2.account_id = u2.account_id\n    WHERE a2.industry = a.industry\n    AND a2.country = 'JP'\n    AND a2.created_at <= '2024-12-31'\n)",
+        "family": "subquery_cte",
+        "gold_sql": "WITH c AS (SELECT a.account_id, a.industry, a.status, a.country, a.created_at, COUNT(u.user_id) AS n FROM accounts a LEFT JOIN users u ON u.account_id = a.account_id GROUP BY a.account_id) SELECT account_id, n FROM c WHERE status = 'suspended' AND country = 'JP' AND created_at < '2025-01-01' AND n > (SELECT AVG(n) FROM c c2 WHERE c2.industry = c.industry)",
+        "heldout_class": "in_distribution",
+        "kind": "still_wrong",
+        "question": "Which suspended accounts in JP created in or before 2024 have more users than the average user count of accounts in their industry (over all accounts in that industry)? Return account_id and user count.",
+        "student_ok": false,
+        "student_sql": "WITH filtered AS (\n    SELECT a.account_id, a.industry, COUNT(u.user_id) AS user_cnt\n    FROM accounts a\n    JOIN users u ON u.account_id = a.account_id\n    WHERE a.status = 'suspended' AND a.country = 'JP' AND a.created_at <= '2024-12-31'\n    GROUP BY a.account_id, a.industry\n)\nSELECT f.account_id, f.user_cnt\nFROM filtered f\nWHERE f.user_cnt > (\n    SELECT AVG(f2.user_cnt)\n    FROM filtered f2\n    WHERE f2.industry = f.industry\n)",
+        "task_id": "sql-5790aa160a29",
+        "teacher_ok": true,
+        "teacher_sql": "WITH account_user_counts AS (\n    SELECT\n        a.account_id,\n        a.industry,\n        COUNT(u.user_id) AS user_cnt\n    FROM accounts a\n    LEFT JOIN users u\n        ON u.account_id = a.account_id\n        AND u.deleted_at IS NULL\n    WHERE a.deleted_at IS NULL\n    GROUP BY a.account_id, a.industry\n),\nindustry_avg AS (\n    SELECT\n        industry,\n        AVG(user_cnt) AS avg_users\n    FROM account_user_counts\n    GROUP BY industry\n)\nSELECT\n    auc.account_id,\n    auc.user_cnt\nFROM account_user_counts auc\nJOIN industry_avg ia ON auc.industry = ia.industry\nWHERE auc.account_id IN (\n    SELECT account_id\n    FROM accounts\n    WHERE status = 'suspended'\n      AND country = 'JP'\n      AND created_at <= '2024-12-31'\n      AND deleted_at IS NULL\n)\n  AND auc.user_cnt > ia.avg_users"
+      },
+      {
+        "base_ok": false,
+        "base_sql": "SELECT \n  p.payment_id,\n  p.account_id,\n  SUM(CASE WHEN p2.payment_id IS NOT NULL THEN p2.amount_cents ELSE 0 END) AS increase\nFROM \n  payments p\nJOIN \n  payments p2 ON p.payment_id = p2.payment_id - 1\nWHERE \n  p.method = 'paypal'\n  AND p.currency = 'EUR'\n  AND p.status = 'succeeded'\nGROUP BY \n  p.payment_id\nHAVING \n  increase > 700\nORDER BY \n  p.paid_at, \n  p.payment_id",
+        "family": "window",
+        "gold_sql": "SELECT account_id, payment_id, amount_cents - prev FROM (SELECT i.account_id, p.payment_id, p.amount_cents, LAG(p.amount_cents) OVER (PARTITION BY i.account_id ORDER BY p.paid_at, p.payment_id) AS prev FROM payments p JOIN invoices i ON i.invoice_id = p.invoice_id WHERE p.status = 'succeeded' AND p.method = 'paypal' AND i.currency = 'EUR') WHERE prev IS NOT NULL AND amount_cents - prev > 700",
+        "heldout_class": "in_distribution",
+        "kind": "still_wrong",
+        "question": "For each account's succeeded EUR paypal payments ordered by paid_at then payment_id, return account_id, payment_id and increase over the prior payment where the increase is above 700 cents.",
+        "student_ok": false,
+        "student_sql": "WITH filtered AS (\n    SELECT p.account_id, p.payment_id\n    FROM payments p\n    JOIN invoices i ON p.invoice_id = i.invoice_id\n    WHERE p.status = 'succeeded'\n      AND i.currency = 'EUR'\n      AND p.method = 'paypal'\n)\nSELECT account_id, payment_id, increase\nFROM (\n    SELECT *,\n           ROW_NUMBER() OVER (PARTITION BY account_id ORDER BY paid_at, payment_id) AS rn\n    FROM filtered\n) sub\nWHERE rn = 1",
+        "task_id": "sql-941c164d9664",
+        "teacher_ok": false,
+        "teacher_sql": "WITH eur_paypal AS (\n  SELECT p.account_id,\n         p.payment_id,\n         p.paid_at,\n         p.amount_cents\n  FROM payments p\n  JOIN invoices i ON p.invoice_id = i.invoice_id\n  WHERE p.status = 'succeeded'\n    AND p.method = 'paypal'\n    AND i.currency = 'EUR'\n),\nwith_lag AS (\n  SELECT account_id,\n         payment_id,\n         paid_at,\n         amount_cents - LAG(amount_cents) OVER (PARTITION BY account_id ORDER BY paid_at, payment_id) AS increase\n  FROM eur_paypal\n)\nSELECT account_id,\n       payment_id,\n       increase\nFROM with_lag\nWHERE increase > 700\nORDER BY account_id, paid_at, payment_id"
+      },
+      {
+        "base_ok": false,
+        "base_sql": "SELECT DISTINCT accounts.name\nFROM accounts\nJOIN users ON accounts.account_id = users.account_id\nJOIN feature_usage ON users.user_id = feature_usage.user_id\nWHERE accounts.industry = 'education'\nAND feature_usage.feature = 'automations'\nAND feature_usage.event_count > 268\nAND accounts.country = 'US'",
+        "family": "join",
+        "gold_sql": "SELECT DISTINCT a.name FROM feature_usage f JOIN users u ON u.user_id = f.user_id JOIN accounts a ON a.account_id = u.account_id WHERE f.feature = 'automations' AND f.event_count > 268 AND a.industry = 'education'",
+        "heldout_class": "in_distribution",
+        "kind": "still_wrong",
+        "question": "Which education accounts have users with a single 'automations' usage record of more than 268 events? Return distinct account names.",
+        "student_ok": false,
+        "student_sql": "WITH auto_users AS (\n    SELECT u.account_id\n    FROM users u\n    JOIN feature_usage fu ON fu.user_id = u.user_id\n    WHERE fu.feature = 'automations'\n    GROUP BY u.user_id\n    HAVING COUNT(*) = 1 AND MAX(fu.event_count) > 268\n)\nSELECT DISTINCT a.name\nFROM accounts a\nJOIN auto_users au ON au.account_id = a.account_id\nWHERE a.industry = 'education'",
+        "task_id": "sql-fcc325acc976",
+        "teacher_ok": false,
+        "teacher_sql": "WITH qualifying_users AS (\n    SELECT u.account_id\n    FROM users u\n    JOIN feature_usage fu ON fu.user_id = u.user_id\n    WHERE fu.feature = 'automations'\n    GROUP BY u.account_id, u.user_id\n    HAVING COUNT(*) = 1 AND MAX(fu.event_count) > 268\n)\nSELECT DISTINCT a.name\nFROM accounts a\nJOIN qualifying_users qu ON qu.account_id = a.account_id\nWHERE a.industry = 'education'"
+      },
+      {
+        "base_ok": false,
+        "base_sql": "SELECT a.account_id, a.country\nFROM accounts a\nWHERE a.industry = 'healthcare'\nAND a.status = 'active'\nORDER BY COUNT(a.account_id) OVER (ORDER BY a.account_id)\nLIMIT 1\nOFFSET 1\nFETCH FIRST 1 ROW ONLY",
+        "family": "window",
+        "gold_sql": "SELECT account_id, country FROM (SELECT a.account_id, a.country, NTILE(5) OVER (PARTITION BY a.country ORDER BY COUNT(u.user_id) DESC, a.account_id) AS b FROM accounts a LEFT JOIN users u ON u.account_id = a.account_id WHERE a.status = 'active' AND a.industry = 'healthcare' GROUP BY a.account_id) WHERE b = 1",
+        "heldout_class": "in_distribution",
+        "kind": "still_wrong",
+        "question": "Among active healthcare accounts, split accounts within each country into 5 equal-sized buckets by user count (most users first, ties by account_id) using NTILE; return account_id and country for those in bucket 1.",
+        "student_ok": false,
+        "student_sql": "WITH acct AS (\n    SELECT a.account_id,\n           a.country,\n           COUNT(u.user_id) AS user_cnt\n    FROM accounts a\n    LEFT JOIN users u\n           ON u.account_id = a.account_id\n          AND u.deleted_at IS NULL\n    WHERE a.status = 'active'\n      AND a.industry = 'healthcare'\n    GROUP BY a.account_id, a.country\n)\nSELECT account_id, country\nFROM (\n    SELECT account_id,\n           country,\n           NTILE(5) OVER (PARTITION BY country ORDER BY user_cnt DESC, account_id ASC) AS bucket\n    FROM acct\n) sub\nWHERE bucket = 1",
+        "task_id": "sql-0ec75771c0c2",
+        "teacher_ok": false,
+        "teacher_sql": "WITH acct_users AS (\n  SELECT a.account_id,\n         a.country,\n         COUNT(u.user_id) AS user_cnt\n  FROM accounts a\n  JOIN users u ON u.account_id = a.account_id\n  WHERE a.status = 'active'\n    AND a.industry = 'healthcare'\n    AND u.deleted_at IS NULL\n  GROUP BY a.account_id, a.country\n)\nSELECT account_id, country\nFROM (\n  SELECT account_id,\n         country,\n         NTILE(5) OVER (PARTITION BY country ORDER BY user_cnt DESC, account_id ASC) AS bucket\n  FROM acct_users\n)\nWHERE bucket = 1"
+      },
+      {
+        "base_ok": false,
+        "base_sql": "SELECT invoice_id\nFROM invoices\nWHERE status = 'void'\n  AND issued_date = '2024-02'\n  AND invoice_id NOT IN (\n    SELECT invoice_id\n    FROM payments\n    WHERE invoice_id IS NOT NULL\n)",
+        "family": "anti_join",
+        "gold_sql": "SELECT i.invoice_id FROM invoices i LEFT JOIN payments p ON p.invoice_id = i.invoice_id WHERE i.status = 'void' AND strftime('%Y-%m', i.issued_date) = '2024-02' AND p.payment_id IS NULL",
+        "heldout_class": "in_distribution",
+        "kind": "still_wrong",
+        "question": "List invoice_ids with status 'void' issued during February 2024 that never appear in payments.",
+        "student_ok": false,
+        "student_sql": "SELECT i.invoice_id\nFROM invoices i\nWHERE i.status = 'void'\n  AND i.issued_date >= '2024-02-01'\n  AND i.issued_date <= '2024-02-28'\n  AND NOT EXISTS (\n    SELECT 1 FROM payments p WHERE p.invoice_id = i.invoice_id\n  )",
+        "task_id": "sql-697d3c9b1080",
+        "teacher_ok": true,
+        "teacher_sql": "SELECT i.invoice_id\nFROM invoices i\nLEFT JOIN payments p ON p.invoice_id = i.invoice_id\nWHERE i.status = 'void'\n  AND i.issued_date >= '2024-02-01'\n  AND i.issued_date <= '2024-02-29'\n  AND p.payment_id IS NULL"
+      },
+      {
+        "base_ok": false,
+        "base_sql": "SELECT \n  p.payment_id,\n  p.account_id,\n  CASE \n    WHEN p.amount_cents > prev_amount THEN p.amount_cents - prev_amount\n    ELSE 0\n  END AS increase\nFROM \n  payments p\nJOIN (\n  SELECT \n    payment_id,\n    SUM(CASE WHEN payment_id > prev_payment THEN amount_cents ELSE 0 END) AS prev_amount\n  FROM \n    payments\n  WINDOW prev_payment AS (ORDER BY payment_id)\n  GROUP BY \n    payment_id\n) prev ON p.payment_id = prev.payment_id\nORDER BY \n  p.paid_at, \n  p.payment_id",
+        "family": "window",
+        "gold_sql": "SELECT account_id, payment_id, amount_cents - prev FROM (SELECT i.account_id, p.payment_id, p.amount_cents, LAG(p.amount_cents) OVER (PARTITION BY i.account_id ORDER BY p.paid_at, p.payment_id) AS prev FROM payments p JOIN invoices i ON i.invoice_id = p.invoice_id WHERE p.status = 'succeeded' AND p.method = 'paypal' AND i.currency = 'USD') WHERE prev IS NOT NULL AND amount_cents - prev > 1700",
+        "heldout_class": "in_distribution",
+        "kind": "still_wrong",
+        "question": "For each account's succeeded USD paypal payments ordered by paid_at then payment_id, return account_id, payment_id and increase over the prior payment where the increase is above 1700 cents.",
+        "student_ok": false,
+        "student_sql": "WITH filtered AS (\n    SELECT p.account_id, p.payment_id\n    FROM payments p\n    JOIN invoices i ON p.invoice_id = i.invoice_id\n    WHERE p.status = 'succeeded'\n      AND i.currency = 'USD'\n      AND p.method = 'paypal'\n)\nSELECT account_id, payment_id, increase\nFROM (\n    SELECT *,\n           ROW_NUMBER() OVER (PARTITION BY account_id ORDER BY paid_at, payment_id) AS rn\n    FROM filtered\n) sub\nWHERE rn = 1\n  AND increase > 1700",
+        "task_id": "sql-babda85efa62",
+        "teacher_ok": false,
+        "teacher_sql": "WITH filtered AS (\n    SELECT p.account_id,\n           p.payment_id,\n           p.amount_cents,\n           p.paid_at\n    FROM payments p\n    JOIN invoices i ON p.invoice_id = i.invoice_id\n    WHERE p.status = 'succeeded'\n      AND p.method = 'paypal'\n      AND i.currency = 'USD'\n),\nlagged AS (\n    SELECT account_id,\n           payment_id,\n           amount_cents,\n           LAG(amount_cents) OVER (PARTITION BY account_id ORDER BY paid_at, payment_id) AS prev_amount\n    FROM filtered\n)\nSELECT account_id,\n       payment_id,\n       (amount_cents - prev_amount) AS increase\nFROM lagged\nWHERE prev_amount IS NOT NULL\n  AND (amount_cents - prev_amount) > 1700\nORDER BY account_id, paid_at, payment_id"
+      },
+      {
+        "base_ok": false,
+        "base_sql": "SELECT account_id, COUNT(*) AS user_count\nFROM users\nWHERE status = 'churned'\nAND created_at <= '2025-12-31'\nGROUP BY account_id\nHAVING COUNT(*) > (\n    SELECT AVG(user_count) FROM (\n        SELECT COUNT(*) AS user_count\n        FROM users\n        WHERE status = 'churned'\n        AND created_at <= '2025-12-31'\n        GROUP BY account_id\n    )\n)",
+        "family": "subquery_cte",
+        "gold_sql": "WITH c AS (SELECT a.account_id, a.industry, a.status, a.country, a.created_at, COUNT(u.user_id) AS n FROM accounts a LEFT JOIN users u ON u.account_id = a.account_id GROUP BY a.account_id) SELECT account_id, n FROM c WHERE status = 'churned' AND country = 'IN' AND created_at < '2026-01-01' AND n > (SELECT AVG(n) FROM c c2 WHERE c2.industry = c.industry)",
+        "heldout_class": "in_distribution",
+        "kind": "still_wrong",
+        "question": "List account_id and user count for churned accounts in IN (created up to 2025) whose number of users is above their industry's average per-account user count.",
+        "student_ok": false,
+        "student_sql": "WITH acct_user_counts AS (\n    SELECT a.account_id,\n           a.industry,\n           COUNT(u.user_id) AS user_cnt\n    FROM accounts a\n    LEFT JOIN users u\n           ON u.account_id = a.account_id\n          AND u.deleted_at IS NULL\n    GROUP BY a.account_id, a.industry\n)\nSELECT auc.account_id,\n       auc.user_cnt\nFROM acct_user_counts auc\nJOIN accounts a ON a.account_id = auc.account_id\nWHERE a.status = 'churned'\n  AND a.country = 'IN'\n  AND a.created_at <= '2025-12-31'\n  AND auc.user_cnt > (\n      SELECT AVG(auc2.user_cnt)\n      FROM acct_user_counts auc2\n      WHERE auc2.ind",
+        "task_id": "sql-86298b20abdd",
+        "teacher_ok": false,
+        "teacher_sql": "WITH account_users AS (\n    SELECT\n        a.account_id,\n        a.industry,\n        COUNT(u.user_id) AS user_cnt\n    FROM accounts a\n    LEFT JOIN users u\n        ON u.account_id = a.account_id\n        AND u.deleted_at IS NULL\n    WHERE a.country = 'IN'\n      AND a.status = 'churned'\n      AND a.created_at <= '2025-12-31'\n      AND a.deleted_at IS NULL\n    GROUP BY a.account_id, a.industry\n),\nindustry_avg AS (\n    SELECT\n        industry,\n        AVG(user_cnt) AS avg_users\n    FROM account_users\n    GROUP BY industry\n)\nSELECT\n    au.account_id,\n    au.user_cnt\nFROM account_users au\nJOIN industry_avg ia\n    ON au.industry = ia.industry\nWHERE au.user_cnt > ia.avg_users"
+      },
+      {
+        "base_ok": false,
+        "base_sql": "SELECT a.account_id, AVG(s.csat_score) AS avg_csat\nFROM accounts a\nJOIN support_tickets s ON a.account_id = s.account_id\nWHERE s.category = 'feature_request'\nGROUP BY a.account_id\nHAVING COUNT(s.csat_score) >= 1\nORDER BY a.account_id",
+        "family": "null_handling",
+        "gold_sql": "SELECT a.name, ROUND(AVG(t.csat_score), 2) FROM support_tickets t JOIN accounts a ON a.account_id = t.account_id WHERE t.priority = 'normal' AND t.category = 'feature_request' GROUP BY a.account_id HAVING COUNT(t.csat_score) >= 1",
+        "heldout_class": "in_distribution",
+        "kind": "still_wrong",
+        "question": "For normal feature_request tickets, give each account's average csat_score rounded to 2 decimals if it has 1 or more non-NULL scores.",
+        "student_ok": false,
+        "student_sql": "SELECT a.account_id,\n       ROUND(AVG(t.csat_score), 2) AS average_csat_score\nFROM support_tickets t\nJOIN accounts a ON t.account_id = a.account_id\nWHERE t.priority = 'normal'\n  AND t.category = 'feature_request'\nGROUP BY a.account_id\nHAVING COUNT(t.csat_score) >= 1 AND t.csat_score IS NOT NULL",
+        "task_id": "sql-7340b6b41851",
+        "teacher_ok": false,
+        "teacher_sql": "SELECT\n    t.account_id,\n    ROUND(AVG(t.csat_score), 2) AS avg_csat_score\nFROM support_tickets t\nWHERE t.priority = 'normal'\n  AND t.category = 'feature_request'\n  AND t.csat_score IS NOT NULL\nGROUP BY t.account_id\nHAVING COUNT(t.csat_score) > 0"
+      },
+      {
+        "base_ok": false,
+        "base_sql": "SELECT account_id\nFROM payments\nJOIN invoices ON payments.invoice_id = invoices.invoice_id\nWHERE payments.status = 'succeeded' AND payments.method = 'wire' AND invoices.currency = 'EUR'\nGROUP BY account_id\nHAVING SUM(payments.amount_cents) > (SELECT AVG(total) FROM (SELECT SUM(amount_cents) AS total FROM payments JOIN invoices ON payments.invoice_id = invoices.invoice_id WHERE payments.status = 'succeeded' AND payments.method = 'wire' AND invoices.currency = 'EUR') AS avg_total)",
+        "family": "subquery_cte",
+        "gold_sql": "WITH t AS (SELECT i.account_id, SUM(p.amount_cents) AS total FROM payments p JOIN invoices i ON i.invoice_id = p.invoice_id WHERE p.status = 'succeeded' AND p.method = 'wire' AND i.currency = 'EUR' GROUP BY i.account_id) SELECT account_id FROM t WHERE total > (SELECT AVG(total) FROM t)",
+        "heldout_class": "in_distribution",
+        "kind": "still_wrong",
+        "question": "Considering succeeded wire payments on EUR invoices, which accounts have a total above the average total across accounts that have any such payment? Return account_id.",
+        "student_ok": false,
+        "student_sql": "WITH filtered AS (\n    SELECT p.invoice_id, a.account_id\n    FROM payments p\n    JOIN invoices i ON p.invoice_id = i.invoice_id\n    WHERE p.status = 'succeeded'\n      AND p.method = 'wire'\n      AND i.currency = 'EUR'\n)\nSELECT account_id\nFROM filtered\nWHERE total > (SELECT AVG(total) FROM filtered)",
+        "task_id": "sql-f745a1bc813e",
+        "teacher_ok": false,
+        "teacher_sql": "WITH acc_totals AS (\n    SELECT p.account_id, SUM(p.amount_cents) AS total\n    FROM payments p\n    JOIN invoices i ON p.invoice_id = i.invoice_id\n    WHERE p.method = 'wire'\n      AND p.status = 'succeeded'\n      AND i.currency = 'EUR'\n    GROUP BY p.account_id\n)\nSELECT account_id\nFROM acc_totals\nWHERE total > (SELECT AVG(total) FROM acc_totals)"
+      },
+      {
+        "base_ok": false,
+        "base_sql": "SELECT \n  a.account_id,\n  p.payment_id,\n  p.amount_cents - (SELECT p2.amount_cents FROM payments p2 WHERE p2.payment_id = (SELECT MIN(payment_id) FROM payments WHERE payment_id < p.payment_id AND payment_id IN (SELECT payment_id FROM payments WHERE status = 'succeeded' AND currency = 'USD' AND account_id = a.account_id)) AND p2.account_id = a.account_id) AS increase\nFROM \n  payments p\nJOIN \n  accounts a ON p.account_id = a.account_id\nWHERE \n  p.status = 'succeeded'\n  AND p.currency = 'USD'\nORDER BY \n  a.account_id,\n  p.payment_id",
+        "family": "window",
+        "gold_sql": "SELECT account_id, payment_id, amount_cents - prev FROM (SELECT i.account_id, p.payment_id, p.amount_cents, LAG(p.amount_cents) OVER (PARTITION BY i.account_id ORDER BY p.paid_at, p.payment_id) AS prev FROM payments p JOIN invoices i ON i.invoice_id = p.invoice_id WHERE p.status = 'succeeded' AND p.method = 'ach' AND i.currency = 'USD') WHERE prev IS NOT NULL AND amount_cents - prev > 4900",
+        "heldout_class": "in_distribution",
+        "kind": "still_wrong",
+        "question": "Looking at succeeded ach payments on USD invoices in chronological order per account (ties by payment_id), which payments exceed the account's previous such payment by more than 4900 cents? Return account_id, payment_id and the increase.",
+        "student_ok": false,
+        "student_sql": "WITH filtered AS (\n    SELECT p.account_id, p.payment_id\n    FROM payments p\n    JOIN invoices i ON p.invoice_id = i.invoice_id\n    WHERE p.method = 'ach'\n      AND p.status = 'succeeded'\n      AND i.currency = 'USD'\n      AND p.paid_at >= i.issued_date\n)\nSELECT account_id, payment_id, increase\nFROM (\n    SELECT *,\n           ROW_NUMBER() OVER (PARTITION BY account_id ORDER BY p.paid_at, p.payment_id) AS rn\n    FROM filtered\n) sub\nWHERE rn = 1\n  AND increase > 4900",
+        "task_id": "sql-3d2c9473450e",
+        "teacher_ok": false,
+        "teacher_sql": "WITH filtered AS (\n    SELECT p.account_id,\n           p.payment_id,\n           p.amount_cents,\n           p.paid_at\n    FROM payments p\n    JOIN invoices i ON p.invoice_id = i.invoice_id\n    WHERE p.status = 'succeeded'\n      AND p.method = 'ach'\n      AND i.currency = 'USD'\n)\nSELECT account_id,\n       payment_id,\n       (amount_cents - prev_amount) AS increase\nFROM (\n    SELECT *,\n           LAG(amount_cents) OVER (PARTITION BY account_id\n                                   ORDER BY paid_at, payment_id) AS prev_amount\n    FROM filtered\n)\nWHERE prev_amount IS NOT NULL\n  AND amount_cents - prev_amount > 4900"
+      },
+      {
+        "base_ok": false,
+        "base_sql": "SELECT \n  a.account_id,\n  p.payment_id,\n  p.amount_cents - LAG(p.amount_cents, 1) OVER (ORDER BY p.paid_at, p.payment_id) AS increase\nFROM \n  payments p\nJOIN \n  accounts a ON p.invoice_id = a.account_id\nWHERE \n  p.status = 'succeeded'\n  AND p.currency = 'EUR'\n  AND p.method = 'ach'\nORDER BY \n  p.paid_at, \n  p.payment_id",
+        "family": "window",
+        "gold_sql": "SELECT account_id, payment_id, amount_cents - prev FROM (SELECT i.account_id, p.payment_id, p.amount_cents, LAG(p.amount_cents) OVER (PARTITION BY i.account_id ORDER BY p.paid_at, p.payment_id) AS prev FROM payments p JOIN invoices i ON i.invoice_id = p.invoice_id WHERE p.status = 'succeeded' AND p.method = 'ach' AND i.currency = 'EUR') WHERE prev IS NOT NULL AND amount_cents - prev > 3400",
+        "heldout_class": "in_distribution",
+        "kind": "still_wrong",
+        "question": "For each account's succeeded EUR ach payments ordered by paid_at then payment_id, return account_id, payment_id and increase over the prior payment where the increase is above 3400 cents.",
+        "student_ok": false,
+        "student_sql": "WITH filtered AS (\n    SELECT p.account_id, p.payment_id\n    FROM payments p\n    JOIN invoices i ON p.invoice_id = i.invoice_id\n    WHERE p.status = 'succeeded'\n      AND i.currency = 'EUR'\n      AND p.method = 'ach'\n)\nSELECT account_id, payment_id, increase\nFROM (\n    SELECT *,\n           ROW_NUMBER() OVER (PARTITION BY account_id ORDER BY p.paid_at, p.payment_id) AS rn\n    FROM filtered\n) sub\nWHERE rn = 1",
+        "task_id": "sql-3f5557a76513",
+        "teacher_ok": false,
+        "teacher_sql": "WITH filtered AS (\n    SELECT p.account_id,\n           p.payment_id,\n           p.paid_at,\n           p.amount_cents\n    FROM payments p\n    JOIN invoices i ON p.invoice_id = i.invoice_id\n    WHERE p.status = 'succeeded'\n      AND p.method = 'ach'\n      AND i.currency = 'EUR'\n)\nSELECT account_id,\n       payment_id,\n       (amount_cents - prev_amount) AS increase\nFROM (\n    SELECT account_id,\n           payment_id,\n           amount_cents,\n           LAG(amount_cents) OVER (PARTITION BY account_id ORDER BY paid_at, payment_id) AS prev_amount\n    FROM filtered\n) sub\nWHERE prev_amount IS NOT NULL\n  AND (amount_cents - prev_amount) > 3400\nORDER BY account_id, paid_at, payment_id"
+      },
+      {
+        "base_ok": false,
+        "base_sql": "SELECT account_id\nFROM payments\nJOIN invoices ON payments.invoice_id = invoices.invoice_id\nWHERE payments.status = 'succeeded' AND payments.method = 'wire'\nAND invoices.currency = 'USD'\nGROUP BY account_id\nHAVING SUM(amount_cents) > (\n    SELECT AVG(total) FROM (\n        SELECT SUM(amount_cents) AS total\n        FROM payments\n        JOIN invoices ON payments.invoice_id = invoices.invoice_id\n        WHERE payments.status = 'succeeded' AND payments.method = 'wire' AND invoices.currency = 'USD'\n        GROUP BY account_id\n    )\n)",
+        "family": "subquery_cte",
+        "gold_sql": "WITH t AS (SELECT i.account_id, SUM(p.amount_cents) AS total FROM payments p JOIN invoices i ON i.invoice_id = p.invoice_id WHERE p.status = 'succeeded' AND p.method = 'wire' AND i.currency = 'USD' GROUP BY i.account_id) SELECT account_id FROM t WHERE total > (SELECT AVG(total) FROM t)",
+        "heldout_class": "in_distribution",
+        "kind": "still_wrong",
+        "question": "List account_ids whose succeeded wire payment total on USD invoices exceeds the mean of per-account totals (only accounts with at least one such payment count toward the mean).",
+        "student_ok": false,
+        "student_sql": "WITH filtered AS (\n    SELECT i.account_id, p.amount_cents\n    FROM payments p\n    JOIN invoices i ON p.invoice_id = i.invoice_id\n    WHERE p.status = 'succeeded'\n      AND p.method = 'wire'\n      AND i.currency = 'USD'\n)\nSELECT account_id\nFROM filtered\nWHERE SUM(amount_cents) > (SELECT AVG(amount_cents) FROM filtered)",
+        "task_id": "sql-09958fd95515",
+        "teacher_ok": true,
+        "teacher_sql": "WITH acct_sums AS (\n  SELECT i.account_id,\n         SUM(p.amount_cents) AS total_wire_usd\n  FROM payments p\n  JOIN invoices i ON p.invoice_id = i.invoice_id\n  WHERE p.status = 'succeeded'\n    AND p.method = 'wire'\n    AND i.currency = 'USD'\n  GROUP BY i.account_id\n)\nSELECT account_id\nFROM acct_sums\nWHERE total_wire_usd > (SELECT AVG(total_wire_usd) FROM acct_sums)"
+      },
+      {
+        "base_ok": false,
+        "base_sql": "SELECT accounts.account_id, SUM(payments.amount_cents) AS total_succeeded_payment_cents\nFROM accounts\nJOIN subscriptions ON accounts.account_id = subscriptions.account_id\nJOIN payments ON subscriptions.subscription_id = payments.subscription_id\nWHERE accounts.account_id = payments.invoice_id\nGROUP BY accounts.account_id\nHAVING SUM(payments.amount_cents) > 100000",
+        "family": "aggregation",
+        "gold_sql": "SELECT i.account_id, SUM(p.amount_cents) FROM payments p JOIN invoices i ON i.invoice_id = p.invoice_id WHERE p.status = 'succeeded' GROUP BY i.account_id HAVING SUM(p.amount_cents) > 100000",
+        "heldout_class": "in_distribution",
+        "kind": "still_wrong",
+        "question": "Return account_id and total succeeded payment cents for accounts whose total exceeds $1000.",
+        "student_ok": false,
+        "student_sql": "SELECT a.account_id, SUM(p.amount_cents) AS total_succeeded_payment_cents\nFROM payments p\nJOIN invoices i ON p.invoice_id = i.invoice_id\nJOIN accounts a ON i.account_id = a.account_id\nWHERE p.status = 'succeeded'\n  AND a.account_id IS NOT NULL\n  AND SUM(p.amount_cents) > 100000\nGROUP BY a.account_id",
+        "task_id": "sql-abf83c7102fb",
+        "teacher_ok": false,
+        "teacher_sql": "SELECT p.account_id,\n       SUM(p.amount_cents) AS total_succeeded_payment_cents\nFROM payments p\nWHERE p.status = 'succeeded'\nGROUP BY p.account_id\nHAVING SUM(p.amount_cents) > 100000"
+      },
+      {
+        "base_ok": false,
+        "base_sql": "SELECT \n  a.account_id,\n  p.payment_id,\n  p.amount_cents - COALESCE(prev_amount, 0) AS increase\nFROM \n  payments p\nJOIN (\n  SELECT \n    payment_id,\n    amount_cents,\n    LEAD(amount_cents) OVER (ORDER BY payment_id) AS next_amount\n  FROM \n    payments\n) prev ON p.payment_id = prev.payment_id\nWHERE \n  p.currency = 'EUR'\n  AND p.status = 'succeeded'\n  AND p.method = 'ach'\n  AND p.amount_cents > COALESCE(prev.amount_cents, 0)\n  AND p.amount_cents > 2300\nORDER BY \n  p.paid_at,\n  p.payment_id",
+        "family": "window",
+        "gold_sql": "SELECT account_id, payment_id, amount_cents - prev FROM (SELECT i.account_id, p.payment_id, p.amount_cents, LAG(p.amount_cents) OVER (PARTITION BY i.account_id ORDER BY p.paid_at, p.payment_id) AS prev FROM payments p JOIN invoices i ON i.invoice_id = p.invoice_id WHERE p.status = 'succeeded' AND p.method = 'ach' AND i.currency = 'EUR') WHERE prev IS NOT NULL AND amount_cents - prev > 2300",
+        "heldout_class": "in_distribution",
+        "kind": "still_wrong",
+        "question": "For each account's succeeded EUR ach payments ordered by paid_at then payment_id, return account_id, payment_id and increase over the prior payment where the increase is above 2300 cents.",
+        "student_ok": false,
+        "student_sql": "WITH filtered AS (\n    SELECT p.account_id, p.payment_id\n    FROM payments p\n    JOIN invoices i ON p.invoice_id = i.invoice_id\n    WHERE p.status = 'succeeded'\n      AND i.currency = 'EUR'\n      AND p.method = 'ach'\n)\nSELECT account_id, payment_id, increase\nFROM (\n    SELECT *,\n           ROW_NUMBER() OVER (PARTITION BY account_id ORDER BY p.paid_at, p.payment_id) AS rn\n    FROM filtered\n) sub\nWHERE rn = 1",
+        "task_id": "sql-9e4ddd30c653",
+        "teacher_ok": true,
+        "teacher_sql": "WITH filtered AS (\n    SELECT\n        i.account_id,\n        p.payment_id,\n        p.paid_at,\n        p.amount_cents\n    FROM payments p\n    JOIN invoices i ON p.invoice_id = i.invoice_id\n    WHERE p.method = 'ach'\n      AND p.status = 'succeeded'\n      AND i.currency = 'EUR'\n)\nSELECT\n    account_id,\n    payment_id,\n    (amount_cents - lag_amount) AS increase\nFROM (\n    SELECT\n        *,\n        LAG(amount_cents) OVER (PARTITION BY account_id ORDER BY paid_at, payment_id) AS lag_amount\n    FROM filtered\n) sub\nWHERE lag_amount IS NOT NULL\n  AND (amount_cents - lag_amount) > 2300"
+      },
+      {
+        "base_ok": false,
+        "base_sql": "SELECT account_id\nFROM payments\nJOIN invoices ON payments.invoice_id = invoices.invoice_id\nWHERE payments.status = 'succeeded' AND payments.method = 'card' AND invoices.currency = 'EUR'\nGROUP BY account_id\nHAVING SUM(amount_cents) > (\n    SELECT AVG(total) FROM (\n        SELECT SUM(amount_cents) AS total\n        FROM payments\n        JOIN invoices ON payments.invoice_id = invoices.invoice_id\n        WHERE payments.status = 'succeeded' AND payments.method = 'card' AND invoices.currency = 'EUR'\n        GROUP BY account_id\n    )\n)",
+        "family": "subquery_cte",
+        "gold_sql": "WITH t AS (SELECT i.account_id, SUM(p.amount_cents) AS total FROM payments p JOIN invoices i ON i.invoice_id = p.invoice_id WHERE p.status = 'succeeded' AND p.method = 'card' AND i.currency = 'EUR' GROUP BY i.account_id) SELECT account_id FROM t WHERE total > (SELECT AVG(total) FROM t)",
+        "heldout_class": "in_distribution",
+        "kind": "still_wrong",
+        "question": "List account_ids whose succeeded card payment total on EUR invoices exceeds the mean of per-account totals (only accounts with at least one such payment count toward the mean).",
+        "student_ok": false,
+        "student_sql": "WITH card_payment AS (\n    SELECT i.account_id, COUNT(*) AS cnt\n    FROM payments p\n    JOIN invoices i ON p.invoice_id = i.invoice_id\n    WHERE p.status = 'succeeded'\n      AND p.method = 'card'\n      AND i.currency = 'EUR'\n    GROUP BY i.account_id\n)\nSELECT account_id\nFROM card_payment\nWHERE cnt > (SELECT AVG(cnt) FROM card_payment)",
+        "task_id": "sql-f9e64babddd1",
+        "teacher_ok": false,
+        "teacher_sql": "WITH filtered AS (\n    SELECT p.account_id, p.amount_cents\n    FROM payments p\n    JOIN invoices i ON p.invoice_id = i.invoice_id\n    WHERE p.status = 'succeeded'\n      AND p.method = 'card'\n      AND i.currency = 'EUR'\n),\nagg AS (\n    SELECT account_id, SUM(amount_cents) AS total_cents\n    FROM filtered\n    GROUP BY account_id\n)\nSELECT account_id\nFROM agg\nWHERE total_cents > (SELECT AVG(total_cents) FROM agg)"
+      },
+      {
+        "base_ok": false,
+        "base_sql": "SELECT a.account_id, COUNT(u.user_id) AS user_count\nFROM accounts a\nJOIN users u ON a.account_id = u.account_id\nWHERE a.country = 'CA'\nAND a.created_at <= '2024-12-31'\nAND a.status = 'trial'\nGROUP BY a.account_id\nHAVING COUNT(u.user_id) > (\n    SELECT AVG(COUNT(u2.user_id)) FROM accounts a2\n    JOIN users u2 ON a2.account_id = u2.account_id\n    WHERE a2.country = 'CA'\n    AND a2.created_at <= '2024-12-31'\n    AND a2.status = 'trial'\n    GROUP BY a2.account_id\n    HAVING COUNT(u2.user_id",
+        "family": "subquery_cte",
+        "gold_sql": "WITH c AS (SELECT a.account_id, a.industry, a.status, a.country, a.created_at, COUNT(u.user_id) AS n FROM accounts a LEFT JOIN users u ON u.account_id = a.account_id GROUP BY a.account_id) SELECT account_id, n FROM c WHERE status = 'trial' AND country = 'CA' AND created_at < '2025-01-01' AND n > (SELECT AVG(n) FROM c c2 WHERE c2.industry = c.industry)",
+        "heldout_class": "in_distribution",
+        "kind": "still_wrong",
+        "question": "Which trial accounts in CA created in or before 2024 have more users than the average user count of accounts in their industry (over all accounts in that industry)? Return account_id and user count.",
+        "student_ok": false,
+        "student_sql": "WITH trial_acc AS (\n    SELECT a.account_id,\n           a.industry,\n           COUNT(u.user_id) AS user_cnt\n    FROM accounts a\n    JOIN users u ON u.account_id = a.account_id\n    WHERE a.status = 'trial'\n      AND a.country = 'CA'\n      AND a.created_at <= '2024-12-31'\n    GROUP BY a.account_id, a.industry\n)\nSELECT ta.account_id,\n       ta.user_cnt\nFROM trial_acc ta\nWHERE ta.user_cnt > (\n    SELECT AVG(ta2.user_cnt)\n    FROM trial_acc ta2\n    WHERE ta2.industry = ta.industry\n)",
+        "task_id": "sql-81ead85cb862",
+        "teacher_ok": true,
+        "teacher_sql": "WITH user_counts AS (\n    SELECT\n        a.account_id,\n        a.industry,\n        a.status,\n        a.country,\n        a.created_at,\n        COUNT(u.user_id) AS user_cnt\n    FROM accounts a\n    LEFT JOIN users u ON u.account_id = a.account_id\n    GROUP BY a.account_id, a.industry, a.status, a.country, a.created_at\n),\nindustry_avg AS (\n    SELECT\n        industry,\n        AVG(user_cnt) AS avg_user_cnt\n    FROM user_counts\n    GROUP BY industry\n)\nSELECT\n    uc.account_id,\n    uc.user_cnt\nFROM user_counts uc\nJOIN industry_avg ia ON uc.industry = ia.industry\nWHERE uc.status = 'trial'\n  AND uc.country = 'CA'\n  AND uc.created_at <= '2024-12-31'\n  AND uc.user_cnt > ia.avg_user_cnt"
+      },
+      {
+        "base_ok": false,
+        "base_sql": "SELECT accounts.account_id, SUM(payments.amount_cents) AS total_succeeded_payment_cents\nFROM accounts\nJOIN subscriptions ON accounts.account_id = subscriptions.account_id\nJOIN payments ON subscriptions.subscription_id = payments.subscription_id\nWHERE accounts.account_id = payments.invoice_id\nGROUP BY accounts.account_id\nHAVING SUM(payments.amount_cents) > 5000",
+        "family": "aggregation",
+        "gold_sql": "SELECT i.account_id, SUM(p.amount_cents) FROM payments p JOIN invoices i ON i.invoice_id = p.invoice_id WHERE p.status = 'succeeded' GROUP BY i.account_id HAVING SUM(p.amount_cents) > 500000",
+        "heldout_class": "in_distribution",
+        "kind": "still_wrong",
+        "question": "Return account_id and total succeeded payment cents for accounts whose total exceeds $5000.",
+        "student_ok": false,
+        "student_sql": "SELECT a.account_id, SUM(p.amount_cents) AS total_succeeded_payment_cents\nFROM payments p\nJOIN invoices i ON p.invoice_id = i.invoice_id\nJOIN accounts a ON i.account_id = a.account_id\nWHERE p.status = 'succeeded'\n  AND a.account_id IS NOT NULL\n  AND SUM(p.amount_cents) > 500000",
+        "task_id": "sql-0b71fa8779fc",
+        "teacher_ok": false,
+        "teacher_sql": "SELECT p.account_id,\n       SUM(p.amount_cents) AS total_succeeded_payment_cents\nFROM payments p\nWHERE p.status = 'succeeded'\nGROUP BY p.account_id\nHAVING SUM(p.amount_cents) > 500000"
+      },
+      {
+        "base_ok": false,
+        "base_sql": "SELECT ROUND(AVG(s.csat_score), 2) AS avg_csat\nFROM accounts a\nJOIN support_tickets s ON a.account_id = s.account_id\nWHERE s.priority = 'low'\nAND s.category = 'feature_request'\nAND s.status = 'closed'\nAND a.account_id IN (\n    SELECT DISTINCT account_id\n    FROM support_tickets\n    WHERE s.status = 'closed'\n    AND s.category = 'feature_request'\n    AND s.priority = 'low'\n)",
+        "family": "null_handling",
+        "gold_sql": "SELECT a.name, ROUND(AVG(t.csat_score), 2) FROM support_tickets t JOIN accounts a ON a.account_id = t.account_id WHERE t.priority = 'low' AND t.category = 'feature_request' GROUP BY a.account_id HAVING COUNT(t.csat_score) >= 1",
+        "heldout_class": "in_distribution",
+        "kind": "still_wrong",
+        "question": "Average CSAT (rounded to 2 decimals) per account name for low-priority feature_request tickets, only accounts with at least 1 rated tickets (missing scores don't count).",
+        "student_ok": false,
+        "student_sql": "SELECT a.name AS account_name,\n       ROUND(AVG(t.csat_score), 2) AS avg_csat\nFROM support_tickets t\nJOIN accounts a ON t.account_id = a.account_id\nWHERE t.priority = 'low'\n  AND t.category = 'feature_request'\n  AND t.csat_score IS NOT NULL\nGROUP BY a.name",
+        "task_id": "sql-1e32bb069a01",
+        "teacher_ok": false,
+        "teacher_sql": "SELECT a.name AS account_name,\n       ROUND(AVG(t.csat_score), 2) AS avg_csat\nFROM support_tickets t\nJOIN accounts a ON t.account_id = a.account_id\nWHERE t.priority = 'low'\n  AND t.category = 'feature_request'\n  AND t.csat_score IS NOT NULL\nGROUP BY a.name"
+      },
+      {
+        "base_ok": true,
+        "base_sql": "SELECT DISTINCT accounts.name\nFROM accounts\nJOIN users ON accounts.account_id = users.account_id\nJOIN feature_usage ON users.user_id = feature_usage.user_id\nWHERE accounts.industry = 'fintech'\nAND feature_usage.feature = 'api'\nAND feature_usage.event_count > 445",
+        "family": "join",
+        "gold_sql": "SELECT DISTINCT a.name FROM feature_usage f JOIN users u ON u.user_id = f.user_id JOIN accounts a ON a.account_id = u.account_id WHERE f.feature = 'api' AND f.event_count > 445 AND a.industry = 'fintech'",
+        "heldout_class": "in_distribution",
+        "kind": "regressed",
+        "question": "Which fintech accounts have users with a single 'api' usage record of more than 445 events? Return distinct account names.",
+        "student_ok": false,
+        "student_sql": "WITH api_users AS (\n    SELECT u.account_id\n    FROM users u\n    JOIN feature_usage fu ON fu.user_id = u.user_id\n    WHERE fu.feature = 'api'\n    GROUP BY u.user_id\n    HAVING COUNT(*) = 1 AND MAX(fu.event_count) > 445\n)\nSELECT DISTINCT a.name\nFROM accounts a\nJOIN api_users au ON au.account_id = a.account_id\nWHERE a.industry = 'fintech'",
+        "task_id": "sql-da3b9474910b",
+        "teacher_ok": false,
+        "teacher_sql": "WITH api_users AS (\n    SELECT u.account_id, u.user_id\n    FROM users u\n    JOIN feature_usage fu ON fu.user_id = u.user_id\n    WHERE fu.feature = 'api'\n    GROUP BY u.account_id, u.user_id\n    HAVING COUNT(*) = 1 AND MAX(fu.event_count) > 445\n)\nSELECT DISTINCT a.name\nFROM accounts a\nJOIN api_users au ON au.account_id = a.account_id\nWHERE a.industry = 'fintech'"
+      },
+      {
+        "base_ok": true,
+        "base_sql": "SELECT accounts.name FROM accounts WHERE accounts.country = 'NL' AND accounts.status = 'active'",
+        "family": "filter",
+        "gold_sql": "SELECT name FROM accounts WHERE country = 'NL' AND status = 'active'",
+        "heldout_class": "in_distribution",
+        "kind": "regressed",
+        "question": "List the names of active accounts in NL.",
+        "student_ok": false,
+        "student_sql": "SELECT name FROM accounts WHERE status='active' AND country='NL' AND deleted_at IS NULL",
+        "task_id": "sql-ea0d14ad7562",
+        "teacher_ok": true,
+        "teacher_sql": "SELECT name FROM accounts WHERE status='active' AND country='NL'"
+      }
+    ],
+    "gate": {
+      "base_acc": 0.25666666666666665,
+      "base_only_vs_student": 2,
+      "bootstrap_resamples_used": 10000,
+      "bootstrap_skipped": 0,
+      "decision": "PROMOTE",
+      "mcnemar_p": 1.6266184059419292e-57,
+      "n": 300,
+      "ratio_hi": 1.0610687022900764,
+      "ratio_lo": 0.9927536231884058,
+      "ratio_point": 1.025925925925926,
+      "reasons": [
+        "ratio lower bound 0.993 >= 0.85 (point 1.026)",
+        "McNemar exact p=0.0000 < 0.05 (student-only 202, base-only 2)"
+      ],
+      "student_acc": 0.9233333333333333,
+      "student_ci": [
+        0.8875898961498251,
+        0.9483723882133924
+      ],
+      "student_only_vs_base": 202,
+      "teacher_acc": 0.9,
+      "thresholds": {
+        "bootstrap_resamples": 10000,
+        "mcnemar_alpha": 0.05,
+        "ratio_lower_bound_min": 0.85,
+        "seed": 1234
+      }
+    },
+    "heldout_sha256": "cf92bf60e3c734f63035273395e629f3dafe0afab8397c4b01e2976f683dd878",
+    "human": null,
+    "n": 300,
+    "stress": {
+      "accuracy": {
+        "base": 0.09,
+        "student": 0.16,
+        "teacher": 0.99
+      },
+      "accuracy_by_family": {
+        "date_math": {
+          "base": 0.03225806451612903,
+          "student": 0.20967741935483872,
+          "teacher": 0.9838709677419355
+        },
+        "set_ops": {
+          "base": 0.18421052631578946,
+          "student": 0.07894736842105263,
+          "teacher": 1.0
+        }
+      },
+      "families": [
+        "date_math",
+        "set_ops"
+      ],
+      "n": 100,
+      "note": "reserved families, never in train/dev/gate; reported separately, not a gate input",
+      "sha256": "1ba7bcde6e2db4f29da897ab88c4a7f200eb6c96d3d3610da9ad3c1d2a172896",
+      "unparseable": {
+        "base": 0,
+        "student": 0,
+        "teacher": 0
+      }
+    },
+    "unparseable": {
+      "base": 0,
+      "student": 0,
+      "teacher": 0
+    }
+  },
+  "finetune": [
+    {
+      "base_model": "Qwen/Qwen3-1.7B",
+      "events": [
+        {
+          "created_at": 1791132544,
+          "level": "info",
+          "message": "Job is submitted"
+        },
+        {
+          "created_at": 1791132587,
+          "level": "info",
+          "message": "Dataset 'validation' processed successfully"
+        },
+        {
+          "created_at": 1791132592,
+          "level": "info",
+          "message": "Dataset 'training' processed successfully"
+        },
+        {
+          "created_at": 1791132781,
+          "level": "info",
+          "message": "Training started"
+        },
+        {
+          "created_at": 1791133171,
+          "level": "info",
+          "message": "Training completed successfully"
+        }
+      ],
+      "hyperparameters": {
+        "batch_size": 4,
+        "context_length": 8192,
+        "learning_rate": 0.0001,
+        "learning_rate_multiplier": null,
+        "lora": true,
+        "lora_alpha": 32,
+        "lora_dropout": 0.0,
+        "lora_r": 16,
+        "max_grad_norm": 1.0,
+        "n_epochs": 3,
+        "packing": false,
+        "warmup_ratio": 0.0,
+        "weight_decay": 0.0
+      },
+      "job_id": "ftjob-4676999d7acd4b058e776abc1170373f",
+      "loss_curve": [
+        {
+          "step": 496,
+          "train_loss": 0.09402879327535629,
+          "valid_loss": 0.3526250422000885
+        },
+        {
+          "step": 992,
+          "train_loss": 0.07080817967653275,
+          "valid_loss": 0.4413396120071411
+        },
+        {
+          "step": 1488,
+          "train_loss": 0.04185228422284126,
+          "valid_loss": 0.5497852563858032
+        }
+      ],
+      "round": 1,
+      "total_steps": 1488,
+      "trained_steps": 1488,
+      "trained_tokens": 5842530
+    }
+  ],
+  "headroom": {
+    "base_dev_acc": 0.22,
+    "max_allowed": 0.8
+  },
+  "label": null,
+  "llm_attempt_counters": {
+    "eval_teacher:failed_attempts": 0,
+    "eval_teacher:schema_retries": 0,
+    "paraphrase:failed_attempts": 0,
+    "paraphrase:schema_retries": 1,
+    "teacher_paraphrase:failed_attempts": 0,
+    "teacher_paraphrase:schema_retries": 0,
+    "teacher_train:failed_attempts": 0,
+    "teacher_train:schema_retries": 0,
+    "triage_format:failed_attempts": 0,
+    "triage_format:schema_retries": 0
+  },
+  "llm_errors_by_purpose": {},
+  "pack": "sql",
+  "paraphrase": {
+    "after_dedup": 1588,
+    "discards": {
+      "duplicate_of_original": 159,
+      "duplicate_of_paraphrase": 2,
+      "empty": 3,
+      "failed_verification": 190,
+      "over_limit": 16
+    },
+    "final_train_rows": 1981,
+    "generated": 1768,
+    "originals": 583,
+    "per_task": 3,
+    "questions_failed": 0,
+    "questions_paraphrased": 583,
+    "row_cap": 2000,
+    "rows_added": 1398,
+    "seed": 1234,
+    "teacher_attempt_counters": {
+      "candidates": 1588,
+      "dropped": 190,
+      "exec_error": 10,
+      "gold_error": 0,
+      "result_mismatch": 180,
+      "tasks": 1588,
+      "verified": 1398
+    },
+    "trimmed_by_cap": 0,
+    "verified": 1398,
+    "yield": 0.7907239819004525,
+    "yield_by_family": {
+      "aggregation": {
+        "generated": 178,
+        "questions": 53,
+        "verified": 117,
+        "yield": 0.6573033707865169
+      },
+      "anti_join": {
+        "generated": 189,
+        "questions": 63,
+        "verified": 152,
+        "yield": 0.8042328042328042
+      },
+      "conditional": {
+        "generated": 144,
+        "questions": 48,
+        "verified": 105,
+        "yield": 0.7291666666666666
+      },
+      "filter": {
+        "generated": 141,
+        "questions": 47,
+        "verified": 124,
+        "yield": 0.8794326241134752
+      },
+      "join": {
+        "generated": 291,
+        "questions": 97,
+        "verified": 240,
+        "yield": 0.8247422680412371
+      },
+      "null_handling": {
+        "generated": 183,
+        "questions": 61,
+        "verified": 143,
+        "yield": 0.7814207650273224
+      },
+      "soft_delete": {
+        "generated": 111,
+        "questions": 37,
+        "verified": 93,
+        "yield": 0.8378378378378378
+      },
+      "subquery_cte": {
+        "generated": 165,
+        "questions": 55,
+        "verified": 114,
+        "yield": 0.6909090909090909
+      },
+      "top_n": {
+        "generated": 153,
+        "questions": 51,
+        "verified": 136,
+        "yield": 0.8888888888888888
+      },
+      "window": {
+        "generated": 213,
+        "questions": 71,
+        "verified": 174,
+        "yield": 0.8169014084507042
+      }
+    }
+  },
+  "rounds": [
+    {
+      "adapter_sha256": "4bebc793ba4158532adc33ca5085f37003aad46b679db9085cc89864fa8f553f",
+      "clusters": [],
+      "dev_acc": 0.9066666666666666,
+      "dev_failures": 14,
+      "finetune_stage": "finetune_r1",
+      "job_id": "ftjob-4676999d7acd4b058e776abc1170373f",
+      "round": 1,
+      "train_rows": 1981
+    }
+  ],
+  "rounds_stop_reason": "dev accuracy >= dev_target_acc=0.9",
+  "run_id": "sql-gated-20261004T155134Z-66ff347c",
+  "sandbox_lineage": [],
+  "stages": [
+    {
+      "output_sha256": "e646180d497ad7edd10c30ded3f17320bd0edf952990697c7b1780c8af448edd",
+      "stage": "schema"
+    },
+    {
+      "output_sha256": "1a117e05bdce7dab6c6318c2d3e1f6cf076077503c21a33e60020526a85b47ca",
+      "stage": "questions"
+    },
+    {
+      "output_sha256": "1d40bb7ba737a67ead47e7363d13298d66b4010c39b809d108c4aab6d6cbac83",
+      "stage": "gold_crosscheck"
+    },
+    {
+      "output_sha256": "4e57f2656b2d549042f1f4feaed0c82025a3ba21ceee1b68dcff378a1c8aaefc",
+      "stage": "verifier_selftest"
+    },
+    {
+      "output_sha256": "befa64f515872550bbafffdcdb1816c242773635d95bad5cb01ce38dd9a61c14",
+      "stage": "split"
+    },
+    {
+      "output_sha256": "129a5c10607c5f8639bc12c254defdc554aed1f7c1aaf5926127fcbcc20d262f",
+      "stage": "headroom"
+    },
+    {
+      "output_sha256": "af5193e124e265c3a42558fcf5c33f5e0093002c6f80a0953ff12f697db19b95",
+      "stage": "teacher_data"
+    },
+    {
+      "output_sha256": "e86d912bb49930dd8a60f35b566d7cd01c96b72d15adac725566383d40b7150f",
+      "stage": "paraphrase"
+    },
+    {
+      "output_sha256": "cc06cd67bec73db0e34131220e596dae35a9053a89d7a79dd5548143ac4bf4ee",
+      "stage": "finetune_r1"
+    },
+    {
+      "output_sha256": "8868ae043c08efdc2057d4c10f352aca3794f2c24eade8d2bb18ba0de9f0ff5b",
+      "stage": "dev_eval_r1"
+    },
+    {
+      "output_sha256": "cee04f9cfcc32b7b7e3ffce1faf29a9ff63c62e7a2952daddc4ef635fb1b17ee",
+      "stage": "final_eval"
+    }
+  ]
+}

@@ -1,0 +1,28 @@
+{
+  "nodes": [
+    {
+      "cost_usd": null,
+      "data_delta": null,
+      "dev_score": 0.22,
+      "hypothesis": null,
+      "id": "base",
+      "label": "base model",
+      "parent_id": null,
+      "round": null,
+      "sandbox_image": null,
+      "selected": false
+    },
+    {
+      "cost_usd": null,
+      "data_delta": null,
+      "dev_score": 0.9066666666666666,
+      "hypothesis": null,
+      "id": "round-1",
+      "label": "round 1",
+      "parent_id": "base",
+      "round": 1,
+      "sandbox_image": null,
+      "selected": true
+    }
+  ]
+}

@@ -1,0 +1,110 @@
+{
+  "dry_run": false,
+  "error": null,
+  "recorded": true,
+  "recorded_at": "2026-10-05T00:04:35.588559+00:00",
+  "run_id": "sql-gated-20261004T155134Z-66ff347c",
+  "sandbox": {
+    "concurrency_peak": null,
+    "operations": null
+  },
+  "spend": {
+    "by_model": {
+      "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B": {
+        "calls": 684,
+        "input_tokens": 126538,
+        "output_tokens": 753151,
+        "usd": 0.18834852
+      },
+      "nvidia/nemotron-3-super-120b-a12b": {
+        "calls": 2638,
+        "input_tokens": 2537916,
+        "output_tokens": 1079412,
+        "usd": 1.7328456
+      }
+    },
+    "cap_usd": 8.0,
+    "finetune_billed_usd": 2.337012,
+    "finetune_ceiling_usd": null,
+    "finetune_usd_estimate": 2.337012,
+    "total_usd": 4.25820612
+  },
+  "stages": [
+    {
+      "ended_at": "2026-10-04T15:51:36.903323+00:00",
+      "name": "schema",
+      "started_at": null,
+      "status": "done"
+    },
+    {
+      "ended_at": "2026-10-04T15:51:38.647168+00:00",
+      "name": "questions",
+      "started_at": null,
+      "status": "done"
+    },
+    {
+      "ended_at": "2026-10-04T15:52:01.059468+00:00",
+      "name": "gold_crosscheck",
+      "started_at": null,
+      "status": "done"
+    },
+    {
+      "ended_at": "2026-10-04T15:53:38.626184+00:00",
+      "name": "verifier_selftest",
+      "started_at": null,
+      "status": "done"
+    },
+    {
+      "ended_at": "2026-10-04T15:53:38.689974+00:00",
+      "name": "split",
+      "started_at": null,
+      "status": "done"
+    },
+    {
+      "ended_at": "2026-10-04T16:27:44.363835+00:00",
+      "name": "headroom",
+      "started_at": null,
+      "status": "done"
+    },
+    {
+      "ended_at": "2026-10-04T16:31:06.566714+00:00",
+      "name": "teacher_data",
+      "started_at": null,
+      "status": "done"
+    },
+    {
+      "ended_at": "2026-10-04T16:48:41.784602+00:00",
+      "name": "paraphrase",
+      "started_at": null,
+      "status": "done"
+    },
+    {
+      "ended_at": "2026-10-04T17:42:40.384881+00:00",
+      "name": "finetune_r1",
+      "started_at": null,
+      "status": "done"
+    },
+    {
+      "ended_at": "2026-10-04T18:01:49.036351+00:00",
+      "name": "dev_eval_r1",
+      "started_at": null,
+      "status": "done"
+    },
+    {
+      "ended_at": "2026-10-04T18:54:32.241734+00:00",
+      "name": "final_eval",
+      "started_at": null,
+      "status": "done"
+    }
+  ],
+  "status": "complete",
+  "verifier": {
+    "code": null,
+    "language": "sql",
+    "selftest": {
+      "accepted_gold": 50,
+      "failures": 0,
+      "rejected_corruptions": 199
+    }
+  }
+}

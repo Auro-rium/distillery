@@ -1,0 +1,77 @@
+{
+  "dry_run": false,
+  "heldout_sha256": "cf92bf60e3c734f63035273395e629f3dafe0afab8397c4b01e2976f683dd878",
+  "label": null,
+  "recorded_at": "2026-10-05T00:04:35.588559+00:00",
+  "run_id": "sql-gated-20261004T155134Z-66ff347c",
+  "source_run_id": "sql-gated-20261004T155134Z-66ff347c",
+  "stages": [
+    {
+      "input_hash": "831858ca2f6720f4d4565f83178b1a3d8bc8432c58cc1bccfbe0f97c05a084e5",
+      "output_sha256": "8868ae043c08efdc2057d4c10f352aca3794f2c24eade8d2bb18ba0de9f0ff5b",
+      "stage": "dev_eval_r1",
+      "updated_at": "2026-10-04T18:01:49.036351+00:00"
+    },
+    {
+      "input_hash": "349b07cc988a3125d7c97abbd0c0b467cdeefe8e72b6f79d2687ed5a8a93ada4",
+      "output_sha256": "cee04f9cfcc32b7b7e3ffce1faf29a9ff63c62e7a2952daddc4ef635fb1b17ee",
+      "stage": "final_eval",
+      "updated_at": "2026-10-04T18:54:32.241734+00:00"
+    },
+    {
+      "input_hash": "e2c1cb0610e59358b36a97f9cf29e0ecee2a436f518befd9ce13e5905bb0365d",
+      "output_sha256": "cc06cd67bec73db0e34131220e596dae35a9053a89d7a79dd5548143ac4bf4ee",
+      "stage": "finetune_r1",
+      "updated_at": "2026-10-04T17:42:40.384881+00:00"
+    },
+    {
+      "input_hash": "b1f3530b9b78f770d2fe12a22e2953e2ef1ab5a55478ee585efc08bf1c1aceda",
+      "output_sha256": "1d40bb7ba737a67ead47e7363d13298d66b4010c39b809d108c4aab6d6cbac83",
+      "stage": "gold_crosscheck",
+      "updated_at": "2026-10-04T15:52:01.059468+00:00"
+    },
+    {
+      "input_hash": "84d6001fd2211dfd2ea7a5542b15d30ae44e77f1373860859fad4e953c492277",
+      "output_sha256": "129a5c10607c5f8639bc12c254defdc554aed1f7c1aaf5926127fcbcc20d262f",
+      "stage": "headroom",
+      "updated_at": "2026-10-04T16:27:44.363835+00:00"
+    },
+    {
+      "input_hash": "6c5040b45984336bda8c1c800c83c0132d3b37e3eeca14d1aa918cf124391049",
+      "output_sha256": "e86d912bb49930dd8a60f35b566d7cd01c96b72d15adac725566383d40b7150f",
+      "stage": "paraphrase",
+      "updated_at": "2026-10-04T16:48:41.784602+00:00"
+    },
+    {
+      "input_hash": "9f2bd96e34cc9acc79b41f31811f5cfc06e31147bf10a9a99b7fd9d72c41948a",
+      "output_sha256": "1a117e05bdce7dab6c6318c2d3e1f6cf076077503c21a33e60020526a85b47ca",
+      "stage": "questions",
+      "updated_at": "2026-10-04T15:51:38.647168+00:00"
+    },
+    {
+      "input_hash": "5cb71f0ddb8fc41d77b82ed87bd8bcf828f98b9238e7272aa71c851c23c98154",
+      "output_sha256": "e646180d497ad7edd10c30ded3f17320bd0edf952990697c7b1780c8af448edd",
+      "stage": "schema",
+      "updated_at": "2026-10-04T15:51:36.903323+00:00"
+    },
+    {
+      "input_hash": "e78de909de287f10f0272698a9397bc46525d5386b5eca4be6658f847c304520",
+      "output_sha256": "befa64f515872550bbafffdcdb1816c242773635d95bad5cb01ce38dd9a61c14",
+      "stage": "split",
+      "updated_at": "2026-10-04T15:53:38.689974+00:00"
+    },
+    {
+      "input_hash": "9b7889059c69d54312f462430cc8d12b48732b3404639711b4cfda47e4de7c6a",
+      "output_sha256": "af5193e124e265c3a42558fcf5c33f5e0093002c6f80a0953ff12f697db19b95",
+      "stage": "teacher_data",
+      "updated_at": "2026-10-04T16:31:06.566714+00:00"
+    },
+    {
+      "input_hash": "690e2981f3e428d63aa598660852b07c6e55e934db9f8cfc357f247ec815723a",
+      "output_sha256": "4e57f2656b2d549042f1f4feaed0c82025a3ba21ceee1b68dcff378a1c8aaefc",
+      "stage": "verifier_selftest",
+      "updated_at": "2026-10-04T15:53:38.626184+00:00"
+    }
+  ],
+  "stress_sha256": "1ba7bcde6e2db4f29da897ab88c4a7f200eb6c96d3d3610da9ad3c1d2a172896"
+}
