@@ -44,6 +44,7 @@ class Job:
     dry_run: bool
     budget_usd: float | None = None
     finetune_estimate_usd: float | None = None
+    pack: str = "sql"  # task pack (taskpacks.base registry name), passed to the CLI as --pack
     state: str = "queued"  # queued | running | finished
     error: str | None = None
     logs: list[str] = field(default_factory=list)
@@ -137,7 +138,7 @@ def subprocess_executor(
 
     def run(job: Job, log: Callable[[str], None]) -> int:
         argv = [
-            sys.executable, "-m", "distillery", "--root", root, "run", "--pack", "sql",
+            sys.executable, "-m", "distillery", "--root", root, "run", "--pack", job.pack,
             "--scale", job.scale, "--run-id", job.run_id,
         ]  # fmt: skip
         env = dict(os.environ)

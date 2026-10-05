@@ -1,7 +1,7 @@
 import { fmtInt } from "../../api/format";
 import type { PlaygroundResult } from "../../api/types";
 import { Badge, Card } from "../../ui";
-import { SqlBlock } from "../report/SqlBlock";
+import { CodeBlock } from "../report/CodeBlock";
 import { cellText, normalizeRows } from "./rows";
 
 /** Longest preview drawn; the server itself only previews a few rows. */
@@ -53,7 +53,7 @@ export function Pane({ name, r }: { name: string; r: PlaygroundResult }) {
             {r.verified === false && <Badge tone="bad">verified: wrong result</Badge>}
             {r.verified === null && <Badge>not verified (question is not a known task)</Badge>}
           </div>
-          {r.sql ? <SqlBlock label="SQL" code={r.sql} /> : <p className="muted">No SQL returned.</p>}
+          {r.sql ? <CodeBlock label="SQL" language="sql" code={r.sql} /> : <p className="muted">No SQL returned.</p>}
           {r.error && <p role="alert" className="pg-err">Error: {r.error}</p>}
           {r.rows_preview !== null && r.rows_preview !== undefined && <RowsPreview rows={r.rows_preview} />}
         </div>

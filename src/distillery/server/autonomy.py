@@ -26,6 +26,7 @@ def write(run_dir: Path, job: Job) -> None:
     data = {
         "run_id": job.run_id,
         "scale": job.scale,
+        "pack": job.pack,
         "dry_run": job.dry_run,
         "budget_usd": job.budget_usd,
         "finetune_estimate_usd": job.finetune_estimate_usd,
@@ -80,4 +81,5 @@ def resumable(*stores: Store) -> Iterator[Job]:
             yield Job(
                 str(data["run_id"]), str(data["scale"]), dry,
                 data.get("budget_usd"), data.get("finetune_estimate_usd"),
+                str(data.get("pack", "sql")),
             )  # fmt: skip

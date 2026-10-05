@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Report } from "../../api/types";
 import { diffAgainstGold } from "../../lib/diff";
 import { Counters } from "./sections";
-import { SqlBlock } from "./SqlBlock";
+import { CodeBlock } from "./CodeBlock";
 
 afterEach(() => { cleanup(); vi.useRealTimers(); vi.unstubAllGlobals(); });
 
@@ -29,9 +29,9 @@ describe("long counter names wrap at underscores, never inside a word", () => {
   });
 });
 
-describe("SqlBlock", () => {
+describe("CodeBlock", () => {
   it("keeps the copy button in the header, outside the code, so it can never cover SQL", () => {
-    const { container, getByRole } = render(<SqlBlock label="Gold" code="SELECT 1" status={<span>correct</span>} />);
+    const { container, getByRole } = render(<CodeBlock label="Gold" code="SELECT 1" status={<span>correct</span>} />);
     const head = container.querySelector(".sql-head")!;
     expect(head.textContent).toContain("Gold");
     expect(head.textContent).toContain("correct");
@@ -41,12 +41,12 @@ describe("SqlBlock", () => {
   });
   it("marks tokens from a diff and still joins back to the exact string", () => {
     const d = diffAgainstGold("SELECT a FROM t", "SELECT b FROM t")!;
-    const { container } = render(<SqlBlock label="Student" code="SELECT b FROM t" segments={d.other} side="other" />);
+    const { container } = render(<CodeBlock label="Student" code="SELECT b FROM t" segments={d.other} side="other" />);
     expect(container.querySelector("mark.diff-other")!.textContent!.trim()).toBe("b");
     expect(container.querySelector("code")!.textContent).toBe("SELECT b FROM t");
   });
   it("shows its note (why a diff is or is not drawn) under the code", () => {
-    const { container } = render(<SqlBlock label="Base" code="SELECT 1" note="diff skipped: SQL too long" />);
+    const { container } = render(<CodeBlock label="Base" code="SELECT 1" note="diff skipped: SQL too long" />);
     expect(container.querySelector(".sql-block")!.textContent).toContain("diff skipped: SQL too long");
   });
 });

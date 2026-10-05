@@ -4,8 +4,11 @@ import type { Example, ExamplesResult } from "../../api/types";
 import { Badge } from "../../components";
 import { diffAgainstGold, type SideBySide } from "../../lib/diff";
 import { ChoiceGroup, Tabs, TabsContent, TabsList, TabsTrigger } from "../../ui";
-import { SqlBlock } from "./SqlBlock";
+import { CodeBlock } from "./CodeBlock";
 import { useWide } from "./useWide";
+
+/** Noun for the side-by-side region, by code language. */
+const LABEL: Record<string, string> = { sql: "SQL", json: "tool calls" };
 
 type Kind = Example["kind"];
 type Model = "base" | "student" | "teacher";
@@ -20,27 +23,30 @@ const MODELS: readonly { key: Model; label: string }[] = [
   { key: "student", label: "Student" },
   { key: "teacher", label: "Teacher" },
 ];
-const SQL_OF: Record<Model, (e: Example) => string> = { base: (e) => e.base_sql, student: (e) => e.student_sql, teacher: (e) => e.teacher_sql };
+/** One model's answer string: the pack-neutral field, else the SQL pack's own name for it (older servers send only *_sql). */
+type Who = Model | "gold";
+const answerOf = (e: Example, who: Who): string => e[`${who}_answer`] ?? e[`${who}_sql`] ?? "";
+const ANSWER_OF: Record<Model, (e: Example) => string> = { base: (e) => answerOf(e, "base"), student: (e) => answerOf(e, "student"), teacher: (e) => answerOf(e, "teacher") };
 const OK_OF: Record<Model, (e: Example) => boolean> = { base: (e) => e.base_ok, student: (e) => e.student_ok, teacher: (e) => e.teacher_ok };
 
-function diffNote(d: SideBySide | null): string {
-  return d === null ? "diff skipped: SQL too long" : d.identical ? "same tokens as gold" : "tokens not in gold are highlighted";
+function diffNote(d: SideBySide | null, noun: string): string {
+  return d === null ? `diff skipped: ${noun} too long` : d.identical ? "same tokens as gold" : "tokens not in gold are highlighted";
 }
 
 /** One example, side by side. Correctness flags come from the API; the highlighting is a plain token diff of the returned SQL strings. */
-function ExampleDetail({ e, id }: { e: Example; id: string }) {
+function ExampleDetail({ e, id, language }: { e: Example; id: string; language: string }) {
   const [against, setAgainst] = useState<Model>("student");
   const group = useId();
   const diffs = useMemo(
     () => ({
-      base: diffAgainstGold(e.gold_sql, e.base_sql),
-      student: diffAgainstGold(e.gold_sql, e.student_sql),
-      teacher: diffAgainstGold(e.gold_sql, e.teacher_sql),
+      base: diffAgainstGold(answerOf(e, "gold"), answerOf(e, "base")),
+      student: diffAgainstGold(answerOf(e, "gold"), answerOf(e, "student")),
+      teacher: diffAgainstGold(answerOf(e, "gold"), answerOf(e, "teacher")),
     }),
-    [e.gold_sql, e.base_sql, e.student_sql, e.teacher_sql],
+    [e],
   );
   return (
-    <div className="exd" id={id} role="region" aria-label={`Side-by-side SQL for ${e.question}`}>
+    <div className="exd" id={id} role="region" aria-label={`Side-by-side ${LABEL[language] ?? "answers"} for ${e.question}`}>
       <h4 className="exd-q">{e.question}</h4>
       <p className="mono muted exd-meta">{e.task_id} · {e.family} · {e.heldout_class}</p>
       <ChoiceGroup
@@ -52,23 +58,25 @@ function ExampleDetail({ e, id }: { e: Example; id: string }) {
       />
       <div className="cmp">
         <div className="exd-sql" data-model="gold">
-          <SqlBlock
+          <CodeBlock
             label="Gold"
-            code={e.gold_sql}
+            language={language}
+            code={answerOf(e, "gold")}
             segments={diffs[against]?.gold}
             side="gold"
-            note={diffs[against] === null ? "diff skipped: SQL too long" : `tokens missing from ${against} SQL are highlighted`}
+            note={diffs[against] === null ? `diff skipped: ${LABEL[language] ?? "answer"} too long` : `tokens missing from ${against} ${LABEL[language] ?? "answer"} are highlighted`}
           />
         </div>
         {MODELS.map((m) => (
           <div className="exd-sql" data-model={m.key} key={m.key}>
-            <SqlBlock
+            <CodeBlock
               label={m.label}
+              language={language}
               status={<Badge tone={OK_OF[m.key](e) ? "ok" : "bad"}>{OK_OF[m.key](e) ? "correct" : "wrong"}</Badge>}
-              code={SQL_OF[m.key](e)}
+              code={ANSWER_OF[m.key](e)}
               segments={diffs[m.key]?.other}
               side="other"
-              note={diffNote(diffs[m.key])}
+              note={diffNote(diffs[m.key], LABEL[language] ?? "answer")}
             />
           </div>
         ))}
@@ -114,7 +122,7 @@ function Row(props: { e: Example; open: boolean; panel: string; onPick: () => vo
  * Wide windows put the rows in a bounded, scrolling list and the open example beside it at its natural height,
  * so it is never clipped or scrolled inside itself. Exactly one example is open at a time; the first opens by itself.
  */
-function KindList({ items, total, meaning }: { items: Example[]; total: number | null | undefined; meaning: string }) {
+function KindList({ items, total, meaning, language }: { items: Example[]; total: number | null | undefined; meaning: string; language: string }) {
   const uid = useId();
   const wide = useWide();
   const [picked, setPicked] = useState<string | null | undefined>(undefined); // undefined: the first one is open
@@ -145,9 +153,9 @@ function KindList({ items, total, meaning }: { items: Example[]; total: number |
             {items.map((e, i) => <li key={e.task_id}>{row(e, i)}</li>)}
           </ul>
           {openItem ? (
-            <ExampleDetail e={openItem} id={`${uid}-${items.indexOf(openItem)}`} />
+            <ExampleDetail e={openItem} id={`${uid}-${items.indexOf(openItem)}`} language={language} />
           ) : (
-            <p className="exb-pick muted">Select an example to compare its SQL.</p>
+            <p className="exb-pick muted">{`Select an example to compare its ${LABEL[language] ?? "answers"}.`}</p>
           )}
         </div>
       ) : (
@@ -155,17 +163,17 @@ function KindList({ items, total, meaning }: { items: Example[]; total: number |
           {items.map((e, i) => (
             <Fragment key={e.task_id}>
               {row(e, i)}
-              {e.task_id === open && <ExampleDetail e={e} id={`${uid}-${i}`} />}
+              {e.task_id === open && <ExampleDetail e={e} id={`${uid}-${i}`} language={language} />}
             </Fragment>
           ))}
-          {open === null && <p className="exb-pick muted">Select an example to compare its SQL.</p>}
+          {open === null && <p className="exb-pick muted">{`Select an example to compare its ${LABEL[language] ?? "answers"}.`}</p>}
         </div>
       )}
     </div>
   );
 }
 
-export default function ExampleBrowser({ result }: { result: ExamplesResult }) {
+export default function ExampleBrowser({ result, language = "sql" }: { result: ExamplesResult; language?: string }) {
   const byKind = useMemo(() => {
     const m = new Map<Kind, Example[]>(KINDS.map((k) => [k.kind, []]));
     for (const e of result.items) m.get(e.kind)?.push(e);
@@ -180,7 +188,7 @@ export default function ExampleBrowser({ result }: { result: ExamplesResult }) {
       </TabsList>
       {KINDS.map((k) => (
         <TabsContent key={k.kind} value={k.kind}>
-          <KindList items={byKind.get(k.kind) ?? []} total={result.totals?.[k.kind]} meaning={k.meaning} />
+          <KindList items={byKind.get(k.kind) ?? []} total={result.totals?.[k.kind]} meaning={k.meaning} language={language} />
         </TabsContent>
       ))}
     </Tabs>

@@ -5,6 +5,13 @@
     "teacher": "fake-t",
     "triage": "fake-n"
   },
+  "packs": [
+    {
+      "answer_label": "SQL",
+      "language": "sql",
+      "name": "sql"
+    }
+  ],
   "playground": {
     "daily_cap_usd": 1.0,
     "enabled": false,

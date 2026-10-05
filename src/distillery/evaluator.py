@@ -18,16 +18,23 @@ from distillery.finetune import TrainedArtifact, sha256_file
 from distillery.gate import GateResult, evaluate_gate
 from distillery.humanset import SELECTION_BIAS_NOTE, HumanSetError, read_confirmed
 from distillery.misses import classify_miss
-from distillery.prompts import build_messages, extract_sql
+from distillery.prompts import extract_sql
 from distillery.store import Store, canonical_json, sha256_hex
+from distillery.taskpacks.base import Pack, get_pack
 from distillery.taskpacks.sql.executor import Executor
 from distillery.taskpacks.sql.human import normalise_question
-from distillery.taskpacks.sql.questions import skeleton
 from distillery.taskpacks.sql.runner import ExecOutcome
 from distillery.taskpacks.sql.verifier import compare_outcomes
 
 ChatMessages = list[dict[str, str]]
 MODEL_ROLES = ("base", "student", "teacher")
+
+
+def _pack(pack: Pack | None) -> Pack:
+    """Every scoring entry point takes ``pack``; ``None`` means the SQL pack (the pipeline always
+    passes its own, so only the SQL-only diagnostics and legacy callers rely on the default).
+    ``schema_ddl`` below is the pack's env ``context_text`` under its historical name."""
+    return get_pack("sql") if pack is None else pack
 
 
 class Generator(Protocol):
@@ -125,17 +132,19 @@ def score_model(
     db_ref: str,
     executor: Executor,
     role: str,
+    pack: Pack | None = None,
 ) -> ModelScores:
     if role not in MODEL_ROLES:
         raise ValueError(f"unknown model role {role!r}")
+    pk = _pack(pack)
     batch = [
-        build_messages(str(it["question"]), schema_ddl, role=f"eval_{role}")  # type: ignore[arg-type]
+        pk.build_messages(str(it["question"]), schema_ddl, role=f"eval_{role}")  # type: ignore[arg-type]
         for it in items
     ]
     outputs = generator.generate(batch)
     if len(outputs) != len(items):
         raise RuntimeError(f"{role}: got {len(outputs)} outputs for {len(items)} items")
-    sqls = [extract_sql(o) for o in outputs]
+    sqls = [pk.extract_answer(o) for o in outputs]
     runnable = [i for i, s in enumerate(sqls) if s is not None]
     outcomes = executor.run_batch(db_ref, [sqls[i] or "" for i in runnable])
     by_index = dict(zip(runnable, outcomes, strict=True))
@@ -144,9 +153,9 @@ def score_model(
     for i, it in enumerate(items):
         if sqls[i] is None:
             correct.append(False)
-            reasons.append("no SQL extracted from output")
+            reasons.append(f"no {pk.answer_label} extracted from output")
             continue
-        verdict = compare_outcomes(by_index[i], gold[i], bool(it["requires_order"]))
+        verdict = pk.compare(by_index[i], gold[i], bool(it["requires_order"]))
         correct.append(verdict.ok)
         reasons.append(verdict.reason)
     return ModelScores(
@@ -162,11 +171,16 @@ EXAMPLES_PER_KIND = 20  # 3 kinds -> at most 60 examples
 
 
 def build_examples(
-    items: Sequence[Mapping[str, Any]], scores: Mapping[str, ModelScores]
+    items: Sequence[Mapping[str, Any]],
+    scores: Mapping[str, ModelScores],
+    pack: Pack | None = None,
 ) -> list[dict[str, Any]]:
     """Deterministic capped examples in held-out order: the first ``EXAMPLES_PER_KIND`` of each
     kind. ``fixed`` = student ok, base wrong; ``regressed`` = base ok, student wrong;
     ``still_wrong`` = both wrong. Items both models solve are omitted."""
+
+    pk = _pack(pack)
+    key = pk.answer_key
 
     def shown(role: str, i: int) -> str:
         return scores[role].sqls[i] or scores[role].outputs[i]
@@ -186,10 +200,10 @@ def build_examples(
                 "family": it.get("family"),
                 "heldout_class": it.get("heldout_class", "seen"),
                 "question": it["question"],
-                "gold_sql": it["gold_sql"],
-                "base_sql": shown("base", i),
-                "student_sql": shown("student", i),
-                "teacher_sql": shown("teacher", i),
+                f"gold_{key}": it[pk.gold_field],
+                f"base_{key}": shown("base", i),
+                f"student_{key}": shown("student", i),
+                f"teacher_{key}": shown("teacher", i),
                 "base_ok": base_ok,
                 "student_ok": student_ok,
                 "teacher_ok": scores["teacher"].correct[i],
@@ -210,8 +224,10 @@ def evaluate(
     trained: TrainedArtifact | None = None,
     expected: ExpectedArtifact | None = None,
     on_scores: Callable[[str, ModelScores], None] | None = None,
+    pack: Pack | None = None,
 ) -> EvalReport:
     """Evaluate base/student/teacher on the sealed held-out set and run the gate."""
+    pk = _pack(pack)
     if set(generators) != set(MODEL_ROLES):
         raise ValueError(f"generators must be exactly {MODEL_ROLES}")
     if (trained is None) != (expected is None):
@@ -221,14 +237,17 @@ def evaluate(
 
     items = store.load_heldout(run_id)
     heldout_sha = sha256_hex(canonical_json(items).encode("utf-8"))
-    gold = executor.run_batch(db_ref, [str(it["gold_sql"]) for it in items])
+    gold = executor.run_batch(db_ref, [str(it[pk.gold_field]) for it in items])
     for it, g in zip(items, gold, strict=True):
         if not g.ok:
-            raise RuntimeError(f"gold SQL failed for held-out item {it.get('task_id')}: {g.error}")
+            raise RuntimeError(
+                f"gold answer failed for held-out item {it.get('task_id')}: {g.error}"
+            )
 
     scores = _score_roles(
-        generators, items, gold, executor, db_ref=db_ref, schema_ddl=schema_ddl, on_scores=on_scores
-    )
+        generators, items, gold, executor,
+        db_ref=db_ref, schema_ddl=schema_ddl, on_scores=on_scores, pack=pk,
+    )  # fmt: skip
 
     classes = [str(it.get("heldout_class", "seen")) for it in items]
     class_counts = {c: classes.count(c) for c in sorted(set(classes))}
@@ -257,13 +276,13 @@ def evaluate(
         accuracy_by_class=by_class,
         class_counts=class_counts,
         artifact=artifact,
-        examples=build_examples(items, scores),
+        examples=build_examples(items, scores, pk),
         stress=_score_stress(
-            store, run_id, generators, executor, db_ref=db_ref, schema_ddl=schema_ddl
+            store, run_id, generators, executor, db_ref=db_ref, schema_ddl=schema_ddl, pack=pk
         ),
         human=_score_human(
             store, run_id, generators, executor,
-            db_ref=db_ref, schema_ddl=schema_ddl, gate_cfg=gate_cfg,
+            db_ref=db_ref, schema_ddl=schema_ddl, gate_cfg=gate_cfg, pack=pk,
         ),
     )  # fmt: skip
 
@@ -277,6 +296,7 @@ def _score_roles(
     db_ref: str,
     schema_ddl: str,
     on_scores: Callable[[str, ModelScores], None] | None,
+    pack: Pack | None = None,
 ) -> dict[str, ModelScores]:
     """Score base, student and teacher concurrently: the models are independent (the base and the
     student each run in their own sandbox), so serving them one after another only adds wall
@@ -294,6 +314,7 @@ def _score_roles(
                 db_ref=db_ref,
                 executor=executor,
                 role=role,
+                pack=pack,
             ): role
             for role in MODEL_ROLES
         }
@@ -313,19 +334,22 @@ def _score_stress(
     *,
     db_ref: str,
     schema_ddl: str,
+    pack: Pack | None = None,
 ) -> dict[str, Any] | None:
     """Accuracy of every model on the sealed stress set, per model and per family. Runs after the
     gate decision is computed and shares nothing with it: the stress set cannot move the gate."""
     items = store.load_stress(run_id)
     if items is None:
         return None
-    gold = executor.run_batch(db_ref, [str(it["gold_sql"]) for it in items])
+    pk = _pack(pack)
+    gold = executor.run_batch(db_ref, [str(it[pk.gold_field]) for it in items])
     for it, g in zip(items, gold, strict=True):
         if not g.ok:
-            raise RuntimeError(f"gold SQL failed for stress item {it.get('task_id')}: {g.error}")
+            raise RuntimeError(f"gold answer failed for stress item {it.get('task_id')}: {g.error}")
     scores = _score_roles(
-        generators, items, gold, executor, db_ref=db_ref, schema_ddl=schema_ddl, on_scores=None
-    )
+        generators, items, gold, executor,
+        db_ref=db_ref, schema_ddl=schema_ddl, on_scores=None, pack=pk,
+    )  # fmt: skip
     families = sorted({str(it["family"]) for it in items})
     by_family = {
         f: {
@@ -355,6 +379,7 @@ def _score_human(
     db_ref: str,
     schema_ddl: str,
     gate_cfg: GateThresholds,
+    pack: Pack | None = None,
 ) -> dict[str, Any] | None:
     """Gate B: every model on the sealed human set, then ``evaluate_gate`` a second time with the
     SAME thresholds object as Gate A. Shares nothing with Gate A or the stress set, so neither can
@@ -362,13 +387,15 @@ def _score_human(
     items = store.load_human(run_id)
     if items is None:
         return None
-    gold = executor.run_batch(db_ref, [str(it["gold_sql"]) for it in items])
+    pk = _pack(pack)
+    gold = executor.run_batch(db_ref, [str(it[pk.gold_field]) for it in items])
     for it, g in zip(items, gold, strict=True):
         if not g.ok:
-            raise RuntimeError(f"gold SQL failed for human item {it.get('task_id')}: {g.error}")
+            raise RuntimeError(f"gold answer failed for human item {it.get('task_id')}: {g.error}")
     scores = _score_roles(
-        generators, items, gold, executor, db_ref=db_ref, schema_ddl=schema_ddl, on_scores=None
-    )
+        generators, items, gold, executor,
+        db_ref=db_ref, schema_ddl=schema_ddl, on_scores=None, pack=pk,
+    )  # fmt: skip
     gate = evaluate_gate(
         scores["base"].correct, scores["student"].correct, scores["teacher"].correct, gate_cfg
     )
@@ -378,7 +405,7 @@ def _score_human(
         "accuracy": {m: s.accuracy for m, s in scores.items()},
         "unparseable": {m: s.unparseable for m, s in scores.items()},
         "gate": gate.model_dump(mode="json"),
-        "examples": build_examples(items, scores),
+        "examples": build_examples(items, scores, pk),
         "note": SELECTION_BIAS_NOTE,
     }
 
@@ -394,6 +421,7 @@ def score_sealed_human(
     gate_cfg: GateThresholds,
     trained: TrainedArtifact,
     expected: ExpectedArtifact,
+    pack: Pack | None = None,
 ) -> dict[str, Any]:
     """Gate B for an ALREADY finished run: verify the adapter on disk is still the trained one,
     then score the sealed human set once with the same gate rule as ``evaluate``. Raises if no
@@ -402,8 +430,9 @@ def score_sealed_human(
         raise ValueError(f"generators must be exactly {MODEL_ROLES}")
     verify_artifact(trained, expected)
     block = _score_human(
-        store, run_id, generators, executor, db_ref=db_ref, schema_ddl=schema_ddl, gate_cfg=gate_cfg
-    )
+        store, run_id, generators, executor,
+        db_ref=db_ref, schema_ddl=schema_ddl, gate_cfg=gate_cfg, pack=_pack(pack),
+    )  # fmt: skip
     if block is None:
         raise HumanSetError("no human set is sealed for this run")
     return block
@@ -426,6 +455,7 @@ def seal_human_set(
     *,
     train_questions: Iterable[str],
     dev_questions: Iterable[str],
+    pack: Pack | None = None,
 ) -> dict[str, Any]:
     """Verify the confirmed human set against this run's database, drop every question that exactly
     matches (whitespace-normalised) a train, dev or gate question, and seal the rest. Returns hash
@@ -452,14 +482,17 @@ def seal_human_set(
             kept.append(dict(it))
     if not kept:
         raise HumanSetError("every human question matches a train, dev or gate question")
-    train_skeletons = {skeleton(x) for x in train}
+    pk = _pack(pack)
+    train_skeletons = {pk.skeleton(x) for x in train}
     digest = store.seal_human(run_id, kept)
     return {
         "sha256": digest,
         "file_sha256": confirmed.file_sha256,
         "n": len(kept),
         "dropped_exact_overlap": {**dropped, "total": sum(dropped.values())},
-        "skeleton_in_train": sum(skeleton(str(it["question"])) in train_skeletons for it in kept),
+        "skeleton_in_train": sum(
+            pk.skeleton(str(it["question"])) in train_skeletons for it in kept
+        ),
         "counts": confirmed.counts,
         "db_sha256": confirmed.db_sha256,
         "question_file_sha256": confirmed.question_file_sha256,
@@ -675,6 +708,7 @@ def diagnose_generate(
     db_ref: str,
     schema_ddl: str,
     compare_to: str = "base",
+    pack: Pack | None = None,
 ) -> dict[str, Any]:
     """Generate with every model over every named item set and score it.
 
@@ -684,21 +718,22 @@ def diagnose_generate(
     ``{"models": {model: {set: {n, accuracy, items[{task_id, raw, sql, correct, reason}]}}},
     "identical_to_<compare_to>": {model: {set: {raw, sql}}}}``.
     """
+    pk = _pack(pack)
     names = list(sets)
     flat: list[Mapping[str, Any]] = [it for n in names for it in sets[n]]
     prompts: list[ChatMessages] = [
         list(it["messages"])
         if it.get("messages") is not None
-        else build_messages(str(it["question"]), schema_ddl, role="eval_student")
+        else pk.build_messages(str(it["question"]), schema_ddl, role="eval_student")
         for it in flat
     ]
-    gold = executor.run_batch(db_ref, [str(it["gold_sql"]) for it in flat]) if flat else []
+    gold = executor.run_batch(db_ref, [str(it[pk.gold_field]) for it in flat]) if flat else []
     models: dict[str, Any] = {}
     for model, gen in generators.items():
         outputs = gen.generate(prompts) if prompts else []
         if len(outputs) != len(flat):
             raise RuntimeError(f"{model}: got {len(outputs)} outputs for {len(flat)} items")
-        sqls = [extract_sql(o) for o in outputs]
+        sqls = [pk.extract_answer(o) for o in outputs]
         runnable = [i for i, s in enumerate(sqls) if s is not None]
         outcomes = executor.run_batch(db_ref, [sqls[i] or "" for i in runnable]) if runnable else []
         by_index = dict(zip(runnable, outcomes, strict=True))
@@ -712,7 +747,7 @@ def diagnose_generate(
                 if sqls[i] is None:
                     ok, why = False, "no SQL extracted from output"
                 else:
-                    v = compare_outcomes(by_index[i], gold[i], bool(it.get("requires_order")))
+                    v = pk.compare(by_index[i], gold[i], bool(it.get("requires_order")))
                     ok, why = v.ok, v.reason
                 rows.append(
                     {"task_id": it.get("task_id"), "raw": outputs[i], "sql": sqls[i],

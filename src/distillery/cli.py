@@ -46,6 +46,7 @@ from distillery.pipeline_fakes import build_dry_run, dry_run_id
 from distillery.sandbox import Sandbox
 from distillery.sandbox_executor import AsyncBridge, SandboxExecutor
 from distillery.store import Store, atomic_write_bytes, sha256_hex
+from distillery.taskpacks.base import get_pack, pack_names
 from distillery.taskpacks.sql import schema as sql_schema
 from distillery.taskpacks.sql.human import QuestionFileError, load_question_file
 
@@ -61,7 +62,7 @@ def _parser() -> argparse.ArgumentParser:
     )
     sub = p.add_subparsers(dest="cmd", required=True)
     r = sub.add_parser("run", help="run the pipeline")
-    r.add_argument("--pack", choices=["sql"], default="sql")
+    r.add_argument("--pack", choices=pack_names(), default="sql")
     r.add_argument("--scale", choices=sorted(SCALES), default="tiny")
     r.add_argument("--dry-run", action="store_true", help="offline, fake models, no spend")
     r.add_argument("--run-id", default=None)
@@ -266,9 +267,9 @@ def _cmd_run(
     root = _root(args, env)
     dry = bool(args.dry_run)
     run_id = args.run_id or (
-        dry_run_id(args.scale)
+        dry_run_id(args.scale, args.pack)
         if dry
-        else f"sql-{args.scale}-{datetime.now(UTC).strftime('%Y%m%dT%H%M%SZ')}"
+        else f"{args.pack}-{args.scale}-{datetime.now(UTC).strftime('%Y%m%dT%H%M%SZ')}"
     )
     try:
         config = load_config(env)
@@ -301,6 +302,8 @@ def _cmd_run(
         out(f"refused: human set file not found: {human_set}")
         return EXIT_REFUSED
     pcfg = PipelineConfig(
+        pack=args.pack,
+        student_max_new_tokens=get_pack(args.pack).student_max_new_tokens,
         human_set_path=human_set,
         scale=SCALES[args.scale],
         dry_run=dry,
@@ -328,6 +331,7 @@ def _cmd_run(
                     headroom_max_base_acc=args.max_base_acc, human_set_path=human_set,
                     finetune_state=store.run_dir(run_id) / "fake_finetune_state.json"
                     if plan is not None else None,
+                    pack=args.pack,
                 )  # fmt: skip
                 config, pcfg, deps = dr.config, dr.pipeline_cfg, dr.deps
             elif deps_factory is not None:
@@ -638,7 +642,7 @@ def _cmd_score_human(
             if dry:
                 dr = build_dry_run(
                     Scale.model_validate(report["config"]["pipeline"]["scale"]), bridge,
-                    seed=pcfg.seed, human_set_path=human_set,
+                    seed=pcfg.seed, human_set_path=human_set, pack=pcfg.pack,
                 )  # fmt: skip
                 config, deps = dr.config, dr.deps
             elif deps_factory is not None:

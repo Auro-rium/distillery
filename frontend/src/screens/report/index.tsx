@@ -4,6 +4,7 @@ import { fmtInt } from "../../api/format";
 import type { Report } from "../../api/types";
 import { ApiErrorState, EmptyState, LabelBanner, Spinner } from "../../components";
 import { RunShell } from "../../components/RunShell";
+import { answerLanguage } from "../../lib/packs";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../ui";
 import { ExamplesCard } from "./Examples";
 import { Summary } from "./Summary";
@@ -68,7 +69,7 @@ export function ReportView({ r }: { r: Report }) {
         </TabsContent>
         <TabsContent value="examples" forceMount className="rp-tab">
           <div className="rp-grid">
-            <ExamplesCard id={r.run_id} />
+            <ExamplesCard id={r.run_id} language={answerLanguage(r.pack)} />
             <Clusters r={r} />
             <Counters r={r} />
           </div>

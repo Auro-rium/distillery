@@ -15,6 +15,7 @@ const MEMORY_ONLY = "Held in memory only; lost on reload.";
 export default function NewRun() {
   const nav = useNavigate();
   const [cfg, setCfg] = useState<Config | null>(null);
+  const [pack, setPack] = useState("sql");
   const [scale, setScale] = useState<Scale>("tiny");
   const [dry, setDry] = useState(true);
   const [budget, setBudget] = useState("");
@@ -29,6 +30,9 @@ export default function NewRun() {
     api.config().then((c) => { setCfg(c); setBudget((b) => b || String(c.run_cap_usd)); }).catch((e: unknown) => setCfgErr(e));
   }, []);
 
+  // The server lists its packs; an older server (or a failed config load) offers just "sql".
+  const packs = cfg?.packs?.length ? cfg.packs : [{ name: "sql", language: "sql", answer_label: "SQL" }];
+
   function fail(field: typeof badField, message: string) {
     setBadField(field);
     setErr(message);
@@ -42,7 +46,7 @@ export default function NewRun() {
     if (cap !== undefined && (!Number.isFinite(cap) || cap <= 0)) return fail("budget", "Budget cap must be a positive number of USD.");
     if (!dry && !token) return fail("token", describeCreateError(new ApiError(401, "unauthorized", "")));
     if (!dry && !approve) return fail("approve", "Tick the spend approval box to start a live run.");
-    const body: NewRunBody = { pack: "sql", scale, dry_run: dry };
+    const body: NewRunBody = { pack, scale, dry_run: dry };
     if (cap !== undefined) body.budget_usd = cap;
     if (!dry) body.approve_spend = true;
     setAdminToken(token);
@@ -70,8 +74,10 @@ export default function NewRun() {
       <Card className="form-card">
         <form className="form" onSubmit={submit} noValidate>
           <div className="form-grid">
-            <Field label="Pack" help="Text-to-SQL is the only pack this server offers.">
-              <Select value="sql" disabled><option value="sql">sql (text-to-SQL)</option></Select>
+            <Field label="Pack" help={packs.length > 1 ? "The task domain: what the student learns and how answers are verified." : "Text-to-SQL is the only pack this server offers."}>
+              <Select value={pack} onChange={(e) => setPack(e.target.value)} disabled={packs.length < 2}>
+                {packs.map((p) => <option key={p.name} value={p.name}>{p.name} ({p.answer_label})</option>)}
+              </Select>
             </Field>
             <ChoiceGroup legend="Scale" name="scale" value={scale} onChange={setScale} options={SCALE_OPTIONS} />
             <Field label="Budget cap (USD)" help={budgetHelp}>

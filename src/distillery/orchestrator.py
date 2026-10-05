@@ -71,25 +71,13 @@ from distillery.llm import (
     RetriesExhaustedError,
     is_retryable,
 )
-from distillery.prompts import build_messages, extract_sql, to_training_row
 from distillery.sandbox import Sandbox
 from distillery.sandbox_executor import AsyncBridge
 from distillery.store import Store, atomic_write_bytes, canonical_json, sha256_hex
 from distillery.student import StudentServer
-from distillery.taskpacks.sql import schema as sql_schema
+from distillery.taskpacks.base import Pack, PackTask, get_pack
 from distillery.taskpacks.sql.executor import Executor
-from distillery.taskpacks.sql.questions import (
-    DEFAULT_SKELETON_CAP,
-    FAMILIES,
-    IN_DISTRIBUTION,
-    STRESS,
-    SqlTask,
-    generate_tasks,
-    skeleton,
-    stress_families,
-)
-from distillery.taskpacks.sql.runner import run_select
-from distillery.taskpacks.sql.verifier import compare_outcomes, corrupt_sql
+from distillery.taskpacks.sql.questions import IN_DISTRIBUTION, STRESS
 
 log = logging.getLogger(__name__)
 
@@ -363,7 +351,7 @@ class Deps:
     on_stage: Callable[[str], None] | None = None  # called inside a stage that is really running
     # Oracle registration for FAKE models only (they must know the gold SQL). Called with every
     # task set produced (also when the stage result comes from cache). Real deps leave it None.
-    task_observer: Callable[[Sequence[SqlTask]], None] | None = None
+    task_observer: Callable[[Sequence[PackTask]], None] | None = None
     base_factory: BaseFactory | None = None
 
 
@@ -638,11 +626,7 @@ def _digest(obj: Any) -> str:
     return sha256_hex(canonical_json(obj).encode("utf-8"))
 
 
-def _task_from(d: Mapping[str, Any]) -> SqlTask:
-    return SqlTask.model_validate(dict(d))
-
-
-def _item(t: SqlTask, heldout_class: str | None = None) -> dict[str, Any]:
+def _item(t: PackTask, heldout_class: str | None = None) -> dict[str, Any]:
     d: dict[str, Any] = t.model_dump(mode="json")
     if heldout_class is not None:
         d["heldout_class"] = heldout_class
@@ -651,10 +635,10 @@ def _item(t: SqlTask, heldout_class: str | None = None) -> dict[str, Any]:
 
 @dataclass
 class SplitPlan:
-    train: list[SqlTask]
-    dev: list[SqlTask]
-    heldout: list[SqlTask]  # the gate set: in-distribution only
-    stress: list[SqlTask]  # reserved families, never in train/dev/heldout
+    train: list[PackTask]
+    dev: list[PackTask]
+    heldout: list[PackTask]  # the gate set: in-distribution only
+    stress: list[PackTask]  # reserved families, never in train/dev/heldout
     heldout_families: list[str]  # families held out of TRAINING: none, the gate is in-distribution
     counters: dict[str, int] = field(default_factory=dict)
 
@@ -664,10 +648,11 @@ def _rate(num: int, den: int) -> float:
 
 
 def plan_split(
-    tasks: Sequence[SqlTask],
+    tasks: Sequence[PackTask],
     scale: Scale,
     seed: int,
-    stress_tasks: Sequence[SqlTask] = (),
+    stress_tasks: Sequence[PackTask] = (),
+    pack: Pack | None = None,
 ) -> SplitPlan:
     """In-distribution train/dev/gate split with exact target sizes (or ShortfallError), plus the
     stress set drawn from ``stress_tasks`` (reserved families, so disjoint from all three).
@@ -678,14 +663,15 @@ def plan_split(
     counters, not hidden.
     """
     rng = random.Random(seed)  # noqa: S311 - deterministic sampling, not security
-    reserved = set(stress_families())
+    pack = pack or get_pack("sql")
+    reserved = set(pack.stress_families())
     if any(t.family in reserved for t in tasks):
         raise ShortfallError("a stress family leaked into the in-distribution pool")
     pool = list(tasks)
     rng.shuffle(pool)
     # one anchor task per family goes to train first, so every gate family is covered by training
     # by construction (a plain shuffle can miss a family at small scales)
-    anchors: dict[str, SqlTask] = {}
+    anchors: dict[str, PackTask] = {}
     for t in pool:
         anchors.setdefault(t.family, t)
     anchor_ids = {t.task_id for t in anchors.values()}
@@ -713,8 +699,8 @@ def plan_split(
     uncovered = sorted({t.family for t in heldout} - train_fams)
     if uncovered:
         raise ShortfallError(f"gate families without any training task: {uncovered}")
-    train_sk = {skeleton(t.question) for t in train}
-    in_train = sum(skeleton(t.question) in train_sk for t in heldout)
+    train_sk = {pack.skeleton(t.question) for t in train}
+    in_train = sum(pack.skeleton(t.question) in train_sk for t in heldout)
     train_q = {t.question for t in train}
     return SplitPlan(
         train,
@@ -731,27 +717,6 @@ def plan_split(
             "train_distinct_skeletons": len(train_sk),
         },
     )
-
-
-def build_analysis_messages(
-    failures: Sequence[Mapping[str, Any]], allowed_families: Sequence[str]
-) -> list[dict[str, str]]:
-    """Prompt for the planner-role failure analyst. Takes DEV failures only (by construction:
-    the caller passes the dev-eval failure list; no other data source is reachable here)."""
-    lines = []
-    for f in failures:
-        lines.append(
-            f"- [family={f['family']}] Q: {f['question']}\n"
-            f"  gold: {f['gold_sql']}\n  student: {f['student_sql']}\n  verdict: {f['reason']}"
-        )
-    system = (
-        "You analyse failures of a small text-to-SQL model on a development set. Group the "
-        "failures into a few clusters of related mistakes. For each cluster give a short name, a "
-        "description, and the question families (from the allowed list only) whose extra "
-        "training examples would fix it."
-    )
-    user = f"Allowed families: {', '.join(allowed_families)}\n\nFailures:\n" + "\n".join(lines)
-    return [{"role": "system", "content": system}, {"role": "user", "content": user}]
 
 
 def cost_by_model(store: Store, run_id: str) -> dict[str, dict[str, float | int]]:
@@ -826,8 +791,9 @@ class Pipeline:
         self.run_dir = store.run_dir(run_id)
         self.db_path = self.run_dir / "db.sqlite"
         self.db_ref = str(self.db_path)
-        self.ddl = ""
-        self.tasks_by_id: dict[str, SqlTask] = {}
+        self.pack: Pack = get_pack(cfg.pack)
+        self.ddl = ""  # the env's context_text (SQL: the schema DDL), shown in every prompt
+        self.tasks_by_id: dict[str, PackTask] = {}
         self.sealed_sha: str | None = None
         self.counters: dict[str, dict[str, int]] = {}
         self.usage: dict[str, dict[str, dict[str, int]]] = {}
@@ -1036,19 +1002,20 @@ class Pipeline:
     def _stage_schema(self) -> dict[str, Any]:
         seed = self.cfg.db_seed
 
+        built: list[Any] = []
+
         def fn() -> dict[str, Any]:
-            data = sql_schema.build_database(seed)
-            atomic_write_bytes(self.db_path, data)
-            return {"db_seed": seed, "db_sha256": sha256_hex(data), "db_bytes": len(data)}
+            env = self.pack.build_env(seed, self.db_path)
+            built.append(env)
+            return {"db_seed": seed, "db_sha256": env.sha256, "db_bytes": env.size}
 
         res = self._stage("schema", {"db_seed": seed}, [], fn)
-        ok = self.db_path.exists() and sha256_hex(self.db_path.read_bytes()) == res["db_sha256"]
-        if not ok:  # cached result but file missing/changed: rebuild deterministically
-            data = sql_schema.build_database(seed)
-            if sha256_hex(data) != res["db_sha256"]:
-                raise PipelineError("schema build is not deterministic: sha256 differs from record")
-            atomic_write_bytes(self.db_path, data)
-        self.ddl = sql_schema.schema_ddl(seed)
+        # a cached result still needs the context text and a present, unchanged env file: rebuild
+        # it deterministically (atomic write) and check it against the recorded digest
+        env = built[-1] if built else self.pack.build_env(seed, self.db_path)
+        if env.sha256 != res["db_sha256"]:
+            raise PipelineError("schema build is not deterministic: sha256 differs from record")
+        self.ddl = env.context_text
         return res
 
     # ---- stage 2: questions ---------------------------------------------
@@ -1056,19 +1023,19 @@ class Pipeline:
         sc = self.cfg.scale
         n_total = math.ceil((sc.train + sc.dev + sc.heldout) * self.cfg.oversample)
         n_stress = math.ceil(sc.stress * self.cfg.oversample)
-        reserved = stress_families()
+        reserved = self.pack.stress_families()
 
         def fn() -> dict[str, Any]:
             # in-distribution pool: every family except the reserved stress families
-            rep = generate_tasks(
+            rep = self.pack.generate_tasks(
                 self.db_ref,
                 n_total,
                 self.cfg.seed,
                 exclude_families=reserved,
-                skeleton_cap=DEFAULT_SKELETON_CAP,
+                skeleton_cap=self.pack.default_skeleton_cap,
             )
             stress_rep = (
-                generate_tasks(
+                self.pack.generate_tasks(
                     self.db_ref,
                     n_stress,
                     self.cfg.seed + 7,
@@ -1107,15 +1074,17 @@ class Pipeline:
                 "seed": self.cfg.seed,
                 "n_stress": n_stress,
                 "stress_families": list(reserved),
-                "skeleton_cap": DEFAULT_SKELETON_CAP,
+                "skeleton_cap": self.pack.default_skeleton_cap,
             },
             ["schema"],
             fn,
         )
-        self._observe([_task_from(d) for d in [*res["tasks"], *res.get("stress_tasks", [])]])
+        self._observe(
+            [self.pack.task_from(d) for d in [*res["tasks"], *res.get("stress_tasks", [])]]
+        )
         return res
 
-    def _observe(self, tasks: Sequence[SqlTask]) -> None:
+    def _observe(self, tasks: Sequence[PackTask]) -> None:
         if self.deps.task_observer is not None:
             self.deps.task_observer(tasks)
 
@@ -1127,19 +1096,18 @@ class Pipeline:
         the playground and the UI read them."""
 
         def fn() -> dict[str, Any]:
-            tasks = [_task_from(d) for d in self.questions["tasks"]]
-            stress = [_task_from(d) for d in self.questions.get("stress_tasks", [])]
+            tasks = [self.pack.task_from(d) for d in self.questions["tasks"]]
+            stress = [self.pack.task_from(d) for d in self.questions.get("stress_tasks", [])]
             outs = self.deps.executor.run_batch(
-                self.db_ref, [t.gold_sql for t in [*tasks, *stress]]
+                self.db_ref, [t.gold_answer for t in [*tasks, *stress]]
             )
             reasons: Counter[str] = Counter()
             accepted: list[dict[str, Any]] = []
             stress_accepted: list[dict[str, Any]] = []
             for i, (t, o) in enumerate(zip([*tasks, *stress], outs, strict=True)):
-                if not o.ok:
-                    reasons["gold_error"] += 1
-                elif not o.rows:
-                    reasons["gold_empty"] += 1
+                problem = self.pack.gold_problem(o)
+                if problem is not None:
+                    reasons[problem] += 1
                 else:
                     (accepted if i < len(tasks) else stress_accepted).append(_item(t))
             return {
@@ -1165,7 +1133,9 @@ class Pipeline:
     # ---- stage 4: verifier self-test -------------------------------------
     def _stage_selftest(self) -> dict[str, Any]:
         def fn() -> dict[str, Any]:
-            accepted = [_task_from(d) for d in self._results["gold_crosscheck"]["accepted"]]
+            accepted = [
+                self.pack.task_from(d) for d in self._results["gold_crosscheck"]["accepted"]
+            ]
             rng = random.Random(self.cfg.seed + 4)  # noqa: S311
             sample = rng.sample(accepted, min(self.cfg.selftest_sample, len(accepted)))
             ex = self.deps.executor
@@ -1174,18 +1144,18 @@ class Pipeline:
             without = 0
             tested = 0
             for n, t in enumerate(sample):
-                variants = corrupt_sql(
-                    t.gold_sql,
+                variants = self.pack.corrupt(
+                    t.gold_answer,
                     self.db_ref,
                     random.Random(self.cfg.seed * 1000 + n),  # noqa: S311
                     max_variants=self.cfg.selftest_corruptions,
                 )
                 if not variants:
                     without += 1
-                outs = ex.run_batch(self.db_ref, [t.gold_sql, *[v.sql for v in variants]])
+                outs = ex.run_batch(self.db_ref, [t.gold_answer, *[v.answer for v in variants]])
                 g_exec, v_outs = outs[0], outs[1:]
-                g_local = run_select(self.db_ref, t.gold_sql)
-                cmp = compare_outcomes(g_exec, g_local, t.requires_order)
+                g_local = self.pack.run_local(self.db_ref, t.gold_answer)
+                cmp = self.pack.compare(g_exec, g_local, t.order_matters)
                 if not g_exec.ok or not cmp.ok:
                     failures.append(
                         f"gold rejected/inconsistent for {t.task_id}: sandbox ok={g_exec.ok} "
@@ -1200,8 +1170,8 @@ class Pipeline:
                             f"{t.task_id} [{v.kind}]: executor errored on a corruption that runs "
                             f"locally: {o.error}"
                         )
-                    elif compare_outcomes(o, g_exec, t.requires_order).ok:
-                        failures.append(f"{t.task_id} [{v.kind}]: corruption ACCEPTED: {v.sql}")
+                    elif self.pack.compare(o, g_exec, t.order_matters).ok:
+                        failures.append(f"{t.task_id} [{v.kind}]: corruption ACCEPTED: {v.answer}")
             if tested == 0:
                 failures.append("no corruptions could be generated: self-test would be vacuous")
             if failures:
@@ -1228,11 +1198,14 @@ class Pipeline:
     # ---- stage 6: split & seal -------------------------------------------
     def _stage_split(self) -> dict[str, Any]:
         def fn() -> dict[str, Any]:
-            accepted = [_task_from(d) for d in self._results["gold_crosscheck"]["accepted"]]
-            stress_in = [
-                _task_from(d) for d in self._results["gold_crosscheck"].get("stress_accepted", [])
+            accepted = [
+                self.pack.task_from(d) for d in self._results["gold_crosscheck"]["accepted"]
             ]
-            plan = plan_split(accepted, self.cfg.scale, self.cfg.seed, stress_in)
+            stress_in = [
+                self.pack.task_from(d)
+                for d in self._results["gold_crosscheck"].get("stress_accepted", [])
+            ]
+            plan = plan_split(accepted, self.cfg.scale, self.cfg.seed, stress_in, self.pack)
             items = [_item(t, IN_DISTRIBUTION) for t in plan.heldout]
             sealed = self.store.seal_heldout(self.run_id, items)
             stress_items = [_item(t, STRESS) for t in plan.stress]
@@ -1247,6 +1220,7 @@ class Pipeline:
                     str(self._results["schema"]["db_sha256"]),
                     train_questions=[t.question for t in plan.train],
                     dev_questions=[t.question for t in plan.dev],
+                    pack=self.pack,
                 )  # fmt: skip
             rng = random.Random(self.cfg.seed + 6)  # noqa: S311
             spot = rng.sample(items, min(self.cfg.spot_check_n, len(items)))
@@ -1263,7 +1237,7 @@ class Pipeline:
                                     "family",
                                     "heldout_class",
                                     "question",
-                                    "gold_sql",
+                                    self.pack.gold_field,
                                 )
                             }
                             for it in spot
@@ -1276,7 +1250,7 @@ class Pipeline:
                 "train": [_item(t) for t in plan.train],
                 "dev": [_item(t) for t in plan.dev],
                 "heldout_task_ids": sorted(t.task_id for t in plan.heldout),
-                "heldout_gold_sha256": sorted(_digest(t.gold_sql) for t in plan.heldout),
+                "heldout_gold_sha256": sorted(_digest(t.gold_answer) for t in plan.heldout),
                 "heldout_families": plan.heldout_families,
                 "heldout_class_counts": dict(class_counts),
                 "sealed_sha256": sealed,
@@ -1305,13 +1279,13 @@ class Pipeline:
         self.sealed_sha = str(res["sealed_sha256"])
         self.say(f"[held-out] sealed sha256={self.sealed_sha} n={res['counters']['heldout']}")
         for d in (*res["train"], *res["dev"]):
-            self.tasks_by_id[d["task_id"]] = _task_from(d)
+            self.tasks_by_id[d["task_id"]] = self.pack.task_from(d)
         return res
 
     # ---- stage 5b: headroom ---------------------------------------------
     def _stage_headroom(self, split: Mapping[str, Any]) -> dict[str, Any]:
         def fn() -> dict[str, Any]:
-            dev = [_task_from(d) for d in split["dev"]]
+            dev = [self.pack.task_from(d) for d in split["dev"]]
             assert self.deps.base_factory is not None  # noqa: S101 - checked in preconditions
             server = self.deps.base_factory()
             try:
@@ -1335,24 +1309,30 @@ class Pipeline:
 
         return self._stage("headroom", {"max_acc": self.cfg.headroom_max_base_acc}, ["split"], fn)
 
-    def _score(self, gen: Any, tasks: Sequence[SqlTask], role: str) -> ModelScores:
+    def _score(self, gen: Any, tasks: Sequence[PackTask], role: str) -> ModelScores:
         items = [
-            {"question": t.question, "gold_sql": t.gold_sql, "requires_order": t.requires_order}
+            {
+                "question": t.question,
+                self.pack.gold_field: t.gold_answer,
+                "requires_order": t.order_matters,
+            }
             for t in tasks
         ]
-        gold = self.deps.executor.run_batch(self.db_ref, [t.gold_sql for t in tasks])
+        gold = self.deps.executor.run_batch(self.db_ref, [t.gold_answer for t in tasks])
         for t, g in zip(tasks, gold, strict=True):
             if not g.ok:
-                raise PipelineError(f"gold SQL failed for {t.task_id}: {g.error}")
+                raise PipelineError(
+                    f"gold {self.pack.answer_label} failed for {t.task_id}: {g.error}"
+                )
         return score_model(
             gen, items, gold, schema_ddl=self.ddl, db_ref=self.db_ref,
-            executor=self.deps.executor, role=role,
+            executor=self.deps.executor, role=role, pack=self.pack,
         )  # fmt: skip
 
     # ---- stage 5: teacher data -------------------------------------------
-    def _teacher_rows(self, tasks: Sequence[SqlTask], purpose: str, stage: str) -> dict[str, Any]:
+    def _teacher_rows(self, tasks: Sequence[PackTask], purpose: str, stage: str) -> dict[str, Any]:
         ex = self.deps.executor
-        gold = ex.run_batch(self.db_ref, [t.gold_sql for t in tasks])
+        gold = ex.run_batch(self.db_ref, [t.gold_answer for t in tasks])
         pending = [i for i, g in enumerate(gold) if g.ok]
         c: Counter[str] = Counter(tasks=len(tasks), gold_error=len(tasks) - len(pending))
         rows: dict[int, dict[str, list[dict[str, str]]]] = {}
@@ -1360,7 +1340,9 @@ class Pipeline:
         for attempt in range(1, self.cfg.candidates_per_task + 1):
             if not pending:
                 break
-            msgs = [build_messages(tasks[i].question, self.ddl, role="train") for i in pending]
+            msgs = [
+                self.pack.build_messages(tasks[i].question, self.ddl, role="train") for i in pending
+            ]
             temp = 0.0 if attempt == 1 else 0.8
             res = self.runner.map_requeue(
                 "teacher", msgs, purpose=purpose, stage=stage, temperature=temp, passes=1
@@ -1371,7 +1353,7 @@ class Pipeline:
                 if not isinstance(r, ChatResult):
                     c["llm_error"] += 1
                     continue
-                sql = extract_sql(r.text)
+                sql = self.pack.extract_answer(r.text)
                 if sql is None:
                     c["no_sql_extracted"] += 1
                     continue
@@ -1380,9 +1362,9 @@ class Pipeline:
             outs = ex.run_batch(self.db_ref, [s for _, s in sqls])
             still: list[int] = []
             for (i, sql), o in zip(sqls, outs, strict=True):
-                v = compare_outcomes(o, gold[i], tasks[i].requires_order)
+                v = self.pack.compare(o, gold[i], tasks[i].order_matters)
                 if v.ok:
-                    rows[i] = to_training_row(tasks[i], sql, schema_ddl=self.ddl)
+                    rows[i] = self.pack.to_training_row(tasks[i], sql, context_text=self.ddl)
                     c["verified"] += 1
                 else:
                     c["exec_error" if not o.ok else "result_mismatch"] += 1
@@ -1404,16 +1386,7 @@ class Pipeline:
         if not raws:
             return {"triage_calls": 0, "triage_flagged_dirty_format": 0, "triage_errors": 0}
         sample = list(raws[: self.cfg.triage_sample])
-        msgs = [
-            [
-                {
-                    "role": "user",
-                    "content": "Is the following model output ONLY a single SQL query, with no "
-                    f"prose or markdown fences?\n\n{raw}",
-                }
-            ]
-            for raw in sample
-        ]
+        msgs = [self.pack.triage_prompt(raw) for raw in sample]
         res = self.runner.map(
             "triage", msgs, purpose="triage_format", stage="teacher_data", schema=FormatVerdict
         )
@@ -1427,7 +1400,7 @@ class Pipeline:
 
     def _stage_teacher_data(self, split: Mapping[str, Any]) -> dict[str, Any]:
         def fn() -> dict[str, Any]:
-            train = [_task_from(d) for d in split["train"]]
+            train = [self.pack.task_from(d) for d in split["train"]]
             return self._teacher_rows(train, "teacher_train", "teacher_data")
 
         return self._stage(
@@ -1446,11 +1419,11 @@ class Pipeline:
         def fn() -> dict[str, Any]:
             # Isolation: only train-split tasks are read here; no sealed or dev text is in scope.
             verified = set(data["task_ids"])
-            originals = [_task_from(d) for d in split["train"] if d["task_id"] in verified]
+            originals = [self.pack.task_from(d) for d in split["train"] if d["task_id"] in verified]
             n = self.cfg.paraphrases_per_task
             discards: Counter[str] = Counter()
             fam: dict[str, Counter[str]] = {}
-            pseudo: list[SqlTask] = []
+            pseudo: list[PackTask] = []
             asked = failed = generated = 0
             if n > 0 and originals:
                 msgs = [paraphrase_mod.paraphrase_messages(t.question, n) for t in originals]
@@ -1535,7 +1508,7 @@ class Pipeline:
 
     # ---- stage 7: fine-tune ----------------------------------------------
     def _stage_finetune(
-        self, r: int, rows: Sequence[Mapping[str, Any]], dev: Sequence[SqlTask], upstream: str
+        self, r: int, rows: Sequence[Mapping[str, Any]], dev: Sequence[PackTask], upstream: str
     ) -> dict[str, Any]:
         name = f"finetune_r{r}"
         rows_hash = _digest(list(rows))
@@ -1550,7 +1523,9 @@ class Pipeline:
             atomic_write_bytes(
                 train_p, ("\n".join(canonical_json(x) for x in rows) + "\n").encode("utf-8")
             )
-            val_rows = [to_training_row(t, t.gold_sql, schema_ddl=self.ddl) for t in dev]
+            val_rows = [
+                self.pack.to_training_row(t, t.gold_answer, context_text=self.ddl) for t in dev
+            ]
             atomic_write_bytes(
                 val_p, ("\n".join(canonical_json(x) for x in val_rows) + "\n").encode("utf-8")
             )
@@ -1824,7 +1799,7 @@ class Pipeline:
 
     # ---- stage 9: dev eval / analysis / targeted / branch ------------------
     def _stage_dev_eval(
-        self, r: int, ft: Mapping[str, Any], dev: Sequence[SqlTask]
+        self, r: int, ft: Mapping[str, Any], dev: Sequence[PackTask]
     ) -> dict[str, Any]:
         def fn() -> dict[str, Any]:
             assert self.deps.student_factory is not None  # noqa: S101 - checked in preconditions
@@ -1840,8 +1815,9 @@ class Pipeline:
                     "task_id": t.task_id,
                     "family": t.family,
                     "question": t.question,
-                    "gold_sql": t.gold_sql,
-                    "student_sql": extract_sql(outputs[i]) or outputs[i],
+                    f"gold_{self.pack.answer_key}": t.gold_answer,
+                    f"student_{self.pack.answer_key}": self.pack.extract_answer(outputs[i])
+                    or outputs[i],
                     "reason": scores.reasons[i],
                 }
                 for i, t in enumerate(dev)
@@ -1870,7 +1846,7 @@ class Pipeline:
             failures = list(dev_res["failures"])[:40]
             (res,) = self.runner.map(
                 "planner",
-                [build_analysis_messages(failures, train_families)],
+                [self.pack.analysis_prompt(failures, train_families)],
                 purpose="failure_analysis",
                 stage=f"analysis_r{r}",
                 schema=FailureClusters,
@@ -1885,7 +1861,7 @@ class Pipeline:
                 for f in cl.target_families:
                     if f in heldout_families:
                         heldout += 1
-                    elif f not in train_families or f not in FAMILIES:
+                    elif f not in train_families or f not in self.pack.families():
                         unknown += 1
                     elif f not in targets:
                         targets.append(f)
@@ -1905,20 +1881,20 @@ class Pipeline:
         families = tuple(analysis["target_families"] if targets is None else targets)
 
         def fn() -> dict[str, Any]:
-            known_gold = {_digest(t.gold_sql) for t in self.tasks_by_id.values()}
+            known_gold = {_digest(t.gold_answer) for t in self.tasks_by_id.values()}
             known_gold |= set(split["heldout_gold_sha256"])
-            rep = generate_tasks(
+            rep = self.pack.generate_tasks(
                 self.db_ref,
                 self.cfg.extra_tasks(),
                 self.cfg.seed + 1000 * r,
                 families=families,
             )
-            fresh: list[SqlTask] = []
+            fresh: list[PackTask] = []
             c: Counter[str] = Counter(generated=len(rep.tasks))
             for t in rep.tasks:
                 if t.task_id in split["heldout_task_ids"] or t.family in split["heldout_families"]:
                     c["dropped_heldout_overlap"] += 1
-                elif _digest(t.gold_sql) in known_gold or t.task_id in self.tasks_by_id:
+                elif _digest(t.gold_answer) in known_gold or t.task_id in self.tasks_by_id:
                     c["dropped_already_known"] += 1
                 else:
                     fresh.append(t)
@@ -1937,7 +1913,7 @@ class Pipeline:
             up.append(f"controller_r{r}")
         res = self._stage(f"targeted_r{r}", cfg_in, up, fn)
         for d in res["tasks"]:  # also on a cached result, so later rounds dedupe identically
-            self.tasks_by_id[d["task_id"]] = _task_from(d)
+            self.tasks_by_id[d["task_id"]] = self.pack.task_from(d)
         return res
 
     def _stage_branch(
@@ -2047,7 +2023,7 @@ class Pipeline:
 
     # ---- rounds ------------------------------------------------------------
     def _run_rounds(self, split: Mapping[str, Any], para: Mapping[str, Any]) -> dict[str, Any]:
-        dev = [_task_from(d) for d in split["dev"]]
+        dev = [self.pack.task_from(d) for d in split["dev"]]
         train_fams = sorted({d["family"] for d in split["train"]})
         rows: list[dict[str, Any]] = list(para["rows"])  # originals + verified paraphrases
         rounds: list[dict[str, Any]] = []
@@ -2138,7 +2114,7 @@ class Pipeline:
                 rep = evaluator_mod.evaluate(
                     pipeline.store, pipeline.run_id, gens, pipeline.deps.executor,
                     db_ref=pipeline.db_ref, schema_ddl=pipeline.ddl, gate_cfg=pipeline.config.gate,
-                    trained=trained, expected=pipeline._expected(r),
+                    trained=trained, expected=pipeline._expected(r), pack=pipeline.pack,
                 )  # fmt: skip
                 rep = replace(rep, artifact=_with_serving(rep.artifact, trained))
             except BaseException:

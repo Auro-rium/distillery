@@ -17,7 +17,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from distillery.taskpacks.sql.questions import SqlTask
+from distillery.taskpacks.base import PackTask
 
 PURPOSE = "paraphrase"
 _NON_WORD = re.compile(r"[^\w]+")
@@ -70,7 +70,7 @@ def clean_candidates(
     return kept, dict(discards)
 
 
-def pseudo_task(original: SqlTask, k: int, text: str) -> SqlTask:
+def pseudo_task(original: PackTask, k: int, text: str) -> PackTask:
     """New wording, the original template's gold and ordering rule (the verification target)."""
     return original.model_copy(update={"task_id": f"{original.task_id}:p{k}", "question": text})
 

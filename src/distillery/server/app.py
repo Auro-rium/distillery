@@ -51,6 +51,7 @@ from distillery.server.worker import (
     Worker,
     subprocess_executor,
 )
+from distillery.taskpacks.base import get_pack, pack_names
 
 
 class ApiError(Exception):
@@ -69,7 +70,7 @@ def _err(
 class RunRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    pack: Literal["sql"] = "sql"
+    pack: str = "sql"  # validated against the pack registry below
     scale: Literal["tiny", "small", "full", "gated"]
     dry_run: bool
     budget_usd: float | None = Field(default=None, gt=0)
@@ -301,6 +302,14 @@ def create_app(settings: ServerSettings) -> FastAPI:
                 "bootstrap_resamples": g.bootstrap_resamples,
             },
             "run_cap_usd": cfg.run_cap_usd,
+            "packs": [
+                {
+                    "name": n,
+                    "language": get_pack(n).language,
+                    "answer_label": get_pack(n).answer_label,
+                }
+                for n in pack_names()
+            ],
             "playground": {
                 "enabled": playground.any_available(),
                 "models": playground.statuses(),
@@ -493,8 +502,8 @@ def create_app(settings: ServerSettings) -> FastAPI:
                                f"budget_usd exceeds the run cap {cfg.run_cap_usd}")  # fmt: skip
         if run_id is None:
             tag = uuid.uuid4().hex[:8]
-            run_id = f"dry-sql-{body.scale}-{tag}" if body.dry_run else (
-                f"sql-{body.scale}-{settings.now().strftime('%Y%m%dT%H%M%SZ')}-{tag}"
+            run_id = f"dry-{body.pack}-{body.scale}-{tag}" if body.dry_run else (
+                f"{body.pack}-{body.scale}-{settings.now().strftime('%Y%m%dT%H%M%SZ')}-{tag}"
             )  # fmt: skip
         if not valid_run_id(run_id):
             raise ApiError(
@@ -506,9 +515,13 @@ def create_app(settings: ServerSettings) -> FastAPI:
             )
         if body.scale not in SCALES:
             raise ApiError(422, "invalid_request", "unknown scale")
+        if body.pack not in pack_names():
+            raise ApiError(422, "invalid_request",
+                           f"unknown pack; expected one of {list(pack_names())}")  # fmt: skip
         if reader.read_report(run_id) is not None:
             raise ApiError(409, "run_exists", "that run already completed")
-        job = Job(run_id, body.scale, body.dry_run, body.budget_usd, body.finetune_estimate_usd)
+        job = Job(run_id, body.scale, body.dry_run, body.budget_usd, body.finetune_estimate_usd,
+                  body.pack)  # fmt: skip
         cap = settings.max_pending_jobs if body.dry_run and not is_admin else None
         # written BEFORE submit: a fast job may finish (and be marked final) before submit returns
         run_dir = reader.store_for(run_id).run_dir(run_id)
@@ -595,6 +608,7 @@ def create_app(settings: ServerSettings) -> FastAPI:
                     "task_id": k["task_id"],
                     "question": k["question"],
                     "gold_sql": k["gold_sql"],
+                    "gold_answer": k["gold_sql"],
                     "requires_order": k["requires_order"],
                     "preview": k["preview"],
                     "decision": decisions.get(k["task_id"]),

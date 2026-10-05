@@ -48,7 +48,8 @@ def test_health_and_config_have_no_secrets(client: TestClient) -> None:
     h = client.get("/api/health").json()
     assert h["ok"] is True and h["mode"] == "live" and h["version"]
     c = client.get("/api/config").json()
-    assert set(c) == {"models", "thresholds", "run_cap_usd", "playground"}
+    assert set(c) == {"models", "thresholds", "run_cap_usd", "packs", "playground"}
+    assert c["packs"] == [{"name": "sql", "language": "sql", "answer_label": "SQL"}]
     assert set(c["models"]) == {"planner", "teacher", "triage", "student"}
     assert set(c["thresholds"]) == {"ratio_lower_bound_min", "mcnemar_alpha", "bootstrap_resamples"}
     assert set(c["playground"]) == {
@@ -388,3 +389,10 @@ def test_worker_log_lines_lose_ansi_colour_codes() -> None:
     job = w.Job("r", "tiny", dry_run=True)
     wk._log(job, "\x1b[1;35mContreeTransportError\x1b[0m: sekret failed")
     assert job.logs == ["ContreeTransportError: [redacted] failed"]
+
+
+def test_run_request_pack_is_validated_against_the_registry(tmp_path: Path) -> None:
+    with _client(tmp_path) as c:
+        r = c.post("/api/runs", json={"pack": "nope", "scale": "tiny", "dry_run": True})
+        assert r.status_code == 422 and r.json()["error"] == "invalid_request"
+        assert c.get("/api/runs").json() == []  # nothing started

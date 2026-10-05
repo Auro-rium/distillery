@@ -41,6 +41,21 @@ describe("NewRun form", () => {
     const post = f.mock.calls.find((c) => c[1]?.method === "POST")!;
     expect(JSON.parse(post[1]!.body as string)).toEqual({ pack: "sql", scale: "tiny", dry_run: true, budget_usd: 5 });
   });
+  it("lists the packs the server offers and posts the chosen one; one pack means a fixed select", async () => {
+    const two = { ...cfg, packs: [{ name: "sql", language: "sql", answer_label: "SQL" }, { name: "toolcall", language: "json", answer_label: "tool calls" }] };
+    const f = vi.fn((_url: string, init?: RequestInit) =>
+      Promise.resolve(init?.method === "POST" ? json({ run_id: "abc" }, 202) : json(two)));
+    vi.stubGlobal("fetch", f);
+    render(<MemoryRouter initialEntries={["/new"]}><Routes><Route path="/new" element={<NewRun />} /><Route path="/runs/:id" element={<div>LIVE VIEW</div>} /></Routes></MemoryRouter>);
+    const sel = (await screen.findByLabelText("Pack")) as HTMLSelectElement;
+    await waitFor(() => expect(sel.disabled).toBe(false));
+    expect([...sel.options].map((o) => o.value)).toEqual(["sql", "toolcall"]);
+    fireEvent.change(sel, { target: { value: "toolcall" } });
+    fireEvent.click(screen.getByRole("button", { name: /start dry run/i }));
+    await screen.findByText("LIVE VIEW");
+    const post = f.mock.calls.find((c) => c[1]?.method === "POST")!;
+    expect(JSON.parse(post[1]!.body as string).pack).toBe("toolcall");
+  });
   it("blocks a live run without token or approval, without calling the API", async () => {
     const f = setup(() => json({}, 202));
     fireEvent.click(screen.getByLabelText(/^\s*Dry run \(fake/));
