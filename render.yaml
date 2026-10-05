@@ -1,6 +1,7 @@
 # Render blueprint: the API plus the built frontend in one Docker web service (see Dockerfile).
 # Secrets are NOT in this file: Render asks for every `sync: false` value in its dashboard.
-# DISTILLERY_ADMIN_TOKEN is deliberately absent, so New run stays locked (every attempt is refused).
+# DISTILLERY_ADMIN_TOKEN is not in this file: set it in the dashboard (secret) to unlock New run;
+# without it New run stays locked (every attempt is refused).
 # Free plan: the service sleeps when idle (first request after a sleep takes about a minute) and its
 # disk is ephemeral, which is fine here: recorded runs ship inside the image (replay/).
 services:
@@ -26,11 +27,11 @@ services:
       - key: DISTILLERY_MODEL_TRIAGE
         value: nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B
       - key: DISTILLERY_MODEL_STUDENT
-        value: Qwen/Qwen3-0.6B
+        value: Qwen/Qwen3-1.7B  # the pre-registered P4 student
       - key: DISTILLERY_PROJECT_CAP_USD
         value: "19.5"
       - key: DISTILLERY_RUN_CAP_USD
-        value: "5"
+        value: "8"  # a gated run measured $4.26 (P4)
       # Public playground: a small daily ceiling on teacher calls (ephemeral disk, so it resets on restart).
       - key: DISTILLERY_PLAYGROUND_DAILY_CAP_USD
         value: "0.5"
