@@ -69,8 +69,9 @@ describe("phone menu", () => {
     expect(btn.getAttribute("aria-haspopup")).toBe("dialog");
     fireEvent.click(btn);
     const dlg = await screen.findByRole("dialog", { name: "Menu" }); // dialog code is lazy-loaded
-    expect(within(dlg).getAllByRole("link").map((l) => l.textContent)).toEqual(["Replay", "New run", "Playground"]);
-    expect(within(dlg).getByRole("link", { name: "Replay" }).getAttribute("aria-current")).toBe("page");
+    // The contract replay list holds only a dry run, so no featured run: Evidence and Live are left out.
+    expect(within(dlg).getAllByRole("link").map((l) => l.textContent)).toEqual(["Mission", "Playground", "New run", "GitHub"]);
+    expect(within(dlg).getByRole("link", { name: "Mission" }).getAttribute("aria-current")).toBe("page");
     fireEvent.click(within(dlg).getByRole("link", { name: "New run" }));
     await screen.findByRole("heading", { name: "New run" });
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
@@ -90,6 +91,35 @@ describe("phone menu", () => {
   });
 });
 
+describe("featured-run nav", () => {
+  const rec = (run_id: string, at: string, over: Record<string, unknown> = {}) => ({
+    run_id, dry_run: false, recorded: true, recorded_at: at, status: "complete", decision: "PROMOTE", created_at: null, ...over,
+  });
+  it("adds Evidence and Live for the newest recorded non-dry PROMOTE run, in nav order", async () => {
+    stubFetch(contractFetch({ replay: [rec("older-promote", "2026-01-01T00:00:00Z"), rec("new-promote", "2026-02-01T00:00:00Z"), rec("newest-reject", "2026-03-01T00:00:00Z", { decision: "REJECT" })] }));
+    renderApp("/");
+    const nav = screen.getByRole("navigation", { name: "Main" });
+    const ev = await within(nav).findByRole("link", { name: "Evidence" });
+    expect(ev.getAttribute("href")).toBe("/runs/new-promote/report");
+    expect(within(nav).getByRole("link", { name: "Live" }).getAttribute("href")).toBe("/runs/new-promote");
+    expect(within(nav).getAllByRole("link").map((l) => l.textContent)).toEqual(["Mission", "Evidence", "Live", "Playground", "New run"]);
+  });
+  it("leaves Evidence and Live out when the replay list fails", async () => {
+    stubFetch((u) => (u.endsWith("/replay") ? new Response("{}", { status: 500 }) : contractFetch()(u)));
+    renderApp("/");
+    await waitFor(() => expect(screen.getByRole("link", { name: "Mission" })).toBeTruthy());
+    expect(screen.queryByRole("link", { name: "Evidence" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "Live" })).toBeNull();
+  });
+  it("has a GitHub link in the header that opens in a new tab", () => {
+    renderApp("/");
+    const gh = within(screen.getByRole("banner")).getByRole("link", { name: /GitHub repository/ });
+    expect(gh.getAttribute("href")).toBe("https://github.com/Auro-rium/distillery");
+    expect(gh.getAttribute("target")).toBe("_blank");
+    expect(gh.getAttribute("rel")).toContain("noopener");
+  });
+});
+
 describe("theme and shortcuts still work", () => {
   it("the theme button says what it will switch to and toggles the theme", () => {
     renderApp("/");
@@ -98,5 +128,9 @@ describe("theme and shortcuts still work", () => {
     fireEvent.click(b);
     expect(document.documentElement.dataset.theme).toMatch(/^(light|dark)$/);
     expect(document.documentElement.dataset.theme).not.toBe(before);
+  });
+  it("defaults to dark when nothing is stored, so the first toggle offers light", () => {
+    renderApp("/");
+    expect(screen.getByRole("button", { name: "Switch to light theme" })).toBeTruthy();
   });
 });

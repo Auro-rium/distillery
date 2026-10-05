@@ -1,4 +1,4 @@
-export { Badge, Card, Stat, type Tone } from "./Card";
+export { Badge, Card, Stat, type ModelTone, type Tone } from "./Card";
 export { Button, IconButton, type ButtonProps, type ButtonVariant, type IconButtonProps } from "./Button";
 export { Checkbox, ChoiceGroup, type ChoiceOption } from "./Choice";
 export { cx } from "./cx";
