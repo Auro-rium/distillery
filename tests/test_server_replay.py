@@ -33,7 +33,7 @@ def test_export_dry_run_with_flag_stays_labelled_dry(tmp_path: Path) -> None:
     assert cli.main(args, env=_env(tmp_path), out=out.append) == 0
     d = tmp_path / "replay" / "dry-sql-tiny-e"
     assert {p.name for p in d.iterdir()} == {
-        "report.json", "manifest.json", "run.json", "events.json", "tree.json"
+        "report.json", "manifest.json", "run.json", "events.json", "tree.json", "experiments.json"
     }  # fmt: skip
     manifest = json.loads((d / "manifest.json").read_text())
     assert manifest["recorded_at"] and manifest["source_run_id"] == "dry-sql-tiny-e"

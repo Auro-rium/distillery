@@ -111,3 +111,19 @@ def test_detail_serves_finetune_billed_and_ceiling_apart(tmp_path: Path) -> None
     assert sp["finetune_billed_usd"] == 2.0
     assert sp["finetune_ceiling_usd"] == 3.0
     assert sp["finetune_usd_estimate"] == 5.0
+
+
+def test_export_writes_experiments_json_served_as_bundle(tmp_path: Path) -> None:
+    store = seed_finished_run(tmp_path / "data", "sql-tiny-exp", dry=False)
+    store.add_experiment("sql-tiny-exp", "finetune_job_started", {"job_id": "j1", "round": 1})
+    store.add_experiment("sql-tiny-exp", "finetune_job_adopted", {"job_id": "j1"})
+    store.add_experiment("sql-tiny-exp", "round_result", {"private": "no"})
+    store.close()
+    _export(tmp_path, "sql-tiny-exp")
+    rows = json.loads((tmp_path / "replay" / "sql-tiny-exp" / "experiments.json").read_text())
+    assert [r["name"] for r in rows] == ["finetune_job_started", "finetune_job_adopted"]
+    assert rows[0]["data"] == {"job_id": "j1", "round": 1} and rows[0]["created_at"]
+    with _bundle_only_client(tmp_path) as c:
+        body = c.get("/api/runs/sql-tiny-exp/experiments").json()
+    assert body["source"] == "bundle"
+    assert body["experiments"] == rows

@@ -8,13 +8,23 @@
 .live-col { display: grid; gap: var(--space-4); min-width: 0; align-content: start; }
 .live-grid > .skeleton-wrap { min-height: 9rem; }
 @media (min-width: 1024px) {
-  .live-grid { grid-template-columns: minmax(17rem, 4fr) minmax(0, 7fr); gap: var(--space-5); }
+  .live-grid { grid-template-columns: minmax(16rem, 4fr) minmax(0, 7fr); gap: var(--space-5); }
+  .live-room .live-col-side { grid-column: 2; }
   /* the stage timeline stays in view while the taller right column scrolls; a long list scrolls inside its own panel.
      --live-shell is the measured height of the RunShell header (useShellTop); the fallback is used until it is measured. */
   .live { --live-sticky-top: calc(var(--header-h) + var(--live-shell, 12.5rem) + var(--space-3)); }
   .live-col-stages { position: sticky; top: var(--live-sticky-top); }
   .live-col-stages .lp-stages { display: flex; flex-direction: column; max-height: calc(100dvh - var(--live-sticky-top) - var(--space-4)); }
   .live-col-stages .stg-scroll { min-height: 0; margin: -4px; padding: 4px; overflow: auto; }
+}
+
+@media (min-width: 1180px) {
+  .live-room { grid-template-columns: minmax(15rem, 3fr) minmax(0, 6fr) minmax(17rem, 4fr); gap: var(--space-4); }
+  .live-room .live-col-side { grid-column: auto; }
+}
+/* phones and tablets: log first, then the money and the ledger, then the stage rail */
+@media (max-width: 1023px) {
+  .live-room .live-col-log { order: 1; } .live-room .live-col-side { order: 2; } .live-room .live-col-stages { order: 3; }
 }
 
 /* ---------- panels ---------- */
@@ -71,35 +81,11 @@
 .live .stg-steps { list-style: none; margin: 2px 0 0; padding: 0; }
 .live .stg-steps[hidden] { display: none; }
 
-.live .stg-step { position: relative; display: flex; align-items: center; gap: var(--space-2); min-height: 2rem; padding: 4px var(--space-2) 4px 2.1rem; border-radius: var(--radius-sm); transition: background-color var(--dur-2); }
-.live .stg-name { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; font-size: .84rem; line-height: 1.3; }
-/* connector: upper half joins the previous dot, lower half joins the next; a finished stage's connectors are green */
-.live .stg-step::before, .live .stg-step::after { content: ""; position: absolute; left: calc(var(--space-2) + 6px); width: 2px; background: var(--line); }
-.live .stg-step::before { top: 50%; bottom: 0; }
-.live .stg-step::after { top: 0; height: 50%; }
-.live .stg-step:first-child::after, .live .stg-step:last-child::before { display: none; }
-.live .stg-step[data-status="done"]::before, .live .stg-step[data-status="done"] + .stg-step::after { background: var(--ok); }
-.live .stg-dot { position: absolute; z-index: 1; left: var(--space-2); top: 50%; width: 14px; height: 14px; margin-top: -7px; display: grid; place-items: center; border: 2px solid var(--control-line); border-radius: 50%; background: var(--surface); transition: border-color var(--dur-2); }
-.live .stg-dot i { width: 6px; height: 6px; border-radius: 50%; background: transparent; }
-.live .stg-step[data-status="done"] .stg-dot { border-color: var(--ok); }
-.live .stg-step[data-status="done"] .stg-dot i { background: var(--ok); animation: live-pop var(--dur-2) var(--ease); }
-.live .stg-step[data-status="failed"] .stg-dot { border-color: var(--bad); }
-.live .stg-step[data-status="failed"] .stg-dot i { background: var(--bad); animation: live-pop var(--dur-2) var(--ease); }
-.live .stg-step[data-status="running"] .stg-dot { border-color: var(--info); }
-.live .stg-step[data-status="running"] .stg-dot i { background: var(--info); }
-.live .stg-step[data-status="pending"] { color: var(--ink-2); }
-/* the current step: tinted row, accent edge, heavier name */
-.live .stg-step[data-status="running"] { background: var(--info-bg); box-shadow: inset 3px 0 0 var(--info); }
-.live .stg-step[data-status="running"] .stg-name { font-weight: 500; color: var(--ink); }
-.live .stg-step[data-status="failed"] { background: var(--bad-bg); box-shadow: inset 3px 0 0 var(--bad); }
-.live .stg-step[data-status="failed"] .stg-name { color: var(--ink); }
-/* live-only motion */
-.live .stg-dot::after { content: ""; position: absolute; inset: -2px; border-radius: 50%; border: 2px solid var(--info); opacity: 0; }
-.live .timeline[data-live="true"] .stg-step[data-status="running"] .stg-dot::after { animation: live-ring 1.6s ease-out infinite; }
-.live .timeline[data-live="true"] .stg-step[data-status="done"] + .stg-step[data-status="running"]::after { animation: live-breathe 1.4s ease-in-out infinite; }
-@keyframes live-pop { from { transform: scale(0); } 60% { transform: scale(1.35); } }
-@keyframes live-ring { from { transform: scale(1); opacity: .7; } to { transform: scale(2); opacity: 0; } }
-@keyframes live-breathe { 50% { opacity: .3; } }
+.live .stg-state { flex: none; font: 500 .7rem var(--font-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--ink-2); }
+.live .stg-state.is-done { color: var(--ok); } .live .stg-state.is-failed { color: var(--bad); } .live .stg-state.is-running { color: var(--info); }
+.live .stg-steps .stage-rail { margin: 2px 0 0; }
+.live .rail-name { overflow-wrap: anywhere; font: 500 .84rem/1.3 var(--font-mono); }
+.live .rail-step.is-pending { color: var(--ink-2); }
 
 /* ---------- verifier code, log ---------- */
 .live .code-wrap .code { max-height: 20rem; overflow: auto; }
@@ -134,3 +120,12 @@
   .live .live-status { position: sticky; top: var(--live-status-top); z-index: calc(var(--z-run) - 1); margin-inline: calc(-1 * var(--gutter)); padding-inline: var(--gutter); border-radius: 0; border-inline: 0; background: var(--bg); }
   .live .metrics { grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr)); }
 }
+
+/* ---------- control room: terminal log, ledger ---------- */
+.live .lp-terminal { background: var(--bg); border-color: var(--control-line); }
+.live .lp-terminal .log { max-height: min(62dvh, 38rem); min-height: 14rem; background: var(--bg); border: 1px solid var(--line); border-radius: var(--radius-sm); font-family: var(--font-mono); }
+.live .lp-terminal .log-msg::before { content: "> "; color: var(--ok); }
+.live .lp-terminal .log-line { border-bottom: 0; padding: 2px 0; }
+.live .lp-ledger .ledger-job, .live .lp-ledger .ledger-detail { overflow-wrap: anywhere; min-width: 0; }
+.live .lp-ledger .ledger-at { font-size: .72rem; }
+.live .live-status .hb-label { font-weight: 600; letter-spacing: .12em; text-transform: uppercase; }

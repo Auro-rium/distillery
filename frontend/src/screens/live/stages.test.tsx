@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import type { Stage, StageStatus } from "../../api/types";
+import { stageElapsed } from "./elapsed";
 import { StageTimeline } from "./StageTimeline";
 
 afterEach(cleanup);
@@ -11,7 +12,7 @@ const REAL = [
   "finetune_r1", "dev_eval_r1", "analysis_r1", "targeted_r1", "sandbox_branch_r1",
   "finetune_r2", "dev_eval_r2", "final_eval",
 ];
-const names = (c: HTMLElement) => [...c.querySelectorAll(".stg-step .stg-name")].map((e) => e.textContent);
+const names = (c: HTMLElement) => [...c.querySelectorAll(".rail-step .rail-name")].map((e) => e.textContent);
 const head = (label: string) => screen.getByRole("button", { name: new RegExp(`^${label}`) });
 
 describe("StageTimeline", () => {
@@ -34,14 +35,15 @@ describe("StageTimeline", () => {
     const cur = container.querySelectorAll('[aria-current="step"]');
     expect(cur).toHaveLength(1);
     expect(cur[0].textContent).toContain("dev_eval_r1");
-    expect(cur[0].getAttribute("data-status")).toBe("running");
+    expect(cur[0].classList.contains("is-running")).toBe(true);
   });
 
   it("says the status in words for every stage that is not done; done stages carry it for screen readers", () => {
     const { container } = render(<StageTimeline title="Stages" stages={[st("a_r1", "done"), st("b_r1", "running"), st("c_r1", "failed"), st("d_r1", "pending")]} live={false} collapseDone={false} />);
-    const rows = [...container.querySelectorAll(".stg-step")];
-    expect(rows.map((r) => r.getAttribute("data-status"))).toEqual(["done", "running", "failed", "pending"]);
-    for (const r of rows) expect(r.textContent).toContain(r.getAttribute("data-status")!);
+    const rows = [...container.querySelectorAll(".rail-step")];
+    const want = ["done", "running", "failed", "pending"];
+    expect(rows.map((r) => want.find((w) => r.classList.contains(`is-${w}`)))).toEqual(want);
+    rows.forEach((r, i) => expect(r.textContent).toContain(want[i]));
   });
 
   it("collapses completed groups when asked to, keeps the active and the last group open, and lets the user reopen", () => {
@@ -83,9 +85,29 @@ describe("StageTimeline", () => {
 
   it("motion follows the live flag only", () => {
     const a = render(<StageTimeline title="Stages" stages={[st("a", "running")]} live collapseDone={false} />);
-    expect(a.container.querySelector(".timeline")!.getAttribute("data-live")).toBe("true");
+    expect(a.container.querySelector(".stage-rail")!.getAttribute("data-live")).toBe("true");
     a.unmount();
     const b = render(<StageTimeline title="Stages" stages={[st("a", "running")]} live={false} collapseDone={false} />);
-    expect(b.container.querySelector(".timeline")!.getAttribute("data-live")).toBe("false");
+    expect(b.container.querySelector(".stage-rail")!.getAttribute("data-live")).toBe("false");
+  });
+});
+
+describe("stage elapsed (derived from the stage's own timestamps)", () => {
+  const at = (n: string, status: StageStatus, a: string | null, b: string | null): Stage => ({ name: n, status, started_at: a, ended_at: b });
+  it("formats finished stages from started/ended and never invents one when a timestamp is missing", () => {
+    expect(stageElapsed(at("a", "done", "2026-01-01T00:00:00Z", "2026-01-01T00:04:12Z"), null)).toBe("4m 12s");
+    expect(stageElapsed(at("a", "done", "2026-01-01T00:00:00Z", "2026-01-01T01:03:00Z"), null)).toBe("1h 03m");
+    expect(stageElapsed(at("a", "done", "2026-01-01T00:00:00Z", "2026-01-01T00:00:09Z"), null)).toBe("9s");
+    expect(stageElapsed(at("a", "done", null, "2026-01-01T00:00:09Z"), null)).toBeNull();
+    expect(stageElapsed(at("a", "pending", null, null), null)).toBeNull();
+  });
+  it("a running stage counts up only when told the stream is live", () => {
+    const s = at("a", "running", "2026-01-01T00:00:00Z", null);
+    expect(stageElapsed(s, null)).toBeNull();
+    expect(stageElapsed(s, Date.parse("2026-01-01T00:00:30Z"))).toBe("30s");
+  });
+  it("shows the elapsed text in the rail row", () => {
+    const { container } = render(<StageTimeline title="Stages" stages={[at("a", "done", "2026-01-01T00:00:00Z", "2026-01-01T00:04:12Z")]} live={false} collapseDone={false} />);
+    expect(container.querySelector(".rail-elapsed")!.textContent).toBe("4m 12s");
   });
 });

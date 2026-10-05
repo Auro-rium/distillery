@@ -7,11 +7,13 @@ from __future__ import annotations
 
 import json
 import re
+import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from distillery.orchestrator import DRY_PREFIX
+from distillery.server.evidence import store_experiments
 from distillery.server.reader import RunReader, valid_run_id
 from distillery.server.views import tree_from_report
 from distillery.store import atomic_write_bytes
@@ -95,6 +97,15 @@ def _absolute_paths(obj: Any) -> list[str]:
     return []
 
 
+def _experiments(reader: RunReader, run_id: str) -> list[dict[str, Any]]:
+    """Job/image/artifact rows, same filter and shape as GET /api/runs/{id}/experiments."""
+    index = reader.store_for(run_id).root / "index.sqlite"
+    try:
+        return store_experiments(index, run_id)
+    except sqlite3.Error:
+        return []
+
+
 def export_bundle(
     reader: RunReader, run_id: str, replay_dir: Path, *, allow_dry_run: bool, recorded_at: str
 ) -> Path:
@@ -126,6 +137,7 @@ def export_bundle(
         "run.json": detail,
         "events.json": [{"id": i, "event": e, "data": d} for i, e, d in events],
         "tree.json": tree_from_report(report),
+        "experiments.json": _experiments(reader, run_id),
     }
     leaks = [p for obj in files.values() for p in _absolute_paths(obj)]
     if leaks:

@@ -1,20 +1,21 @@
 import { useId, useMemo, useState } from "react";
 import type { Stage, StageStatus } from "../../api/types";
-import { Badge, type Tone } from "../../components";
+import { StageRail } from "../../charts";
+import { stageElapsed } from "./elapsed";
 import { groupStages, type StageGroup } from "./groups";
 import { Panel } from "./Panel";
 
-const TONE: Record<StageStatus, Tone> = { pending: "neutral", running: "info", done: "ok", failed: "bad" };
+const STATUS_WORD: Record<StageStatus, string> = { pending: "pending", running: "running", done: "done", failed: "failed" };
 
 /**
  * Compact vertical timeline of the stages exactly as the API reported them, grouped by the round suffix of
  * their real names. The running stage is the current step and is emphasised; finished groups can be collapsed
  * (`collapseDone` is only the starting state, the user's own toggles always win). Motion follows real state:
  * the running dot pulses and its incoming connector breathes only while `live` (stream healthy and run
- * active); stale, disconnected or finished runs are static. Times are not shown: durations are never computed.
+ * active); stale, disconnected or finished runs are static. Each row shows its elapsed time derived from the stage's own timestamps (a running stage counts up only while live).
  * The expand/collapse control sits in the panel header, next to the title.
  */
-export function StageTimeline({ title, stages, live, collapseDone }: { title: string; stages: Stage[]; live: boolean; collapseDone: boolean }) {
+export function StageTimeline({ title, stages, live, collapseDone, nowMs = null }: { title: string; stages: Stage[]; live: boolean; collapseDone: boolean; nowMs?: number | null }) {
   const uid = useId();
   const groups = useMemo(() => groupStages(stages), [stages]);
   const grouped = groups.some((g) => g.round !== null);
@@ -52,25 +53,16 @@ export function StageTimeline({ title, stages, live, collapseDone }: { title: st
                       <button type="button" className="stg-toggle" aria-expanded={open} aria-controls={listId} onClick={() => setOwn({ ...own, [g.key]: !open })}>
                         <span className="stg-chev" aria-hidden="true" />
                         <span className="stg-label">{g.label}</span>
-                        <Badge tone={TONE[g.status]}>{g.status}</Badge>
+                        <span className={`stg-state is-${g.status}`}>{STATUS_WORD[g.status]}</span>
                       </button>
                     </h3>
                   )}
-                  <ol id={listId} className="stg-steps" hidden={!open}>
-                    {g.stages.map((s) => (
-                      <li
-                        key={s.name}
-                        className="stg-step"
-                        data-status={s.status}
-                        aria-current={s.status === "running" ? "step" : undefined}
-                        title={s.ended_at ? `ended ${s.ended_at}` : s.started_at ? `started ${s.started_at}` : undefined}
-                      >
-                        <span className="stg-dot" aria-hidden="true"><i key={s.status} /></span>
-                        <span className="stg-name mono">{s.name}</span>
-                        {s.status === "done" ? <span className="sr-only">done</span> : <Badge tone={TONE[s.status]}>{s.status}</Badge>}
-                      </li>
-                    ))}
-                  </ol>
+                  <div id={listId} className="stg-steps" hidden={!open}>
+                    <StageRail
+                      title={`${g.label} stages`} live={live}
+                      stages={g.stages.map((x) => ({ name: x.name, status: x.status, elapsed: stageElapsed(x, nowMs) ?? undefined }))}
+                    />
+                  </div>
                 </li>
               );
             })}
