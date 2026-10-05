@@ -11,7 +11,7 @@ const stub = (body: unknown, status = 200) =>
 const view = () => render(<MemoryRouter><Replay /></MemoryRouter>);
 afterEach(() => vi.unstubAllGlobals());
 
-describe("Replay", () => {
+describe("Mission: stored runs", () => {
   it("lists bundles with banner and links", async () => {
     stub([run, { ...run, run_id: "r2", dry_run: false, recorded: true, recorded_at: "2026-01-02", status: "running", decision: null }]);
     view();
@@ -57,8 +57,12 @@ describe("Replay", () => {
   it("error state", async () => {
     stub({ error: "boom", message: "server down" }, 500);
     view();
-    await waitFor(() => screen.getByRole("alert"));
-    expect(screen.getByRole("alert").textContent).toContain("boom");
-    expect(screen.getByRole("alert").textContent).toContain("server down");
+    // the hero, the proof ladder and the stored list each show the API error; none looks empty
+    await waitFor(() => expect(screen.getAllByRole("alert").length).toBeGreaterThanOrEqual(3));
+    for (const a of screen.getAllByRole("alert")) {
+      expect(a.textContent).toContain("boom");
+      expect(a.textContent).toContain("server down");
+    }
+    expect(document.body.textContent).not.toMatch(/No replay bundles/);
   });
 });

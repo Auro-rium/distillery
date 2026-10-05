@@ -4,10 +4,11 @@ import type { ReactNode } from "react";
 import { Badge, type Tone } from "../ui/Card";
 import { cx } from "../ui/cx";
 
-export type ProofStatus = "pass" | "fail" | "pending" | "unknown";
+export type ProofStatus = "pass" | "partial" | "fail" | "pending" | "unknown";
 
 const STATUS: Record<ProofStatus, { text: string; tone: Tone }> = {
   pass: { text: "PASS", tone: "ok" },
+  partial: { text: "PARTIAL", tone: "warn" },
   fail: { text: "FAIL", tone: "bad" },
   pending: { text: "PENDING", tone: "warn" },
   unknown: { text: "No verdict", tone: "neutral" },

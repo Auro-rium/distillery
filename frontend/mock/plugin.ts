@@ -125,6 +125,8 @@ export function mockApi(): Plugin {
           });
         if (p === "/runs" || p === "/replay")
           return send(res, 200, [summary("dry-sql-tiny", "complete"), summary("live-mock", "running")]);
+        if (p === "/evidence")
+          return send(res, 200, JSON.parse(fs.readFileSync(path.resolve(__dirname, "../../deploy/evidence.json"), "utf8")));
         if (!m) return send(res, 404, { error: "not_found", message: "no such mock endpoint" });
         const [, id, sub] = m;
         if (!sub) return send(res, 200, detail(id));
@@ -137,6 +139,7 @@ export function mockApi(): Plugin {
           return send(res, 200, examples());
         }
         if (sub === "events") return sse(id, req, res);
+        if (sub === "experiments") return send(res, 200, { run_id: id, source: "unavailable", experiments: [] });
         return send(res, 404, { error: "not_found", message: "no such mock endpoint" });
       });
     },

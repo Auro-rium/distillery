@@ -8,13 +8,25 @@ import { renderApp, stubFetch } from "../../testutil/render";
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 describe("replay landing", () => {
-  it("the label banner comes before the hero in the document", async () => {
+  it("the stored-run label banners come before the stored list, and the hero comes first on the page", async () => {
     stubFetch(contractFetch());
     const { container } = renderApp("/");
     await waitFor(() => screen.getAllByText("DRY RUN — fake models, numbers are NOT results"));
-    const banner = container.querySelector(".banners")!;
     const hero = container.querySelector(".hero")!;
-    expect(banner.compareDocumentPosition(hero) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const banner = container.querySelector(".stored .banners")!;
+    const list = container.querySelector(".stored .bundles")!;
+    expect(hero.compareDocumentPosition(banner) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(banner.compareDocumentPosition(list) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+  it("the featured run's label banner is inside the hero, before its verdict", async () => {
+    const base = contract.replay[0];
+    const rec = { ...base, run_id: "rec-1", dry_run: false, recorded: true, recorded_at: "2026-02-03T00:00:00Z" };
+    stubFetch(contractFetch({ replay: [base, rec] }));
+    const { container } = renderApp("/");
+    await waitFor(() => expect(container.querySelector(".hero .m-verdict")).not.toBeNull());
+    const b = container.querySelector(".hero .banners .label-banner")!;
+    expect(b.textContent).toBe("Recorded run · 2026-02-03T00:00:00Z · real Token Factory jobs");
+    expect(b.compareDocumentPosition(container.querySelector(".hero .m-verdict")!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
   it("reserves the banner slot while loading, so nothing shifts when it arrives", () => {
     vi.stubGlobal("fetch", vi.fn(() => new Promise(() => undefined)));
@@ -70,7 +82,9 @@ describe("replay landing", () => {
     stubFetch(contractFetch({ runs: [], replay: [base, { ...base, run_id: "rec-1", dry_run: false, recorded: true, recorded_at: "2026-02-03T00:00:00Z" }] }));
     const { container } = renderApp("/");
     await waitFor(() => screen.getByText("rec-1"));
-    expect(container.querySelectorAll(".banners .label-banner")).toHaveLength(2);
+    // the featured (recorded) run's banner is in the hero; the stored list adds the other label only
+    expect(container.querySelectorAll(".hero .banners .label-banner")).toHaveLength(1);
+    expect(container.querySelectorAll(".stored .banners .label-banner")).toHaveLength(1);
     const tags = [...container.querySelectorAll(".card .badge")].map((b) => b.textContent);
     expect(tags).toContain("dry run");
     expect(tags).toContain("recorded");

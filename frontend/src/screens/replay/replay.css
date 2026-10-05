@@ -1,7 +1,7 @@
-/* Replay landing. Loaded before styles.css, so selectors carry a second class to win over its single-class rules. */
+/* Mission (route `/`, formerly Replay). Loaded before styles.css, so selectors carry a second class to win over its single-class rules. */
 
 /* ---------- the method diagram ---------- */
-.pipe.pipe { margin: var(--space-5) 0 0; padding: var(--space-4); background: var(--glass); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow-1); }
+.pipe.pipe { margin: 0; padding: var(--space-4); background: var(--glass); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow-1); }
 .pipe figcaption { margin-top: var(--space-3); font-size: .86rem; }
 .pipe .flow { display: block; width: 100%; height: auto; overflow: visible; }
 .pipe .flow-tall { max-width: 24rem; margin-inline: auto; }
@@ -32,13 +32,76 @@
 }
 
 /* ---------- run cards ---------- */
-.bundles { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-4); grid-template-columns: repeat(auto-fill, minmax(min(100%, 19rem), 1fr)); }
+.bundles { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-3); grid-template-columns: repeat(auto-fill, minmax(min(100%, 16rem), 1fr)); }
 .bundles > li { min-width: 0; display: flex; }
-.bundles .bundle { flex: 1; display: flex; flex-direction: column; gap: var(--space-3); }
+.bundles .bundle { flex: 1; display: flex; flex-direction: column; gap: var(--space-2); padding: 12px 14px; }
 .bundle-head { display: grid; gap: var(--space-2); }
-.bundle-head h3 { margin: 0; font-size: var(--step-1); overflow-wrap: anywhere; }
+.bundle-head h3 { margin: 0; font-size: var(--step-0); overflow-wrap: anywhere; }
 .bundle-tags { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; }
 .bundle-date { margin: 0; font-size: .9rem; }
 .bundle-date time { font-family: var(--font-mono); font-size: .86em; }
 .bundle-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: auto; }
 .demo-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); }
+
+/* ---------- Mission: hero verdict ---------- */
+.mission.mission > .m-section { margin-top: var(--space-7); }
+.mission.mission > .m-lists { margin-top: var(--space-7); }
+.mission-hero.hero { padding: 0; }
+.mission-hero.hero h1 { font-size: var(--step-3); max-width: none; margin: var(--space-2) 0 var(--space-3); line-height: 1.12; }
+.mission-hero .banners .label-banner { font-size: .8rem; padding: 6px 12px; text-align: left; }
+.mission-hero .banners .banner-skeleton { height: 32px; }
+.mission-hero .banners:empty { display: none; }
+.m-verdict { display: grid; gap: var(--space-4); margin-top: var(--space-3); }
+.m-left, .m-right { display: grid; gap: var(--space-3); align-content: start; min-width: 0; }
+.m-chiprow { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); }
+.m-chiprow .m-chip { font: 600 1rem/1 var(--font-mono); letter-spacing: .12em; padding: 8px 14px; }
+.m-runid { color: var(--ink-3); font-size: .8rem; overflow-wrap: anywhere; }
+.m-sentence { margin: 0; font: 500 var(--step-1)/1.4 var(--font-display); max-width: 52ch; }
+.m-nums { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-2); }
+.m-nums .m-num { padding: 10px 12px; }
+.m-nums .m-num .v { font-size: clamp(1.45rem, 1rem + 2.6vw, 3rem); }
+.m-numcap { margin: 0; font-size: var(--step--1); }
+.m-sk.m-sk { display: block; height: 72px; border-radius: var(--radius); }
+.m-loading { margin-top: var(--space-3); }
+.m-right .m-ci { padding: var(--space-3) var(--space-4); background: var(--glass); border: 1px solid var(--line); border-radius: var(--radius); }
+.m-facts { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font-size: var(--step--1); color: var(--ink-2); }
+.m-facts .num { color: var(--ink); }
+.m-cta.m-cta { justify-self: start; }
+.m-none { margin: var(--space-3) 0 0; }
+@media (min-width: 900px) {
+  .m-verdict { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: var(--space-6); align-items: start; }
+}
+
+/* ---------- Mission: sections ---------- */
+.m-section-head { display: grid; gap: 4px; margin-bottom: var(--space-4); }
+.m-section-head h2 { margin: 0; font-family: var(--font-display); }
+.m-section-head p { margin: 0; font-size: var(--step--1); }
+.m-proofs { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-4); grid-template-columns: minmax(0, 1fr); }
+.m-proofs > li { display: flex; min-width: 0; }
+.m-proofs .proof-card { flex: 1; }
+.m-proofs .proof-detail .badge { vertical-align: middle; }
+/* ProofCard has no PARTIAL state yet: its generic chip is hidden and the payload's word is shown in the body. */
+@media (min-width: 720px) { .m-proofs { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+.m-training, .m-limits { display: grid; gap: var(--space-5); }
+.m-train-side, .m-limit-chart, .m-cost { display: grid; gap: var(--space-3); align-content: start; min-width: 0; }
+@media (min-width: 900px) {
+  .m-training { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); }
+  .m-limits { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); }
+}
+.m-chips { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.m-chips li { display: inline-flex; align-items: baseline; gap: 6px; padding: 4px 10px; border: 1px solid var(--line); border-radius: var(--radius-pill); background: var(--surface); font-size: .85rem; overflow-wrap: anywhere; }
+.m-interp, .m-overlap { margin: 0; font-size: var(--step--1); line-height: 1.55; padding: var(--space-3); border-left: 2px solid var(--line); background: var(--surface); border-radius: 0 var(--radius) var(--radius) 0; }
+.m-acc { margin: 0; font-size: var(--step--1); }
+.m-total .v { font-size: var(--step-4); }
+.m-ftlines { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-2); font-size: var(--step--1); overflow-wrap: anywhere; }
+.m-basis summary { cursor: pointer; font: 500 .78rem var(--font-mono); letter-spacing: .06em; text-transform: uppercase; color: var(--ink-2); }
+.m-basis p { margin: var(--space-2) 0 0; font-size: var(--step--1); overflow-wrap: anywhere; }
+
+.m-ctas.m-ctas { display: grid; gap: var(--space-3); padding: var(--space-5); border: 1px solid var(--line); border-radius: var(--radius); background: var(--glass); }
+.m-ctas h2 { margin: 0; font-family: var(--font-display); }
+.m-cta-row { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+
+/* ---------- Mission: run lists (compact) ---------- */
+.m-lists { display: grid; gap: var(--space-6); }
+.m-lists h2 { font-size: var(--step-1); margin: 0; }
