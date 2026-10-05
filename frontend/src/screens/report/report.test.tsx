@@ -61,15 +61,21 @@ describe("summary", () => {
 
 describe("accuracy", () => {
   it("shows every model's exact value and the CI only where the report has one", () => {
-    const { container } = view(base);
-    const main = container.querySelector(".acc")!;
+    view(base);
+    const main = screen.getByRole("figure", { name: "Held-out accuracy by model" });
     const acc = base.evaluation.accuracy;
     for (const k of ["base", "student", "teacher"] as const)
-      expect(main.querySelector(`.acc-row.${k}`)!.textContent).toContain(`${(acc[k] * 100).toFixed(1)}%`);
-    expect(main.querySelector(".acc-row.student")!.textContent).toContain(`CI ${(base.evaluation.gate.student_ci![0] * 100).toFixed(1)}% to ${(base.evaluation.gate.student_ci![1] * 100).toFixed(1)}%`);
-    expect(main.querySelectorAll(".acc-ci")).toHaveLength(1);
-    expect(main.textContent).toContain("no CI in report");
-    expect(screen.getAllByRole("list", { name: "Chart key" })).toHaveLength(base.evaluation.stress ? 3 : 2); // headline, class split, stress
+      expect(main.querySelector(`.bar.m-${k} .bar-value`)!.textContent).toBe(`${(acc[k] * 100).toFixed(1)}%`);
+    const ci = base.evaluation.gate.student_ci!;
+    const ciTxt = `CI ${(ci[0] * 100).toFixed(1)}% to ${(ci[1] * 100).toFixed(1)}%`;
+    expect(main.querySelector(".bar.m-student .bar-fill")!.getAttribute("aria-label")).toContain(ciTxt);
+    expect(main.querySelectorAll(".whisker")).toHaveLength(1);
+    expect(main.querySelector(".bar.m-student .whisker")).not.toBeNull();
+    const note = main.closest(".card")!.querySelector(".rp-ci-note")!.textContent!;
+    expect(note).toContain(ciTxt);
+    expect(note).toContain("No CI in report for base, teacher");
+    // headline, class split, stress, loss curve
+    expect(screen.getAllByRole("list", { name: "Chart key" })).toHaveLength(2 + (base.evaluation.stress ? 1 : 0) + (base.finetune?.length ? 1 : 0));
   });
 
   it("splits by held-out class as small multiples with their own n, marking classes the student did not train on", () => {
@@ -79,12 +85,17 @@ describe("accuracy", () => {
     for (const c of classes) {
       const panel = screen.getByRole("group", { name: c });
       expect(within(panel).getByText(`n=${base.evaluation.class_counts[c]}`)).toBeTruthy();
-      expect(panel.querySelectorAll(".acc-row")).toHaveLength(3);
+      expect(panel.querySelectorAll(".bar")).toHaveLength(3);
+      const a = base.evaluation.accuracy_by_class[c];
+      for (const k of ["base", "student", "teacher"] as const)
+        expect(panel.querySelector(`.bar.m-${k} .bar-value`)!.textContent).toBe(`${(a[k] * 100).toFixed(1)}%`);
     }
     expect(screen.queryAllByText("not in training").length).toBe(classes.filter((c) => c.startsWith("unseen")).length);
-    expect(container.querySelectorAll(".acc-row")).toHaveLength(3 + 3 * classes.length + (base.evaluation.stress ? 3 : 0));
+    // headline 3 + 3 per class + stress (student and teacher per group: overall + families)
+    const stressGroups = base.evaluation.stress ? 1 + Object.keys(base.evaluation.stress.accuracy_by_family).length : 0;
+    expect(container.querySelectorAll(".bar")).toHaveLength(3 + 3 * classes.length + 2 * stressGroups);
     // whiskers exist only on the headline chart: the report has no per-class CI
-    expect(container.querySelectorAll(".acc-ci")).toHaveLength(1);
+    expect(container.querySelectorAll(".whisker")).toHaveLength(1);
   });
 
   it("offers a table twin whose cells repeat the drawn values", () => {
@@ -297,5 +308,114 @@ describe("cost basis, student sandbox cost and fine-tune artifact ids", () => {
     expect(row.textContent).toContain(sha.slice(0, 12));
     expect(row.textContent).not.toContain(sha);
     expect(row.textContent).toContain("ftjob-round1");
+  });
+});
+
+describe("dossier tabs", () => {
+  const at = (path: string, r: Report = base) => render(<MemoryRouter initialEntries={[path]}><ReportView r={r} /></MemoryRouter>);
+  const panel = (name: string) => document.getElementById(screen.getByRole("tab", { name }).getAttribute("aria-controls")!)!;
+
+  it("groups the report under Verdict, Training and Examples & errors, Verdict first", () => {
+    at("/runs/x/report");
+    const list = screen.getByRole("tablist", { name: "Report sections" });
+    expect(within(list).getAllByRole("tab").map((t) => t.textContent)).toEqual(["Verdict", "Training", "Examples & errors"]);
+    expect(screen.getByRole("tab", { name: "Verdict" }).getAttribute("aria-selected")).toBe("true");
+    expect(within(panel("Verdict")).getByRole("heading", { name: "Gate statistics" })).toBeTruthy();
+    expect(within(panel("Verdict")).getByRole("heading", { name: "Held-out accuracy" })).toBeTruthy();
+    expect(within(panel("Training")).getByRole("heading", { name: "Fine-tune" })).toBeTruthy();
+    expect(within(panel("Training")).getByRole("heading", { name: "Cost and latency" })).toBeTruthy();
+    expect(within(panel("Examples & errors")).getByRole("heading", { name: "Drops, errors and retries" })).toBeTruthy();
+    expect(within(panel("Examples & errors")).getByRole("heading", { name: "Failure clusters" })).toBeTruthy();
+  });
+
+  it("keeps every panel mounted, marking the inactive ones (hidden by CSS)", () => {
+    at("/runs/x/report");
+    expect(panel("Verdict").getAttribute("data-state")).toBe("active");
+    expect(panel("Training").getAttribute("data-state")).toBe("inactive");
+    expect(panel("Examples & errors").getAttribute("data-state")).toBe("inactive");
+  });
+
+  it("opens the tab named in ?tab=, and falls back to Verdict for an unknown value", () => {
+    const t = at("/runs/x/report?tab=training");
+    expect(screen.getByRole("tab", { name: "Training" }).getAttribute("aria-selected")).toBe("true");
+    t.unmount();
+    at("/runs/x/report?tab=nope");
+    expect(screen.getByRole("tab", { name: "Verdict" }).getAttribute("aria-selected")).toBe("true");
+  });
+
+  it("switches tabs on click", () => {
+    at("/runs/x/report");
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "Examples & errors" }), { button: 0 });
+    expect(screen.getByRole("tab", { name: "Examples & errors" }).getAttribute("aria-selected")).toBe("true");
+    expect(panel("Examples & errors").getAttribute("data-state")).toBe("active");
+  });
+});
+
+describe("verdict graphics", () => {
+  it("draws the ratio interval against the gate's own threshold, and the discordant pair counts", () => {
+    view(base);
+    const g = base.evaluation.gate;
+    const line = screen.getByRole("figure", { name: "Student / teacher accuracy ratio" });
+    for (const v of [g.ratio_point, g.ratio_lo, g.ratio_hi, g.thresholds.ratio_lower_bound_min]) expect(line.textContent).toContain(v.toFixed(3));
+    const dm = screen.getByRole("figure", { name: "Discordant pairs, student vs base" });
+    expect(dm.textContent).toContain(`Student right, Base wrong${g.student_only_vs_base}`);
+    expect(dm.textContent).toContain(`Base right, Student wrong${g.base_only_vs_student}`);
+  });
+});
+
+describe("fine-tune card", () => {
+  const ft = base.finetune!;
+  it("draws the loss curve of the selected candidate's round, labelled with that round", () => {
+    const loss = [{ step: 10, train_loss: 0.5, valid_loss: 0.6 }, { step: 20, train_loss: 0.25, valid_loss: 0.7 }];
+    const r = { ...base, finetune: ft.map((f) => (f.round === base.candidate_round ? { ...f, loss_curve: loss } : f)) } as Report;
+    view(r);
+    const fig = screen.getByRole("figure", { name: `Train and validation loss by step, fine-tune round ${base.candidate_round}` });
+    expect(fig.querySelectorAll(".marker")).toHaveLength(4);
+    expect(fig.textContent).toContain("0.700");
+    expect(fig.textContent).toContain("0.250");
+  });
+  it("says the validation loss is an interpretation and quotes the gate metric from the payload", () => {
+    view(base);
+    const note = screen.getByText(/^Interpretation\./).closest("p")!;
+    expect(note.textContent).toContain("token-level against the gold SQL text");
+    expect(note.textContent).toContain("trained on teacher SQL");
+    expect(note.textContent).toContain("Execution accuracy is the gate metric");
+    const dev = base.rounds.find((x) => x.round === base.candidate_round)!.dev_acc;
+    expect(note.textContent).toContain(`dev ${(dev * 100).toFixed(1)}%`);
+    expect(note.textContent).toContain(`held-out ${(base.evaluation.accuracy.student * 100).toFixed(1)}%`);
+  });
+  it("shows trained tokens, steps and hyperparameters verbatim", () => {
+    view(base);
+    const rec = ft.find((f) => f.round === base.candidate_round) ?? ft[0];
+    const facts = screen.getByRole("list", { name: "Training facts" });
+    expect(facts.textContent).toContain(`trained tokens ${rec.trained_tokens}`);
+    expect(facts.textContent).toContain(`steps ${rec.trained_steps} of ${rec.total_steps}`);
+    const hp = screen.getByRole("list", { name: "Hyperparameters" });
+    for (const [k, v] of Object.entries(rec.hyperparameters!)) expect(hp.textContent).toContain(`${k} ${String(v)}`);
+  });
+  it("offers copy buttons for the artifact ids, with the full adapter hash only behind the button", async () => {
+    const write = vi.fn(() => Promise.resolve());
+    vi.stubGlobal("navigator", { ...navigator, clipboard: { writeText: write } });
+    const sha = "f48dcdbe5239cf70a617edeb36638ffb1cd96bfafcb521769a16b65dd5cbe0e2";
+    const { container } = view({ ...base, evaluation: { ...base.evaluation, artifact: { adapter_sha256: sha, checkpoint_id: "ftckpt_x", job_id: "ftjob-abc" } } });
+    const ids = container.querySelector(".ft-artifact")!;
+    const buttons = within(ids as HTMLElement).getAllByRole("button", { name: "Copy to clipboard" });
+    expect(buttons).toHaveLength(3);
+    fireEvent.click(buttons[2]);
+    await waitFor(() => expect(write).toHaveBeenCalledWith(sha));
+    expect(ids.querySelector(`[title="${sha}"]`)!.textContent).toBe(sha.slice(0, 12));
+  });
+  it("says so when the report has no fine-tune record", () => {
+    const r = { ...base } as Partial<Report>;
+    delete r.finetune;
+    view(r as Report);
+    expect(screen.getByText("This report has no fine-tune record")).toBeTruthy();
+    expect(screen.queryByText(/^Interpretation\./)).toBeNull();
+  });
+  it("lists fine-tune cost lines with their basis when the report has them", () => {
+    const lines = [{ kind: "finetune_billed", model: "m-x", units: 777, usd: 1.25, basis: "measured tokens x price" }];
+    view({ ...base, cost: { ...base.cost, finetune_lines: lines } } as unknown as Report);
+    const l = screen.getByRole("list", { name: "Fine-tune cost lines" });
+    expect(l.textContent).toContain("m-x finetune_billed: 777 units, $1.2500 (measured tokens x price)");
   });
 });

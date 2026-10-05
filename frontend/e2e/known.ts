@@ -6,8 +6,6 @@ export interface Known { id: string; route: string; check: string; note: string;
 export const KNOWN: Known[] = [
   { id: "F1", route: "not-found", check: "landmarks",
     note: "the not-found page has no h1 (EmptyState renders an h3 'Page not found' in App.tsx)" },
-  { id: "F2", route: "report", check: "axe", project: /^w400-/,
-    note: "axe scrollable-region-focusable (serious): .rp-cost > .tbl-wrap scrolls at 400 px but is not keyboard focusable" },
 ];
 
 export function known(route: string, check: string, project: string): Known | undefined {

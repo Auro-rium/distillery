@@ -1,34 +1,79 @@
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import { ApiError, api } from "../../api/client";
 import { fmtInt } from "../../api/format";
 import type { Report } from "../../api/types";
 import { ApiErrorState, EmptyState, LabelBanner, Spinner } from "../../components";
 import { RunShell } from "../../components/RunShell";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../ui";
 import { ExamplesCard } from "./Examples";
 import { Summary } from "./Summary";
-import { Accuracy, ByClass, GateCaveat, HumanSet, Stress, Clusters, Counters, CostLatency, GateDetails } from "./sections";
+import { Accuracy, ByClass, Clusters, CostLatency, Counters, FineTune, GateCaveat, GateDetails, HumanSet, Stress } from "./sections";
 import { useAsync } from "./useAsync";
 import "./report.css";
 
-/** The report body: a sticky summary, then sections in a two-column grid on wide screens. */
+const TABS = [
+  { value: "verdict", label: "Verdict" },
+  { value: "training", label: "Training" },
+  { value: "examples", label: "Examples & errors" },
+] as const;
+type Tab = (typeof TABS)[number]["value"];
+const isTab = (v: string | null): v is Tab => TABS.some((t) => t.value === v);
+
+/** The open tab lives in `?tab=` so a section can be linked to; anything unknown opens the verdict. */
+function useTab(): [Tab, (v: string) => void] {
+  const [params, setParams] = useSearchParams();
+  const raw = params.get("tab");
+  const tab: Tab = isTab(raw) ? raw : "verdict";
+  const set = (v: string) =>
+    setParams((p) => {
+      const next = new URLSearchParams(p);
+      if (v === "verdict") next.delete("tab");
+      else next.set("tab", v);
+      return next;
+    }, { replace: true });
+  return [tab, set];
+}
+
+/**
+ * The evidence dossier: a sticky verdict header, the in-distribution caveat, then three tabs. Every tab
+ * stays mounted (inactive ones are hidden by CSS), so switching is instant, examples load once, and
+ * every number of the report is on the page for the provenance checks.
+ */
 export function ReportView({ r }: { r: Report }) {
+  const [tab, setTab] = useTab();
   return (
     <div className="rp">
       <h2 className="sr-only">Report</h2>
       <Summary r={r} />
       <p className="muted rp-meta">Pack {r.pack} · candidate round {fmtInt(r.candidate_round)}</p>
       <GateCaveat r={r} />
-      <div className="rp-grid">
-        <Accuracy r={r} />
-        <GateDetails r={r} />
-        <ByClass r={r} />
-        <HumanSet r={r} />
-        <Stress r={r} />
-        <ExamplesCard id={r.run_id} />
-        <CostLatency r={r} />
-        <Clusters r={r} />
-        <Counters r={r} />
-      </div>
+      <Tabs value={tab} onValueChange={setTab} className="rp-tabs">
+        <TabsList aria-label="Report sections" className="rp-tablist">
+          {TABS.map((t) => <TabsTrigger key={t.value} value={t.value}>{t.label}</TabsTrigger>)}
+        </TabsList>
+        <TabsContent value="verdict" forceMount className="rp-tab">
+          <div className="rp-grid">
+            <GateDetails r={r} />
+            <Accuracy r={r} />
+            <ByClass r={r} />
+            <HumanSet r={r} />
+          </div>
+        </TabsContent>
+        <TabsContent value="training" forceMount className="rp-tab">
+          <div className="rp-grid">
+            <FineTune r={r} />
+            <CostLatency r={r} />
+            <Stress r={r} />
+          </div>
+        </TabsContent>
+        <TabsContent value="examples" forceMount className="rp-tab">
+          <div className="rp-grid">
+            <ExamplesCard id={r.run_id} />
+            <Clusters r={r} />
+            <Counters r={r} />
+          </div>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

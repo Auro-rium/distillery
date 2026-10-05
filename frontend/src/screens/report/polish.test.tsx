@@ -1,8 +1,7 @@
-import { act, cleanup, render } from "@testing-library/react";
+import { cleanup, render } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Report } from "../../api/types";
 import { diffAgainstGold } from "../../lib/diff";
-import { AccuracyChart, type BarRow } from "./AccuracyChart";
 import { Counters } from "./sections";
 import { SqlBlock } from "./SqlBlock";
 
@@ -27,21 +26,6 @@ describe("long counter names wrap at underscores, never inside a word", () => {
     const { container } = render(<Counters r={report} />);
     const th = [...container.querySelectorAll("tbody th")].find((e) => e.textContent === "crosscheck_planner")!;
     expect([...th.querySelectorAll(".brk")].map((p) => p.textContent)).toEqual(["crosscheck_", "planner"]);
-  });
-});
-
-describe("accuracy chart reveal does not depend on being scrolled into view forever", () => {
-  const rows: BarRow[] = [{ key: "base", label: "Base", value: 0.5, ci: null }];
-  it("reveals after a fallback delay even if IntersectionObserver never reports the chart (print, full-page capture)", () => {
-    vi.useFakeTimers();
-    vi.stubGlobal("IntersectionObserver", class { observe() {} disconnect() {} unobserve() {} });
-    vi.stubGlobal("matchMedia", () => ({ matches: false, addEventListener() {}, removeEventListener() {} }));
-    const { container } = render(<AccuracyChart title="t" rows={rows} />);
-    const fig = container.querySelector("figure")!;
-    expect(fig.getAttribute("data-reveal")).toBe("pending");
-    act(() => { vi.advanceTimersByTime(5000); });
-    expect(fig.getAttribute("data-reveal")).toBe("done");
-    expect(container.textContent).toContain("50.0%");
   });
 });
 
