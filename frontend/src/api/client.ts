@@ -1,5 +1,5 @@
 import type {
-  Config, ExampleKind, ExamplesResult, Health, HumansetDrafts, NewRunBody, PlaygroundResponse, Report,
+  Config, Evidence, ExampleKind, ExperimentsResult, ExamplesResult, Health, HumansetDrafts, NewRunBody, PlaygroundResponse, Report,
   RunDetail, RunSummary, Tree,
 } from "./types";
 
@@ -92,6 +92,8 @@ export const api = {
   config: () => request<Config>("/config"),
   runs: () => request<RunSummary[]>("/runs"),
   replay: () => request<RunSummary[]>("/replay"),
+  evidence: () => request<Evidence>("/evidence"),
+  experiments: (id: string) => request<ExperimentsResult>(`/runs/${encodeURIComponent(id)}/experiments`),
   run: (id: string) => request<RunDetail>(`/runs/${encodeURIComponent(id)}`),
   report: (id: string) => request<Report>(`/runs/${encodeURIComponent(id)}/report`),
   tree: (id: string) => request<Tree>(`/runs/${encodeURIComponent(id)}/tree`),

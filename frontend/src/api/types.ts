@@ -382,3 +382,30 @@ export interface PlaygroundResponse {
   cost_usd: number;
   note: string;
 }
+
+export type ProofVerdict = "PASS" | "FAIL" | "PARTIAL";
+export interface ProofMetric { label: string; value: string | number }
+export interface ProofSeriesPoint { step: number; train_loss: number; valid_loss: number }
+export interface ProofItem {
+  id: string;
+  title: string;
+  verdict: ProofVerdict;
+  headline: { label: string; value: string | number; unit?: string };
+  metrics: ProofMetric[];
+  series?: ProofSeriesPoint[];
+  evidence_path: string;
+  evidence_url: string;
+}
+export interface Evidence {
+  generated_at: string;
+  commit: string;
+  repo_url: string;
+  proofs: ProofItem[];
+}
+
+export interface ExperimentRow { name: string; data: Record<string, unknown>; created_at?: string }
+export interface ExperimentsResult {
+  run_id: string;
+  source: "store" | "bundle" | "unavailable";
+  experiments: ExperimentRow[];
+}

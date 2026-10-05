@@ -3,7 +3,7 @@
   "error": null,
   "recorded": false,
   "recorded_at": null,
-  "run_id": "dry-sql-tiny-9a932046",
+  "run_id": "dry-sql-tiny-38f09212",
   "sandbox": {
     "concurrency_peak": null,
     "operations": null
@@ -25,19 +25,19 @@
   },
   "stages": [
     {
-      "ended_at": "2026-10-02T15:41:36.302853+00:00",
+      "ended_at": "2026-10-05T00:23:08.584163+00:00",
       "name": "schema",
       "started_at": null,
       "status": "done"
     },
     {
-      "ended_at": "2026-10-02T15:41:36.307729+00:00",
+      "ended_at": "2026-10-05T00:23:08.588816+00:00",
       "name": "gold_crosscheck",
       "started_at": null,
       "status": "done"
     },
     {
-      "ended_at": "2026-10-02T15:41:36.311146+00:00",
+      "ended_at": "2026-10-05T00:23:08.592561+00:00",
       "name": "verifier_selftest",
       "started_at": null,
       "status": "done"

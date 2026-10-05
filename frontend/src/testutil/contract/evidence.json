@@ -1,0 +1,249 @@
+{
+  "commit": "67c9dec4f32d78293a9720fb73708a1bb8a85f1a",
+  "generated_at": "2026-10-05T05:50:20+05:30",
+  "proofs": [
+    {
+      "evidence_path": "docs/proofs/evidence/p1_11_overfit.json",
+      "evidence_url": "https://github.com/Auro-rium/distillery/blob/67c9dec4f32d78293a9720fb73708a1bb8a85f1a/docs/proofs/evidence/p1_11_overfit.json",
+      "headline": {
+        "label": "adapter on train set",
+        "value": "64/64"
+      },
+      "id": "W1-P1.11",
+      "metrics": [
+        {
+          "label": "base model on same set",
+          "value": "17/64"
+        },
+        {
+          "label": "base model",
+          "value": "Qwen/Qwen3-1.7B"
+        },
+        {
+          "label": "trained steps",
+          "value": 320
+        },
+        {
+          "label": "learning rate",
+          "value": 0.0002
+        },
+        {
+          "label": "final train loss",
+          "value": 0.000343
+        }
+      ],
+      "series": [
+        {
+          "step": 32,
+          "train_loss": 0.48065704107284546,
+          "valid_loss": 0.27315548062324524
+        },
+        {
+          "step": 64,
+          "train_loss": 0.30585044622421265,
+          "valid_loss": 0.23345020413398743
+        },
+        {
+          "step": 96,
+          "train_loss": 0.15429168939590454,
+          "valid_loss": 0.3025260865688324
+        },
+        {
+          "step": 128,
+          "train_loss": 0.0721069872379303,
+          "valid_loss": 0.04563463106751442
+        },
+        {
+          "step": 160,
+          "train_loss": 0.05553640052676201,
+          "valid_loss": 0.020437929779291153
+        },
+        {
+          "step": 192,
+          "train_loss": 0.05092841014266014,
+          "valid_loss": 0.024273663759231567
+        },
+        {
+          "step": 224,
+          "train_loss": 0.021467305719852448,
+          "valid_loss": 0.007836387492716312
+        },
+        {
+          "step": 256,
+          "train_loss": 0.00492705637589097,
+          "valid_loss": 0.14385749399662018
+        },
+        {
+          "step": 288,
+          "train_loss": 0.003879138268530369,
+          "valid_loss": 0.4942771792411804
+        },
+        {
+          "step": 320,
+          "train_loss": 0.0003434471145737916,
+          "valid_loss": 0.0019841601606458426
+        }
+      ],
+      "title": "Fine-tune pipeline can overfit a tiny set",
+      "verdict": "PASS"
+    },
+    {
+      "evidence_path": "docs/proofs/evidence/p1_12_decision.json",
+      "evidence_url": "https://github.com/Auro-rium/distillery/blob/67c9dec4f32d78293a9720fb73708a1bb8a85f1a/docs/proofs/evidence/p1_12_decision.json",
+      "headline": {
+        "label": "arm A dev accuracy",
+        "value": "142/150"
+      },
+      "id": "W1-P1.12",
+      "metrics": [
+        {
+          "label": "base model",
+          "value": "33/150"
+        },
+        {
+          "label": "arm A learning rate",
+          "value": 0.0001
+        },
+        {
+          "label": "other arm",
+          "value": "141/150"
+        },
+        {
+          "label": "other arm learning rate",
+          "value": 0.0002
+        },
+        {
+          "label": "arm 95% interval (Wilson)",
+          "value": "0.898 to 0.973"
+        }
+      ],
+      "title": "Pilot: learning-rate arms on held-out dev",
+      "verdict": "PASS"
+    },
+    {
+      "evidence_path": "docs/proofs/evidence/p2_data.json",
+      "evidence_url": "https://github.com/Auro-rium/distillery/blob/67c9dec4f32d78293a9720fb73708a1bb8a85f1a/docs/proofs/evidence/p2_data.json",
+      "headline": {
+        "label": "labels verified correct",
+        "value": "276/276"
+      },
+      "id": "W2",
+      "metrics": [
+        {
+          "label": "filter recall on true misses",
+          "value": "85/86"
+        },
+        {
+          "label": "pool rows",
+          "value": 276
+        },
+        {
+          "label": "accidental match rate under perturbation",
+          "value": 0.0109
+        }
+      ],
+      "title": "Training data: labels and filter",
+      "verdict": "PARTIAL"
+    },
+    {
+      "evidence_path": "docs/proofs/evidence/p3_calibrate.json",
+      "evidence_url": "https://github.com/Auro-rium/distillery/blob/67c9dec4f32d78293a9720fb73708a1bb8a85f1a/docs/proofs/evidence/p3_calibrate.json",
+      "headline": {
+        "label": "verifier gold vs gold",
+        "value": "1321/1321"
+      },
+      "id": "W3",
+      "metrics": [
+        {
+          "label": "PROMOTE rate at true ratio 0.95, n=300",
+          "value": "100%"
+        },
+        {
+          "label": "PROMOTE rate at true ratio 0.80, n=300",
+          "value": "0%"
+        },
+        {
+          "label": "handwritten verifier pairs as expected",
+          "value": "8/8"
+        },
+        {
+          "label": "simulations per cell",
+          "value": 200
+        }
+      ],
+      "title": "Gate: verifier and statistical power",
+      "verdict": "PASS"
+    },
+    {
+      "evidence_path": "docs/proofs/evidence/p4_run_summary.json",
+      "evidence_url": "https://github.com/Auro-rium/distillery/blob/67c9dec4f32d78293a9720fb73708a1bb8a85f1a/docs/proofs/evidence/p4_run_summary.json",
+      "headline": {
+        "label": "decision",
+        "value": "PROMOTE"
+      },
+      "id": "W4",
+      "metrics": [
+        {
+          "label": "student held-out accuracy",
+          "value": "92.3%"
+        },
+        {
+          "label": "teacher held-out accuracy",
+          "value": "90.0%"
+        },
+        {
+          "label": "base held-out accuracy",
+          "value": "25.7%"
+        },
+        {
+          "label": "student/teacher ratio (95% CI)",
+          "value": "1.026 (0.993 to 1.061)"
+        },
+        {
+          "label": "held-out n",
+          "value": 300
+        },
+        {
+          "label": "run cost (estimate)",
+          "value": 4.26
+        }
+      ],
+      "title": "Full gated run on a sealed held-out set",
+      "verdict": "PASS"
+    },
+    {
+      "evidence_path": "docs/proofs/evidence/p5_live.json",
+      "evidence_url": "https://github.com/Auro-rium/distillery/blob/67c9dec4f32d78293a9720fb73708a1bb8a85f1a/docs/proofs/evidence/p5_live.json",
+      "headline": {
+        "label": "B3 job adopted, not recreated",
+        "value": "PASS"
+      },
+      "id": "W5",
+      "metrics": [
+        {
+          "label": "fine-tune jobs started",
+          "value": 1
+        },
+        {
+          "label": "distinct job ids",
+          "value": 1
+        },
+        {
+          "label": "adopted events",
+          "value": 1
+        },
+        {
+          "label": "kill-resume checks passed",
+          "value": "3/8"
+        },
+        {
+          "label": "checks failed",
+          "value": "A1, B1, B2, B4, RUN_COMPLETED"
+        }
+      ],
+      "title": "Kill and resume: fine-tune job adopted",
+      "verdict": "PARTIAL"
+    }
+  ],
+  "repo_url": "https://github.com/Auro-rium/distillery"
+}

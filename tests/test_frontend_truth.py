@@ -56,6 +56,8 @@ NULLABLE: dict[str, set[str]] = {
         "nodes[].sandbox_image",
     },
     "examples": set(),
+    "evidence": set(),
+    "experiments": set(),
     # response headers of /examples, parsed: X-Examples-Available / -Cap-Per-Kind / -Totals
     "examples_headers": {"totals.fixed", "totals.still_wrong", "totals.regressed"},
     "health": set(),
@@ -153,7 +155,10 @@ def responses(tmp_path_factory: pytest.TempPathFactory) -> dict[str, Any]:
             _example(2, "still_wrong", False, False),
             _example(3, "regressed", True, False),
         ]
-        seed_finished_run(s.root, ex_id, examples=items).close()
+        st = seed_finished_run(s.root, ex_id, examples=items)
+        st.add_experiment(ex_id, "finetune_job_started", {"job_id": "ftjob-contract", "round": 1})
+        st.add_experiment(ex_id, "serving_image", {"digest": "sha256:contract"})
+        st.close()
         for name, path in {
             "health": "/api/health",
             "config": "/api/config",
@@ -163,6 +168,8 @@ def responses(tmp_path_factory: pytest.TempPathFactory) -> dict[str, Any]:
             "tree": f"/api/runs/{rid}/tree",
             "examples": f"/api/runs/{ex_id}/examples?kind=all&limit=20",
             "replay": "/api/replay",
+            "evidence": "/api/evidence",
+            "experiments": f"/api/runs/{ex_id}/experiments",
         }.items():
             r = c.get(path)
             assert r.status_code == 200, (name, r.text)
@@ -187,6 +194,8 @@ ENDPOINTS = [
     "examples",
     "examples_headers",
     "replay",
+    "evidence",
+    "experiments",
 ]
 
 

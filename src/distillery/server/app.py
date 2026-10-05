@@ -23,6 +23,12 @@ from distillery import humanset
 from distillery.evaluator import EXAMPLES_PER_KIND
 from distillery.orchestrator import DRY_PREFIX, SCALES
 from distillery.server import sse, telemetry
+from distillery.server.evidence import (
+    bundle_experiments,
+    evidence_path,
+    read_evidence,
+    store_experiments,
+)
 from distillery.server.limits import SlidingWindow
 from distillery.server.playground import (
     MAX_QUESTION_CHARS,
@@ -382,6 +388,30 @@ def create_app(settings: ServerSettings) -> FastAPI:
             "X-Examples-Totals": json.dumps(example_totals(rep), separators=(",", ":")),
         }
         return JSONResponse(items, headers=headers)
+
+    @app.get("/api/evidence")
+    def evidence() -> dict[str, Any]:
+        data = read_evidence(evidence_path())
+        if data is None:
+            raise ApiError(404, "evidence_unavailable", "evidence file not found or unreadable")
+        return data
+
+    @app.get("/api/runs/{run_id}/experiments")
+    def run_experiments(run_id: str) -> dict[str, Any]:
+        check_id(run_id)
+        if local(run_id):
+            index = reader.store_for(run_id).root / "index.sqlite"
+            return {
+                "run_id": run_id,
+                "source": "store",
+                "experiments": store_experiments(index, run_id),
+            }
+        if bundle(run_id) is None:
+            raise ApiError(404, "not_found", "no such run")
+        rows = bundle_experiments(settings.replay_dir / run_id)
+        if rows is None:
+            return {"run_id": run_id, "source": "unavailable", "experiments": []}
+        return {"run_id": run_id, "source": "bundle", "experiments": rows}
 
     @app.get("/api/replay")
     def replay() -> list[dict[str, Any]]:
