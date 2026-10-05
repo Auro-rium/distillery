@@ -192,3 +192,13 @@ The smoke runs trained 3, 6 and 9 optimizer steps at provider defaults, far belo
 
 ## 2026-10-04 (result + carry-over, recorded BEFORE P4 starts): P1.12 picked learning rate 1e-4
 P1.12 ran exactly as pre-registered (`docs/proofs/evidence/p1_12_decision.json`): dev accuracy base 33/150 (Wilson [0.161, 0.293]), arm A lr 1e-4 **142/150** ([0.898, 0.973]), arm B lr 2e-4 141/150 ([0.890, 0.968]). Both qualify; A wins (higher count). Per the carry-over rule, `PINNED_HYPERPARAMETERS` is now LoRA r 16, alpha 32, learning rate 1e-4, batch 4, 3 epochs, packing false, context 8192, warmup 0, weight decay 0, max grad norm 1.0, dropout 0. With the 300-step floor, a run needs >= 400 training rows (was 1,600 at batch 16). Caveats recorded now: dev shares templates with train (in-distribution), and the pilot trained on gold SQL while P4 trains on teacher SQL. Gate, thresholds, sets, seeds and max_rounds 1 are unchanged.
+
+## 2026-10-06 (pre-registration, recorded BEFORE any A5 chaos run, local or hosted): A5 chaos pass criteria
+A5: pre-register chaos pass criteria. A `chaos-` run is judged PASS only if ALL of the following hold; a failure is reported as the result, and the criteria are not changed afterwards.
+- a verdict is reached (PROMOTE or REJECT both count);
+- every injected fault is visible in the audit log and was recovered;
+- the audit log shows exactly one `admin` action (the start) and zero others;
+- exactly one fine-tune job was billed;
+- spend <= cap.
+
+Fault plan (from the A5 plan): (a) the LLM transport wrapper raises 503 for N calls; (b) a connection-error window of 60 s (network drop); (c) the supervisor SIGKILLs the child once in `teacher_data` and once in `finetune_r1` (tests adoption); (d) the sandbox returns exit -1 for k jobs in `dev_eval`. `DISTILLERY_CHAOS=<json plan>` is honoured only for run ids that start with `chaos-`. Each injection is logged as audit actor `chaos`.
