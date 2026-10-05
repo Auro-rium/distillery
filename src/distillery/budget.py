@@ -203,6 +203,7 @@ class Ledger:
         input_tokens: int = 0,
         output_tokens: int = 0,
         day: str | None = None,
+        latency_s: float | None = None,
     ) -> None:
         if usd < 0:
             raise ValueError("usd must be >= 0")
@@ -220,7 +221,9 @@ class Ledger:
                     self.run_id, kind, model, usd, input_tokens, output_tokens, d
                 )
                 if model is not None and kind not in NON_LLM_KINDS:
-                    self.store.record_llm_call(self.run_id, model, input_tokens, output_tokens, usd)
+                    self.store.record_llm_call(
+                        self.run_id, model, input_tokens, output_tokens, usd, latency_s
+                    )
 
 
 def spend_lines(store: Store, run_id: str) -> list[dict[str, Any]]:

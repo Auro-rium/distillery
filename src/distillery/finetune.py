@@ -25,6 +25,7 @@ import openai
 from pydantic import BaseModel, ConfigDict, Field
 
 from distillery.config import ConfigError
+from distillery.errors import RunSuspended
 from distillery.llm import is_retryable
 
 TERMINAL_STATUSES = frozenset({"succeeded", "failed", "cancelled"})
@@ -47,7 +48,12 @@ class JobFailedError(FineTuneError):
 
 
 class PollTimeoutError(FineTuneError):
-    pass
+    """``unreachable=True``: the status could not be read (the job may be fine; retryable).
+    ``False``: the job was read and is still not finished after the timeout (terminal)."""
+
+    def __init__(self, message: str, *, unreachable: bool = False) -> None:
+        super().__init__(message)
+        self.unreachable = unreachable
 
 
 class HyperParameters(BaseModel):
@@ -126,6 +132,7 @@ class JobInfo:
     total_steps: int | None
     trained_tokens: int | None = None
     hyperparameters: dict[str, Any] | None = None  # RESOLVED values the API reports
+    suffix: str | None = None  # as given to create_job: finds a job whose create looked failed
 
     @property
     def terminal(self) -> bool:
@@ -204,7 +211,8 @@ class PaidJob:
 
 @contextmanager
 def paid_job(create: Callable[[], str], cancel: CancelFn) -> Iterator[PaidJob]:
-    """Guarantee the paid job is cancelled on any non-success exit.
+    """Guarantee the paid job is cancelled on any non-success exit, except a suspension
+    (``RunSuspended``), which keeps it for the next attempt to adopt.
 
     ``create`` starts the job and returns its id (if it raises, nothing was started).
     Inside the block call ``handle.mark_succeeded()`` once the job has succeeded and its
@@ -214,6 +222,10 @@ def paid_job(create: Callable[[], str], cancel: CancelFn) -> Iterator[PaidJob]:
     handle = PaidJob(create())
     try:
         yield handle
+    except RunSuspended:
+        # SIGTERM (server shutdown/redeploy): leave the job running and unclosed, so the next
+        # attempt adopts it instead of paying for a second one. A user cancel is SIGINT.
+        raise
     except BaseException as exc:
         _cancel_quietly(handle, cancel, exc)
         raise
@@ -326,7 +338,24 @@ class FineTuneClient:
             total_steps=getattr(job, "total_steps", None),
             trained_tokens=getattr(job, "trained_tokens", None),
             hyperparameters=FineTuneClient._resolved_hp(job),
+            suffix=getattr(job, "suffix", None),
         )
+
+    def list_jobs(self, *, limit: int = 100, max_pages: int = 5) -> list[JobInfo]:
+        """Recent jobs, newest first (GET /v1/fine_tuning/jobs, paged). Idempotent, so retried."""
+        out: list[JobInfo] = []
+        after: str | None = None
+        for _ in range(max_pages):
+            kwargs: dict[str, Any] = {"limit": limit}
+            if after:
+                kwargs["after"] = after
+            page = self._retry(partial(self._c.fine_tuning.jobs.list, **kwargs))
+            data = list(page.data)
+            out.extend(self._job_info(j) for j in data)
+            if not getattr(page, "has_more", False) or not data:
+                break
+            after = str(data[-1].id)
+        return out
 
     def get(self, job_id: str) -> JobInfo:
         return self._job_info(self._retry(lambda: self._c.fine_tuning.jobs.retrieve(job_id)))
@@ -369,7 +398,9 @@ class FineTuneClient:
                 ):
                     raise
                 if timeout_s is not None and now - start + interval_s > timeout_s:
-                    raise PollTimeoutError(f"job {job_id} unreachable and unfinished") from exc
+                    raise PollTimeoutError(
+                        f"job {job_id} unreachable and unfinished", unreachable=True
+                    ) from exc
                 if on_error is not None:
                     on_error(exc)
                 self._sleep(interval_s)

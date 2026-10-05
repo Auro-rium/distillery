@@ -11,16 +11,19 @@ terminal, from a hidden prompt; it is never taken from argv (shell history / pro
 from __future__ import annotations
 
 import argparse
+import contextlib
 import getpass
 import json
 import os
+import signal
 import sys
-from collections.abc import Callable, Mapping, Sequence
+import threading
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from distillery import humanset
+from distillery import errors, humanset
 from distillery.budget import BudgetExceeded, Ledger, spend_lines
 from distillery.config import Config, ConfigError, load_config
 from distillery.driver import driving
@@ -47,7 +50,8 @@ from distillery.taskpacks.sql import schema as sql_schema
 from distillery.taskpacks.sql.human import QuestionFileError, load_question_file
 
 DepsFactory = Callable[[Config, PipelineConfig, AsyncBridge], Deps]
-EXIT_OK, EXIT_FAIL, EXIT_REFUSED = 0, 1, 2
+EXIT_OK, EXIT_FAIL, EXIT_REFUSED = errors.EXIT_OK, errors.EXIT_FAIL, errors.EXIT_REFUSED
+EXIT_RETRYABLE = errors.EXIT_RETRYABLE
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -322,19 +326,53 @@ def _cmd_run(
                 deps = deps_factory(config, pcfg, bridge)
             else:
                 deps = make_live_deps(config, pcfg, bridge, env=env)
-            with driving(store.run_dir(run_id)):
+            with driving(store.run_dir(run_id)), _suspend_on_sigterm():
                 report = Pipeline(pcfg, config, deps, store, run_id, say=out).run()
     except (ConfigRefusal, ConfigError, humanset.HumanSetError) as exc:
         out(f"refused: {exc}")
         return EXIT_REFUSED
-    except PipelineError as exc:
-        out(f"FAILED: {type(exc).__name__}: {exc}")
-        return EXIT_FAIL
+    except errors.RunSuspended:
+        out("SUSPENDED (retryable): SIGTERM; paid jobs left running for the next attempt to adopt")
+        return EXIT_RETRYABLE
+    except Exception as exc:  # noqa: BLE001 - every run-level failure gets one classified line
+        return _classified_exit(exc, out)
     finally:
         store.close()
     _summary(report, out)
     out(f"report: {store.run_dir(run_id) / 'report.json'}")
     return EXIT_OK
+
+
+@contextlib.contextmanager
+def _suspend_on_sigterm() -> Iterator[None]:
+    """SIGTERM means "the host is going away" (server shutdown, redeploy): raise RunSuspended in
+    the main thread so the run stops WITHOUT cancelling paid jobs. SIGINT stays a user cancel
+    (KeyboardInterrupt, which cancels them). Only the main thread may install handlers."""
+    if threading.current_thread() is not threading.main_thread():
+        yield
+        return
+
+    def handler(_sig: int, _frame: object) -> None:
+        raise errors.RunSuspended("SIGTERM")
+
+    prev = signal.signal(signal.SIGTERM, handler)
+    try:
+        yield
+    finally:
+        signal.signal(signal.SIGTERM, prev)
+
+
+def _classified_exit(exc: Exception, out: Callable[[str], None]) -> int:
+    """One line the supervisor and a human can read, and the exit code that tells the supervisor
+    whether to restart (75) or stop (1). Types nobody classified also get their traceback: they
+    are bugs, and a bug must stay debuggable."""
+    kind = errors.classify(exc)
+    out(f"FAILED ({kind}): {type(exc).__name__}: {exc}")
+    if not errors.is_known(exc) and not isinstance(exc, PipelineError):
+        import traceback
+
+        out("".join(traceback.format_exception(exc)).rstrip())
+    return EXIT_RETRYABLE if kind == "retryable" else EXIT_FAIL
 
 
 def _cmd_status(

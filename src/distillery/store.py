@@ -30,12 +30,17 @@ CREATE TABLE IF NOT EXISTS experiments (
 CREATE TABLE IF NOT EXISTS llm_calls (
     id INTEGER PRIMARY KEY AUTOINCREMENT, run_id TEXT NOT NULL, model TEXT NOT NULL,
     input_tokens INTEGER NOT NULL, output_tokens INTEGER NOT NULL, usd REAL NOT NULL,
-    created_at TEXT NOT NULL);
+    created_at TEXT NOT NULL, latency_s REAL);
 CREATE TABLE IF NOT EXISTS spend (
     id INTEGER PRIMARY KEY AUTOINCREMENT, run_id TEXT NOT NULL, kind TEXT NOT NULL,
     model TEXT, usd REAL NOT NULL, input_tokens INTEGER NOT NULL,
     output_tokens INTEGER NOT NULL, day TEXT NOT NULL, created_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS audit (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, at TEXT NOT NULL, actor TEXT NOT NULL,
+    action TEXT NOT NULL, run_id TEXT, detail_json TEXT NOT NULL);
 """
+
+AUDIT_ACTORS = frozenset({"admin", "supervisor", "controller", "chaos"})
 
 
 def canonical_json(obj: Any) -> str:
@@ -79,7 +84,15 @@ class Store:
         self._db = sqlite3.connect(self.root / "index.sqlite", check_same_thread=False)
         with self._lock:
             self._db.executescript(_SCHEMA)
+            self._migrate()
             self._db.commit()
+
+    def _migrate(self) -> None:
+        """Additive columns for stores created by older versions (CREATE IF NOT EXISTS keeps an
+        existing table as it was)."""
+        cols = {r[1] for r in self._db.execute("PRAGMA table_info(llm_calls)").fetchall()}
+        if "latency_s" not in cols:  # A2: per-call latency, for the B4 teacher p50/p95
+            self._db.execute("ALTER TABLE llm_calls ADD COLUMN latency_s REAL")
 
     def close(self) -> None:
         with self._lock:
@@ -284,6 +297,28 @@ class Store:
             (run_id, name, canonical_json(data), _now()),
         )
 
+    # ---- audit log of interventions (who started, cancelled, restarted, decided) ----
+    def add_audit(
+        self, actor: str, action: str, run_id: str | None, detail: dict[str, Any] | None = None
+    ) -> None:
+        if actor not in AUDIT_ACTORS:
+            raise ValueError(f"unknown audit actor {actor!r}")
+        self._exec(
+            "INSERT INTO audit(at, actor, action, run_id, detail_json) VALUES (?,?,?,?,?)",
+            (_now(), actor, action, run_id, canonical_json(detail or {})),
+        )
+
+    def list_audit(self, run_id: str | None = None) -> list[dict[str, Any]]:
+        sql = "SELECT at, actor, action, run_id, detail_json FROM audit"
+        params: tuple[Any, ...] = ()
+        if run_id is not None:
+            sql, params = sql + " WHERE run_id=?", (run_id,)
+        rows = self._query(sql + " ORDER BY id", params)
+        return [
+            {"at": r[0], "actor": r[1], "action": r[2], "run_id": r[3], "detail": json.loads(r[4])}
+            for r in rows
+        ]
+
     def list_experiments(self, run_id: str) -> list[tuple[str, dict[str, Any]]]:
         rows = self._query(
             "SELECT name, data_json FROM experiments WHERE run_id=? ORDER BY id", (run_id,)
@@ -291,13 +326,19 @@ class Store:
         return [(r[0], json.loads(r[1])) for r in rows]
 
     def record_llm_call(
-        self, run_id: str, model: str, input_tokens: int, output_tokens: int, usd: float
+        self,
+        run_id: str,
+        model: str,
+        input_tokens: int,
+        output_tokens: int,
+        usd: float,
+        latency_s: float | None = None,
     ) -> None:
         self.create_run(run_id)
         self._exec(
-            "INSERT INTO llm_calls(run_id, model, input_tokens, output_tokens, usd, created_at) "
-            "VALUES (?,?,?,?,?,?)",
-            (run_id, model, input_tokens, output_tokens, usd, _now()),
+            "INSERT INTO llm_calls(run_id, model, input_tokens, output_tokens, usd, created_at, "
+            "latency_s) VALUES (?,?,?,?,?,?,?)",
+            (run_id, model, input_tokens, output_tokens, usd, _now(), latency_s),
         )
 
     def record_spend(

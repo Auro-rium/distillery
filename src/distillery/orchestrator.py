@@ -44,6 +44,7 @@ from distillery.budget import (
     spend_lines,
 )
 from distillery.config import Config, ConfigError
+from distillery.errors import RetryableRunError, RunSuspended
 from distillery.evaluator import ExpectedArtifact, ModelScores, score_model
 from distillery.finetune import (
     ACTIVE_STATUSES,
@@ -59,7 +60,14 @@ from distillery.finetune import (
     planned_steps,
     require_explicit_hyperparameters,
 )
-from distillery.llm import CallRecord, ChatResult, LLMClient, LLMError
+from distillery.llm import (
+    CallRecord,
+    ChatResult,
+    LLMClient,
+    LLMError,
+    RetriesExhaustedError,
+    is_retryable,
+)
 from distillery.prompts import build_messages, extract_sql, to_training_row
 from distillery.sandbox import Sandbox
 from distillery.sandbox_executor import AsyncBridge
@@ -130,6 +138,7 @@ STUDENT_COST_UNAVAILABLE = (
     "unavailable: the student is served in Nebius Sandboxes (CPU) and the sandbox price is unknown"
 )
 DRY_PREFIX = "dry-"
+EVAL_REQUEUE_PASSES = 2  # extra passes over eval items whose LLM call failed retryably
 _SCHEMA_OVERHEAD_TOKENS = 120  # rough prompt overhead of the JSON-schema instruction (estimate)
 
 
@@ -288,6 +297,8 @@ class FineTuner(Protocol):
 
     def get(self, job_id: str) -> JobInfo: ...
 
+    def list_jobs(self, *, limit: int = ..., max_pages: int = ...) -> list[JobInfo]: ...
+
     def poll(
         self,
         job_id: str,
@@ -374,8 +385,9 @@ class LedgerSink:
             a["output_tokens"] += record.output_tokens
             a["usd_nano"] += round(record.cost_usd * 1e9)
         self._ledger.record(
-            "llm", record.model, record.cost_usd, record.input_tokens, record.output_tokens
-        )
+            "llm", record.model, record.cost_usd, record.input_tokens, record.output_tokens,
+            latency_s=record.latency_s,
+        )  # fmt: skip
 
     def snapshot(self) -> dict[str, dict[str, int]]:
         with self._lock:
@@ -433,7 +445,7 @@ class LLMRunner:
         stage: str,
         schema: type[BaseModel] | None,
         temperature: float | None,
-    ) -> ChatResult[Any] | None:
+    ) -> ChatResult[Any] | LLMError:
         async with sem:
             try:
                 if schema is None:
@@ -447,7 +459,7 @@ class LLMRunner:
                 )  # fmt: skip
             except LLMError as exc:
                 self.errors[f"{purpose}:{type(exc).__name__}"] += 1
-                return None
+                return exc
 
     async def _gather(
         self,
@@ -457,7 +469,7 @@ class LLMRunner:
         stage: str,
         schema: type[BaseModel] | None,
         temperature: float | None,
-    ) -> list[ChatResult[Any] | None]:
+    ) -> list[ChatResult[Any] | LLMError]:
         import asyncio
 
         sem = asyncio.Semaphore(self.cfg.concurrency)
@@ -466,6 +478,27 @@ class LLMRunner:
                 *(self._one(sem, role, m, purpose, stage, schema, temperature) for m in chunk)
             )
         )
+
+    def map_raw(
+        self,
+        role: str,
+        batch: Sequence[Sequence[Mapping[str, Any]]],
+        *,
+        purpose: str,
+        stage: str,
+        schema: type[BaseModel] | None = None,
+        temperature: float | None = 0.0,
+    ) -> list[ChatResult[Any] | LLMError]:
+        """Like ``map`` but a failed item comes back as its ``LLMError`` (so callers can tell a
+        retryable ``RetriesExhaustedError`` from a terminal refusal)."""
+        out: list[ChatResult[Any] | LLMError] = []
+        for i in range(0, len(batch), self.cfg.chunk):
+            chunk = batch[i : i + self.cfg.chunk]
+            self.ledger.preflight(self._estimate(role, chunk, schema))  # BudgetExceeded: no call
+            out.extend(
+                self.bridge.run(self._gather(role, chunk, purpose, stage, schema, temperature))
+            )
+        return out
 
     def map(
         self,
@@ -477,14 +510,38 @@ class LLMRunner:
         schema: type[BaseModel] | None = None,
         temperature: float | None = 0.0,
     ) -> list[ChatResult[Any] | None]:
-        out: list[ChatResult[Any] | None] = []
-        for i in range(0, len(batch), self.cfg.chunk):
-            chunk = batch[i : i + self.cfg.chunk]
-            self.ledger.preflight(self._estimate(role, chunk, schema))  # BudgetExceeded: no call
-            out.extend(
-                self.bridge.run(self._gather(role, chunk, purpose, stage, schema, temperature))
-            )
-        return out
+        res = self.map_raw(
+            role, batch, purpose=purpose, stage=stage, schema=schema, temperature=temperature
+        )
+        return [None if isinstance(r, LLMError) else r for r in res]
+
+    def map_requeue(
+        self,
+        role: str,
+        batch: Sequence[Sequence[Mapping[str, Any]]],
+        *,
+        purpose: str,
+        stage: str,
+        temperature: float | None = 0.0,
+        passes: int = EVAL_REQUEUE_PASSES,
+    ) -> list[ChatResult[Any] | LLMError]:
+        """``map_raw``, then up to ``passes`` more passes over the items that failed RETRYABLY
+        (transport retries exhausted), same prompt and temperature. Terminal failures (a 4xx, a
+        refusal) are not re-sent. Re-queued attempts are counted in ``errors`` as
+        ``<purpose>:requeued``."""
+        res = self.map_raw(role, batch, purpose=purpose, stage=stage, temperature=temperature)
+        for _ in range(passes):
+            redo = [i for i, r in enumerate(res) if isinstance(r, RetriesExhaustedError)]
+            if not redo:
+                break
+            self.errors[f"{purpose}:requeued"] += len(redo)
+            again = self.map_raw(
+                role, [batch[i] for i in redo], purpose=purpose, stage=stage,
+                temperature=temperature,
+            )  # fmt: skip
+            for i, r in zip(redo, again, strict=True):
+                res[i] = r
+        return res
 
 
 class LLMGenerator:
@@ -497,9 +554,20 @@ class LLMGenerator:
         self._stage = stage
 
     def generate(self, messages_batch: Sequence[Sequence[Mapping[str, Any]]]) -> list[str]:
-        res = self._runner.map(self._role, messages_batch, purpose=self._purpose, stage=self._stage)
-        # a failed call is already counted in runner.errors; "" is scored as unparseable
-        return [r.text if r is not None else "" for r in res]
+        """Plan A2, gap 3b: a model is never scored wrong because of an infrastructure error.
+        Retryable failures are re-queued; any still failing abort the stage with a retryable
+        error (the resume re-runs it). A terminal failure (refusal, 4xx) is the model's answer:
+        counted in runner.errors and scored as unparseable ("")."""
+        res = self._runner.map_requeue(
+            self._role, messages_batch, purpose=self._purpose, stage=self._stage
+        )
+        lost = sum(isinstance(r, RetriesExhaustedError) for r in res)
+        if lost:
+            raise RetryableRunError(
+                f"{self._purpose}: {lost} of {len(res)} calls still failed after "
+                f"{EVAL_REQUEUE_PASSES} re-queue passes; not scoring them as wrong"
+            )
+        return [r.text if isinstance(r, ChatResult) else "" for r in res]
 
 
 class RecordingGenerator:
@@ -893,6 +961,11 @@ class Pipeline:
         self._check_identity()
         if self.cfg.max_rounds < 1:
             raise ConfigRefusal("max_rounds must be >= 1")
+        if len(self._job_suffix(self.cfg.max_rounds)) > 64:
+            raise ConfigRefusal(
+                f"run id {self.run_id!r} is too long: the fine-tune job suffix "
+                f"{self._job_suffix(self.cfg.max_rounds)!r} must fit in 64 characters"
+            )
         self.config.require_model("student")  # fine-tune base id; served via base_factory, not LLM
         for role in ("planner", "teacher", "triage"):
             model = self.config.require_model(role)
@@ -1263,14 +1336,14 @@ class Pipeline:
             if not pending:
                 break
             msgs = [build_messages(tasks[i].question, self.ddl, role="train") for i in pending]
-            res = self.runner.map(
-                "teacher", msgs, purpose=purpose, stage=stage,
-                temperature=0.0 if attempt == 1 else 0.8,
-            )  # fmt: skip
+            temp = 0.0 if attempt == 1 else 0.8
+            res = self.runner.map_requeue(
+                "teacher", msgs, purpose=purpose, stage=stage, temperature=temp, passes=1
+            )  # one retry of transport-lost items, same temperature; not a new candidate
             sqls: list[tuple[int, str]] = []
             for i, r in zip(pending, res, strict=True):
                 c["candidates"] += 1
-                if r is None:
+                if not isinstance(r, ChatResult):
                     c["llm_error"] += 1
                     continue
                 sql = extract_sql(r.text)
@@ -1475,15 +1548,32 @@ class Pipeline:
                     self.store.add_experiment(
                         self.run_id, "finetune_job_adopted", {"round": r, "job_id": jid}
                     )
+                elif (found := self._unrecorded_job(r)) is not None:
+                    jid = found
+                    self._record_unrecorded(r, jid, "found before create")
                 else:
                     train_id, val_id = ft.upload(train_p), ft.upload(val_p)
-                    jid = ft.create_job(
-                        base_model, train_id, val_id, self.cfg.hyperparameters,
-                        suffix=f"distillery-{self.run_id}-r{r}"[:64], seed=self.cfg.seed,
-                    )  # fmt: skip
-                    self.store.add_experiment(
-                        self.run_id, "finetune_job_started", {"round": r, "job_id": jid}
-                    )
+                    try:
+                        jid = ft.create_job(
+                            base_model, train_id, val_id, self.cfg.hyperparameters,
+                            suffix=self._job_suffix(r), seed=self.cfg.seed,
+                        )  # fmt: skip
+                    except (openai.APIStatusError, openai.APIConnectionError) as exc:
+                        if not is_retryable(exc):
+                            raise
+                        # Gap 4: a 5xx/timeout may still have created a billable job.
+                        found = self._unrecorded_job(r)
+                        if found is None:
+                            raise RetryableRunError(
+                                f"create_job failed ambiguously ({type(exc).__name__}) and no "
+                                f"job with suffix {self._job_suffix(r)!r} exists yet"
+                            ) from exc
+                        jid = found
+                        self._record_unrecorded(r, jid, "found after ambiguous create")
+                    else:
+                        self.store.add_experiment(
+                            self.run_id, "finetune_job_started", {"round": r, "job_id": jid}
+                        )
                 job_ref.append(jid)
                 return jid
 
@@ -1535,8 +1625,11 @@ class Pipeline:
                     self.say(f"[finetune r{r}] cost ${ft_usd:.4f} ({ft_basis})")
                     handle.mark_succeeded()
                     outcome = "succeeded"
+            except RunSuspended:
+                outcome = "suspended"  # stays unclosed: the next attempt adopts the job
+                raise
             finally:
-                if job_ref:
+                if job_ref and outcome != "suspended":
                     self.store.add_experiment(
                         self.run_id,
                         "finetune_job_closed",
@@ -1636,6 +1729,35 @@ class Pipeline:
             if status == "succeeded" or status in ACTIVE_STATUSES:
                 return jid
         return None
+
+    def _job_suffix(self, r: int) -> str:
+        """Deterministic per run and round, so a job whose create call looked failed can be found
+        again. Never truncated: ``_preconditions`` refuses run ids that would not fit."""
+        return f"distillery-{self.run_id}-r{r}"
+
+    def _unrecorded_job(self, r: int) -> str | None:
+        """A live or succeeded provider job carrying this round's suffix that the experiments
+        table never recorded (its create call failed ambiguously). Looked up before every create,
+        not only after a failure, because the provider's job list may lag the create."""
+        recorded = {
+            str(d["job_id"])
+            for n, d in self.store.list_experiments(self.run_id)
+            if n in ("finetune_job_started", "finetune_job_closed")
+        }
+        suffix = self._job_suffix(r)
+        for job in self.deps.finetune.list_jobs():
+            if job.suffix != suffix or job.id in recorded:
+                continue
+            if job.status == "succeeded" or job.status in ACTIVE_STATUSES:
+                return job.id
+        return None
+
+    def _record_unrecorded(self, r: int, jid: str, how: str) -> None:
+        self.say(f"[finetune r{r}] adopting unrecorded job {jid} ({how})")
+        self.store.add_experiment(self.run_id, "finetune_job_started", {"round": r, "job_id": jid})
+        self.store.add_experiment(
+            self.run_id, "finetune_job_adopted", {"round": r, "job_id": jid, "how": how}
+        )
 
     def _cancel_orphans(self, r: int, keep: str | None = None) -> tuple[int, int]:
         """Cancel jobs of this round that were started but never closed (e.g. process killed),

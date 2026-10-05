@@ -19,12 +19,13 @@ import asyncio
 import json
 import re
 import threading
-from collections.abc import Coroutine, Sequence
+from collections.abc import Awaitable, Callable, Coroutine, Sequence
 from concurrent.futures import Future
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from distillery.errors import InfraError
 from distillery.sandbox import MAX_CONCURRENCY, Job, RunResult, Sandbox
 from distillery.taskpacks.sql import runner as _runner_mod
 from distillery.taskpacks.sql import sqltext as _sqltext_mod
@@ -40,6 +41,10 @@ WORK_DIR = "/work"
 DB_PATH = f"{WORK_DIR}/db.sqlite"
 SCRIPT_PATH = f"{WORK_DIR}/runner.py"
 DEFAULT_STATEMENTS_PER_JOB = 25
+# A failed job is re-run this many times (exponential backoff) before its statements are isolated.
+INFRA_RERUNS = 2
+INFRA_BACKOFF_S = 2.0
+CONTROL_SQL = "SELECT 1"  # proves the image and runner work when one statement is isolated
 
 _IMPORT_RE = re.compile(
     r"^from distillery\.taskpacks\.sql\.\w+ import (?:\([^)]*\)|[^\n]*)\n", re.MULTILINE
@@ -181,8 +186,10 @@ def parse_outcomes(stdout: str, expected: int) -> list[ExecOutcome]:
 class ExecutorStats:
     jobs: int = 0
     statements: int = 0
-    infra_failures: int = 0  # jobs whose sandbox run/parse failed (statements reported as errors)
+    infra_failures: int = 0  # job attempts whose sandbox run/parse failed (each was re-run)
     images_built: int = 0
+    reruns: int = 0  # jobs re-submitted after an infra failure
+    runner_crash_verdicts: int = 0  # isolated statements that crash the runner (control job ok)
 
 
 class SandboxExecutor:
@@ -199,6 +206,9 @@ class SandboxExecutor:
         max_rows: int = DEFAULT_MAX_ROWS,
         statements_per_job: int = DEFAULT_STATEMENTS_PER_JOB,
         concurrency: int = MAX_CONCURRENCY,
+        infra_reruns: int = INFRA_RERUNS,
+        infra_backoff_s: float = INFRA_BACKOFF_S,
+        sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
     ) -> None:
         if not 1 <= concurrency <= MAX_CONCURRENCY:
             raise ValueError(f"concurrency must be in 1..{MAX_CONCURRENCY}")
@@ -213,6 +223,9 @@ class SandboxExecutor:
         self._max_rows = max_rows
         self._per_job = statements_per_job
         self._concurrency = concurrency
+        self._reruns = infra_reruns
+        self._backoff_s = infra_backoff_s
+        self._sleep = sleep
         self._registered: dict[str, bytes | Path] = {}
         self._images: dict[str, str] = {}
         self._lock = threading.Lock()
@@ -261,34 +274,90 @@ class SandboxExecutor:
             timeout=self._timeout_s * len(chunk) + 30.0,
         )
 
+    def _parse(self, res: RunResult, n: int) -> list[ExecOutcome] | None:
+        """Outcomes of a job, or None when the sandbox run or its output is unusable."""
+        if res.ok:
+            try:
+                return parse_outcomes(res.stdout, n)
+            except (ValueError, KeyError, TypeError):
+                pass
+        self.stats.infra_failures += 1
+        return None
+
     @staticmethod
-    def _infra_failure(n: int, why: str) -> list[ExecOutcome]:
-        msg = f"sandbox infrastructure failure: {why}"
-        return [ExecOutcome(False, error_kind="runtime", error=msg) for _ in range(n)]
+    def _lost(res: RunResult) -> bool:
+        """The sandbox lost the job (transport error, exit -1, timeout): never the SQL's fault."""
+        return res.error is not None or res.timed_out or res.exit_code == -1
 
-    def _parse(self, res: RunResult, n: int) -> list[ExecOutcome]:
-        if not res.ok:
-            why = res.error or f"exit {res.exit_code}: {res.stderr[:200]!r}"
-            self.stats.infra_failures += 1
-            return self._infra_failure(n, why)
-        try:
-            return parse_outcomes(res.stdout, n)
-        except (ValueError, KeyError, TypeError) as exc:
-            self.stats.infra_failures += 1
-            return self._infra_failure(n, f"unparseable runner output ({exc})")
-
-    async def _run_async(self, db_ref: str, sqls: Sequence[str]) -> list[ExecOutcome]:
-        image = await self._image_for(db_ref)
-        chunks = [sqls[i : i + self._per_job] for i in range(0, len(sqls), self._per_job)]
-        results = await self._sandbox.run_batch(
+    async def _batch(self, image: str, chunks: Sequence[Sequence[str]]) -> list[RunResult]:
+        self.stats.jobs += len(chunks)
+        return await self._sandbox.run_batch(
             image, [self._job(c) for c in chunks], concurrency=self._concurrency
         )
-        out: list[ExecOutcome] = []
-        for chunk, res in zip(chunks, results, strict=True):
-            out.extend(self._parse(res, len(chunk)))
-        self.stats.jobs += len(chunks)
+
+    async def _run_async(self, db_ref: str, sqls: Sequence[str]) -> list[ExecOutcome]:
+        """Infrastructure failures never become verdicts (plan A2, gap 3a). A failed job is re-run
+        with backoff; if it still fails, its statements run one per job beside a control job. A
+        lost job, or a failing control job, raises ``InfraError`` (retryable). Only a statement
+        whose own job exits non-zero while the control job succeeds gets a runtime verdict."""
+        image = await self._image_for(db_ref)
+        chunks = [sqls[i : i + self._per_job] for i in range(0, len(sqls), self._per_job)]
+        got: list[list[ExecOutcome] | None] = [
+            self._parse(r, len(c))
+            for c, r in zip(chunks, await self._batch(image, chunks), strict=True)
+        ]
+        for attempt in range(self._reruns):
+            bad = [i for i, g in enumerate(got) if g is None]
+            if not bad:
+                break
+            await self._sleep(self._backoff_s * 2**attempt)
+            self.stats.reruns += len(bad)
+            again = await self._batch(image, [chunks[i] for i in bad])
+            for i, r in zip(bad, again, strict=True):
+                got[i] = self._parse(r, len(chunks[i]))
+        bad = [i for i, g in enumerate(got) if g is None]
+        if bad:
+            await self._isolate(image, chunks, got, bad)
         self.stats.statements += len(sqls)
-        return out
+        return [o for g in got for o in (g or [])]
+
+    async def _isolate(
+        self,
+        image: str,
+        chunks: Sequence[Sequence[str]],
+        got: list[list[ExecOutcome] | None],
+        bad: Sequence[int],
+    ) -> None:
+        singles = [(i, sql) for i in bad for sql in chunks[i]]
+        results = await self._batch(image, [[CONTROL_SQL], *[[sql] for _, sql in singles]])
+        control, rest = results[0], results[1:]
+        if self._parse(control, 1) is None:
+            raise InfraError(
+                f"sandbox executor: a control job failed too after {self._reruns} re-runs "
+                f"(exit={control.exit_code}, error={control.error!r}): the sandbox, not the SQL"
+            )
+        per_chunk: dict[int, list[ExecOutcome]] = {i: [] for i in bad}
+        for (i, _sql), res in zip(singles, rest, strict=True):
+            parsed = self._parse(res, 1)
+            if parsed is not None:
+                per_chunk[i].extend(parsed)
+            elif self._lost(res):
+                raise InfraError(
+                    f"sandbox executor: a job was lost {self._reruns + 2} times "
+                    f"(error={res.error!r}, timed_out={res.timed_out})"
+                )
+            else:  # the runner itself dies on this one statement while a control job works
+                self.stats.runner_crash_verdicts += 1
+                per_chunk[i].append(
+                    ExecOutcome(
+                        False,
+                        error_kind="runtime",
+                        error=f"runner process failed on this statement (exit {res.exit_code}): "
+                        f"{res.stderr[-200:]!r}",
+                    )
+                )
+        for i in bad:
+            got[i] = per_chunk[i]
 
     def run_batch(self, db_ref: str, sqls: Sequence[str]) -> list[ExecOutcome]:
         if not sqls:

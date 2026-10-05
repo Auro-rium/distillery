@@ -555,7 +555,8 @@ class SandboxCpuStudent:
             if not res.ok:
                 raise StudentServingError(
                     f"generation batch failed (exit={res.exit_code}, timed_out={res.timed_out}, "
-                    f"error={res.error!r}): {res.stderr[-500:]!r}"
+                    f"error={res.error!r}): {res.stderr[-500:]!r}",
+                    transient=_transient_job_failure(res),
                 )
             parsed = parse_output(res.stdout)
             items = parsed.get("results")

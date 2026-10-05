@@ -14,7 +14,15 @@ ChatMessages = Sequence[dict[str, Any]]
 
 
 class StudentServingError(RuntimeError):
-    """A serving backend failed (setup, generation, endpoint lifecycle). Never swallowed."""
+    """A serving backend failed (setup, generation, endpoint lifecycle). Never swallowed.
+
+    ``transient=True``: the sandbox lost the work (timeout, exit -1, transport error) and a later
+    attempt can succeed. ``False`` (default): the model/script itself failed (bad adapter, OOM,
+    too many per-sample errors); a retry would fail the same way."""
+
+    def __init__(self, message: str, *, transient: bool = False) -> None:
+        super().__init__(message)
+        self.transient = transient
 
 
 class StudentServer(Protocol):

@@ -18,7 +18,7 @@ import json
 import re
 from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -241,6 +241,9 @@ class FakeFineTune:
         self._base_models[jid] = model
         self._hps[jid] = require_explicit_hyperparameters(hyperparameters).to_request()
         return jid
+
+    def list_jobs(self, *, limit: int = 100, max_pages: int = 5) -> list[JobInfo]:
+        return [replace(self.get(j), suffix=self.suffixes.get(j)) for j in reversed(self.created)]
 
     def _round(self, job_id: str) -> int:
         m = re.search(r"-r(\d+)$", self.suffixes.get(job_id, ""))
