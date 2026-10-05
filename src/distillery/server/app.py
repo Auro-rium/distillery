@@ -19,7 +19,7 @@ from starlette.background import BackgroundTask
 from starlette.concurrency import run_in_threadpool
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from distillery import humanset
+from distillery import chaos, humanset
 from distillery.evaluator import EXAMPLES_PER_KIND
 from distillery.orchestrator import DRY_PREFIX, SCALES
 from distillery.server import autonomy, sse, telemetry
@@ -142,10 +142,23 @@ def create_app(settings: ServerSettings) -> FastAPI:
     cfg = settings.config
     secrets = [s.get_secret_value() for s in (cfg.nebius_api_key, cfg.admin_token) if s is not None]
     admin = cfg.admin_token.get_secret_value() if cfg.admin_token else None
-    executor = settings.executor or subprocess_executor(
-        str(settings.root), admin, secrets, settings.shutdown_grace_s
-    )
     reader = RunReader(settings)  # its worker is attached below (the worker's hooks use it)
+
+    def chaos_probe(run_id: str) -> tuple[list[str], bool]:
+        st = reader.store_for(run_id)
+        started = any(n == "finetune_job_started" for n, _ in st.list_experiments(run_id))
+        return st.running_stages(run_id), started
+
+    # inert unless DISTILLERY_CHAOS is set AND the run id is a chaos run (plan A5)
+    def chaos_audit(actor: str, action: str, rid: str, detail: dict[str, Any]) -> None:
+        reader.store_for(rid).add_audit(actor, action, rid, detail)
+
+    chaos_supervisor = chaos.ChaosSupervisor(
+        chaos.plan_for, lambda rid: reader.store_for(rid).run_dir(rid), chaos_probe, chaos_audit
+    )
+    executor = settings.executor or subprocess_executor(
+        str(settings.root), admin, secrets, settings.shutdown_grace_s, on_child=chaos_supervisor
+    )
 
     def audit(actor: str, action: str, run_id: str | None, detail: dict[str, Any]) -> None:
         store = reader.store_for(run_id) if run_id else reader.real

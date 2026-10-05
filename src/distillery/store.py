@@ -308,6 +308,15 @@ class Store:
             (_now(), actor, action, run_id, canonical_json(detail or {})),
         )
 
+    def running_stages(self, run_id: str) -> list[str]:
+        """Stages whose newest attempt is still marked running (the chaos supervisor's probe of
+        "where is the child right now"; a killed child leaves its stage here until the resume)."""
+        rows = self._query(
+            "SELECT stage FROM stages WHERE run_id=? AND status='running' ORDER BY updated_at DESC",
+            (run_id,),
+        )
+        return [str(r[0]) for r in rows]
+
     def list_audit(self, run_id: str | None = None) -> list[dict[str, Any]]:
         sql = "SELECT at, actor, action, run_id, detail_json FROM audit"
         params: tuple[Any, ...] = ()

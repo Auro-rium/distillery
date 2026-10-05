@@ -10,7 +10,7 @@ services:
     runtime: docker
     plan: free
     healthCheckPath: /api/health
-    autoDeploy: true
+    autoDeploy: false  # a push must never kill a running pipeline (deploys are manual; see docs/DEPLOY.md)
     envVars:
       - key: NEBIUS_API_KEY
         sync: false

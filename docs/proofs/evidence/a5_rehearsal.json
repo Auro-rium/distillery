@@ -1,0 +1,254 @@
+{
+  "audit": [
+    {
+      "action": "start",
+      "actor": "admin",
+      "at": "2026-10-05T19:36:04.463896+00:00",
+      "detail": {
+        "budget_usd": null,
+        "dry_run": true,
+        "scale": "tiny"
+      },
+      "run_id": "dry-chaos-rehearsal"
+    },
+    {
+      "action": "kill_child",
+      "actor": "chaos",
+      "at": "2026-10-05T19:36:13.409492+00:00",
+      "detail": {
+        "signal": "SIGKILL",
+        "stage": "teacher_data"
+      },
+      "run_id": "dry-chaos-rehearsal"
+    },
+    {
+      "action": "restart",
+      "actor": "supervisor",
+      "at": "2026-10-05T19:36:13.422385+00:00",
+      "detail": {
+        "attempt": 1,
+        "backoff_s": 0.2,
+        "exit_code": -9
+      },
+      "run_id": "dry-chaos-rehearsal"
+    },
+    {
+      "action": "inject_llm_503",
+      "actor": "chaos",
+      "at": "2026-10-05T19:36:14.844035+00:00",
+      "detail": {
+        "model": "fake-teacher",
+        "n": 1,
+        "of": 3
+      },
+      "run_id": "dry-chaos-rehearsal"
+    },
+    {
+      "action": "inject_llm_503",
+      "actor": "chaos",
+      "at": "2026-10-05T19:36:14.847024+00:00",
+      "detail": {
+        "model": "fake-teacher",
+        "n": 2,
+        "of": 3
+      },
+      "run_id": "dry-chaos-rehearsal"
+    },
+    {
+      "action": "inject_llm_503",
+      "actor": "chaos",
+      "at": "2026-10-05T19:36:14.851077+00:00",
+      "detail": {
+        "model": "fake-teacher",
+        "n": 3,
+        "of": 3
+      },
+      "run_id": "dry-chaos-rehearsal"
+    },
+    {
+      "action": "inject_net_window",
+      "actor": "chaos",
+      "at": "2026-10-05T19:36:14.872366+00:00",
+      "detail": {
+        "model": "fake-teacher",
+        "seconds": 3.0
+      },
+      "run_id": "dry-chaos-rehearsal"
+    },
+    {
+      "action": "kill_child",
+      "actor": "chaos",
+      "at": "2026-10-05T19:36:24.294043+00:00",
+      "detail": {
+        "signal": "SIGKILL",
+        "stage": "finetune_r1"
+      },
+      "run_id": "dry-chaos-rehearsal"
+    },
+    {
+      "action": "restart",
+      "actor": "supervisor",
+      "at": "2026-10-05T19:36:24.303761+00:00",
+      "detail": {
+        "attempt": 2,
+        "backoff_s": 0.4,
+        "exit_code": -9
+      },
+      "run_id": "dry-chaos-rehearsal"
+    },
+    {
+      "action": "inject_sandbox_exit_-1",
+      "actor": "chaos",
+      "at": "2026-10-05T19:36:25.717005+00:00",
+      "detail": {
+        "n": 1,
+        "of": 2,
+        "stage": "dev_eval_r1"
+      },
+      "run_id": "dry-chaos-rehearsal"
+    },
+    {
+      "action": "inject_sandbox_exit_-1",
+      "actor": "chaos",
+      "at": "2026-10-05T19:36:25.770762+00:00",
+      "detail": {
+        "n": 2,
+        "of": 2,
+        "stage": "dev_eval_r1"
+      },
+      "run_id": "dry-chaos-rehearsal"
+    }
+  ],
+  "checks": {
+    "at_least_one_supervisor_restart": true,
+    "every_injection_in_audit": true,
+    "every_injection_recovered": true,
+    "exactly_one_admin_action_the_start": true,
+    "one_finetune_job_per_round": true,
+    "spend_within_cap": true,
+    "verdict_reached": true
+  },
+  "cost": {
+    "basis": "ESTIMATES, not billed amounts. LLM lines: measured token counts x the configured price table (price source: FAKE dry-run price, not a real price); fine-tune: ceiling estimate; sandbox compute: not recorded",
+    "cost_per_1k_tasks": {
+      "student": "unavailable: the student is served in Nebius Sandboxes (CPU) and the sandbox price is unknown",
+      "teacher": {
+        "basis": "measured tokens x configured prices, from the teacher pass over gate + stress items",
+        "held_out_tasks": 20,
+        "input_tokens": 30527,
+        "items_scored": 30,
+        "items_scored_breakdown": {
+          "gate": 20,
+          "stress": 10
+        },
+        "output_tokens": 1433,
+        "usd": 0.033393,
+        "usd_per_1k_tasks": 1.1131,
+        "usd_per_1k_tasks_basis": "teacher usd / 30 items scored (gate 20, stress 10)"
+      }
+    },
+    "finetune_lines": [
+      {
+        "basis": "ceiling estimate",
+        "kind": "finetune_ceiling",
+        "model": "fake-student-base",
+        "units": 12345,
+        "usd": 0.0
+      },
+      {
+        "basis": "ceiling estimate",
+        "kind": "finetune_ceiling",
+        "model": "fake-student-base",
+        "units": 12345,
+        "usd": 0.0
+      },
+      {
+        "basis": "ceiling estimate",
+        "kind": "finetune_ceiling",
+        "model": "fake-student-base",
+        "units": 12345,
+        "usd": 0.0
+      }
+    ],
+    "finetune_usd": "$0.0000 [ceiling estimate]; rounds run: 3",
+    "llm_by_model": {
+      "fake-planner": {
+        "calls": 2,
+        "input_tokens": 1140,
+        "output_tokens": 182,
+        "usd": 0.0015040000000000001
+      },
+      "fake-teacher": {
+        "calls": 193,
+        "input_tokens": 197208,
+        "output_tokens": 9686,
+        "usd": 0.21658
+      },
+      "fake-triage": {
+        "calls": 136,
+        "input_tokens": 18674,
+        "output_tokens": 4816,
+        "usd": 0.028306
+      }
+    },
+    "price_sources": {
+      "fake-planner": "FAKE dry-run price, not a real price",
+      "fake-teacher": "FAKE dry-run price, not a real price",
+      "fake-triage": "FAKE dry-run price, not a real price"
+    },
+    "run_cap_usd": 10.0,
+    "run_total_usd": 0.24639000000000005,
+    "sandbox_lines": []
+  },
+  "decision": "PROMOTE",
+  "dry_run": true,
+  "finetune": {
+    "create_calls": 3,
+    "jobs": [
+      "ftjob-fb24a4134ae1",
+      "ftjob-5adb56925917",
+      "ftjob-50967232b02f"
+    ],
+    "suffixes": {
+      "ftjob-50967232b02f": "distillery-dry-chaos-rehearsal-r3",
+      "ftjob-5adb56925917": "distillery-dry-chaos-rehearsal-r2",
+      "ftjob-fb24a4134ae1": "distillery-dry-chaos-rehearsal-r1"
+    }
+  },
+  "injections_planned": {
+    "kill_child": 2,
+    "llm_503": 3,
+    "net_window": 1,
+    "sandbox_exit_-1": 2
+  },
+  "injections_seen": {
+    "kill_child": 2,
+    "llm_503": 3,
+    "net_window": 1,
+    "sandbox_exit_-1": 2
+  },
+  "label": "FAKE models and fake fine-tune: a rehearsal, not a result",
+  "pass": true,
+  "plan": {
+    "hold_s": 20.0,
+    "kill": [
+      "teacher_data",
+      "finetune_r1"
+    ],
+    "llm_503": {
+      "after_calls": 3,
+      "n": 3
+    },
+    "net_window": {
+      "after_calls": 12,
+      "seconds": 3
+    },
+    "poll_s": 0.1,
+    "sandbox_fail": {
+      "jobs": 2,
+      "stage": "dev_eval"
+    }
+  },
+  "run_id": "dry-chaos-rehearsal",
+  "supervisor_restarts": 2
+}
