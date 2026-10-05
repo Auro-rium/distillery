@@ -123,3 +123,78 @@ def test_extract_roundtrips_training_completion() -> None:
 
 def test_strip_thinking() -> None:
     assert strip_thinking("<think>a</think>b<think>c</think>d").strip() == "bd"
+
+
+# ---- few-shot (B2)
+from distillery.prompts import build_fewshot_messages, select_fewshot_examples  # noqa: E402
+
+_EX = [
+    {"question": "How many plans?", "sql": "SELECT COUNT(*) FROM plans;"},
+    {"question": "How many users?", "sql": " SELECT COUNT(*) FROM users "},
+]
+
+
+def test_fewshot_zero_examples_is_exactly_zero_shot() -> None:
+    assert build_fewshot_messages(Q, DDL, []) == build_messages(Q, DDL, role="eval_teacher")
+
+
+def test_fewshot_layout_and_final_turn_identical_to_zero_shot() -> None:
+    msgs = build_fewshot_messages(Q, DDL, _EX)
+    assert [m["role"] for m in msgs] == ["system", "user", "assistant", "user", "assistant", "user"]
+    assert msgs[-1] == build_messages(Q, DDL, role="eval_teacher")[1]
+    assert msgs[1] == build_messages(_EX[0]["question"], DDL, role="eval_teacher")[1]
+    assert msgs[2]["content"] == "SELECT COUNT(*) FROM plans;" and msgs[4]["content"].endswith(
+        "users"
+    )
+
+
+def test_fewshot_is_byte_stable() -> None:
+    a = json.dumps(build_fewshot_messages(Q, DDL, _EX), sort_keys=True).encode()
+    b = json.dumps(build_fewshot_messages(Q, DDL, [dict(e) for e in _EX]), sort_keys=True).encode()
+    assert a == b
+    import hashlib
+
+    # golden digest: any change to the few-shot wire format must be a deliberate, visible edit
+    assert hashlib.sha256(a).hexdigest() == _FEWSHOT_GOLDEN
+
+
+def test_fewshot_rejects_empty_sql() -> None:
+    with pytest.raises(ValueError):
+        build_fewshot_messages(Q, DDL, [{"question": "q", "sql": "  "}])
+
+
+def _train(n_families: int = 10, per: int = 5) -> list[dict[str, str]]:
+    return [
+        {
+            "task_id": f"f{f}-{i}",
+            "family": f"fam{f}",
+            "question": f"q{f}-{i}",
+            "gold_sql": f"S{f}{i}",
+        }
+        for f in range(n_families)
+        for i in range(per)
+    ]
+
+
+def test_select_examples_deterministic_stratified_order_independent() -> None:
+    train = _train()
+    a = select_fewshot_examples(train)
+    assert a == select_fewshot_examples(train)
+    assert a == select_fewshot_examples(list(reversed(train)))
+    assert len(a) == 8 and len({e["family"] for e in a}) == 8  # 8 distinct families of 10
+    assert {e["task_id"] for e in a} <= {t["task_id"] for t in train}
+    assert select_fewshot_examples(train, seed=1) != a
+
+
+def test_select_examples_wraps_families_when_k_exceeds_them() -> None:
+    few = select_fewshot_examples(_train(3, 4), k=8)
+    assert len(few) == 8 and len({e["task_id"] for e in few}) == 8
+    assert (
+        select_fewshot_examples(_train(1, 2), k=8)
+        and len(select_fewshot_examples(_train(1, 2), k=8)) == 2
+    )
+    with pytest.raises(ValueError):
+        select_fewshot_examples([])
+
+
+_FEWSHOT_GOLDEN = "483082e45b85f5937e5b35df50973edd6f4abc3c2b5834cdd159334c47fcb18a"
