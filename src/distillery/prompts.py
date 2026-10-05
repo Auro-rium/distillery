@@ -10,8 +10,10 @@ given to us; there was no conflict with the doc.
 
 from __future__ import annotations
 
+import random
 import re
-from typing import Literal, Protocol
+from collections.abc import Mapping, Sequence
+from typing import Any, Literal, Protocol
 
 from distillery.taskpacks.sql.sqltext import (
     first_keyword,
@@ -72,6 +74,77 @@ def to_training_row(
     messages = build_messages(task.question, schema_ddl, role="train")
     messages.append({"role": "assistant", "content": completion})
     return {"messages": messages}
+
+
+# ---- few-shot (workstream B: the fair teacher comparison) -------------------------------------
+
+FEWSHOT_K = 8
+FEWSHOT_SEED = 1234  # pre-registered (DECISIONS.md, 2026-10-05)
+
+
+def build_fewshot_messages(
+    question: str, schema_ddl: str, examples: Sequence[Mapping[str, str]]
+) -> list[dict[str, str]]:
+    """``[system, (user, assistant) x k, user]``: each example is a complete turn pair in EXACTLY
+    the zero-shot format of ``build_messages`` (same system prompt, schema, ``/no_think``), so
+    the final user turn is byte-identical to the zero-shot request and ``examples=[]`` reproduces
+    ``build_messages`` exactly. Each example needs ``question`` and ``sql`` (bare SQL, as in
+    ``to_training_row``). Byte-stable: pure string assembly, no randomness, no timestamps.
+    """
+    messages = build_messages(question, schema_ddl, role="eval_teacher")
+    shots: list[dict[str, str]] = []
+    for ex in examples:
+        sql = str(ex["sql"]).strip()
+        if not sql:
+            raise ValueError("empty SQL in few-shot example")
+        shots.append({"role": "user", "content": _user_content(str(ex["question"]), schema_ddl)})
+        shots.append({"role": "assistant", "content": sql})
+    return [messages[0], *shots, messages[1]]
+
+
+def select_fewshot_examples(
+    train_items: Sequence[Mapping[str, Any]], k: int = FEWSHOT_K, seed: int = FEWSHOT_SEED
+) -> list[dict[str, str]]:
+    """The one fixed example set: ``k`` TRAIN items, stratified across families, deterministic.
+
+    Families are sorted then shuffled with ``random.Random(seed)``; within a family the items are
+    sorted by ``task_id`` then shuffled with the same generator; examples are taken round-robin
+    over the shuffled families, so with more families than ``k`` no family appears twice. The
+    result depends only on the train items (never on dev, held-out or human data) and is
+    independent of their input order. Items need ``task_id``, ``family``, ``question`` and
+    ``gold_sql``; the example completion is the template gold SQL.
+    """
+    if k < 1:
+        raise ValueError("k must be >= 1")
+    rng = random.Random(seed)  # noqa: S311 - deterministic selection, not security
+    by_family: dict[str, list[Mapping[str, Any]]] = {}
+    for it in train_items:
+        by_family.setdefault(str(it["family"]), []).append(it)
+    if not by_family:
+        raise ValueError("no train items to draw examples from")
+    families = sorted(by_family)
+    rng.shuffle(families)
+    pools = {f: sorted(by_family[f], key=lambda it: str(it["task_id"])) for f in families}
+    for f in families:
+        rng.shuffle(pools[f])
+    picked: list[dict[str, str]] = []
+    depth = 0
+    while len(picked) < k and any(len(p) > depth for p in pools.values()):
+        for f in families:
+            if len(picked) >= k:
+                break
+            if len(pools[f]) > depth:
+                it = pools[f][depth]
+                picked.append(
+                    {
+                        "task_id": str(it["task_id"]),
+                        "family": f,
+                        "question": str(it["question"]),
+                        "sql": str(it["gold_sql"]).strip(),
+                    }
+                )
+        depth += 1
+    return picked
 
 
 # ---- output extraction -----------------------------------------------------------------------

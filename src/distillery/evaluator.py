@@ -17,6 +17,7 @@ from distillery.config import GateThresholds
 from distillery.finetune import TrainedArtifact, sha256_file
 from distillery.gate import GateResult, evaluate_gate
 from distillery.humanset import SELECTION_BIAS_NOTE, HumanSetError, read_confirmed
+from distillery.misses import classify_miss
 from distillery.prompts import build_messages, extract_sql
 from distillery.store import Store, canonical_json, sha256_hex
 from distillery.taskpacks.sql.executor import Executor
@@ -465,6 +466,195 @@ def seal_human_set(
         "teacher_model": confirmed.teacher_model,
         "note": SELECTION_BIAS_NOTE,
     }
+
+
+# ---------------------------------------------------------------- B2: fair teacher comparison
+
+VECTOR_FORMAT = "distillery-setup-vectors-v1"
+PromptBuilder = Callable[[Mapping[str, Any]], ChatMessages]  # item -> the exact prompt to send
+
+
+@dataclass(frozen=True)
+class Setup:
+    """One thing to score: a generator plus how it is prompted. ``generator`` may be ``None``
+    only when re-scoring cached outputs (no model is called)."""
+
+    name: str
+    generator: Generator | None
+    prompt: PromptBuilder
+
+
+def _judge(
+    items: Sequence[Mapping[str, Any]],
+    gold: Sequence[ExecOutcome],
+    outputs: Sequence[str],
+    executor: Executor,
+    db_ref: str,
+    *,
+    set_name: str,
+    setup: str,
+) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    """Execute and verify one setup's raw outputs. Returns the per-item block (vectors) and the
+    pre-classified misses (``misses.classify_miss``: ids, class and result shapes only)."""
+    sqls = [extract_sql(o) for o in outputs]
+    runnable = [i for i, q in enumerate(sqls) if q is not None]
+    outcomes = executor.run_batch(db_ref, [sqls[i] or "" for i in runnable]) if runnable else []
+    by_index = dict(zip(runnable, outcomes, strict=True))
+    correct: list[bool] = []
+    reasons: list[str] = []
+    misses: list[dict[str, Any]] = []
+    for i, it in enumerate(items):
+        cand = by_index.get(i)
+        if cand is None:
+            correct.append(False)
+            reasons.append("no SQL extracted from output")
+        else:
+            verdict = compare_outcomes(cand, gold[i], bool(it["requires_order"]))
+            correct.append(verdict.ok)
+            reasons.append(verdict.reason)
+        if not correct[-1]:
+            misses.append(
+                {
+                    "set": set_name, "setup": setup, "task_id": it.get("task_id"),
+                    "family": it.get("family"), "verifier_reason": reasons[-1],
+                    **classify_miss(cand, gold[i], bool(it["requires_order"])),
+                }
+            )  # fmt: skip
+    block = {
+        "correct": correct,
+        "reasons": reasons,
+        "sqls": sqls,
+        "outputs": list(outputs),
+        "unparseable": sum(1 for q in sqls if q is None),
+        "accuracy": sum(correct) / len(correct) if correct else 0.0,
+    }
+    return block, misses
+
+
+def _score_set(
+    items: Sequence[Mapping[str, Any]],
+    setups: Sequence[Setup],
+    executor: Executor,
+    *,
+    db_ref: str,
+    schema_ddl: str,
+    set_name: str,
+    cached: Mapping[str, Any] | None,
+    label: str,
+) -> dict[str, Any]:
+    """Generate (or take ``cached`` outputs) and judge every setup on one item set, in item order.
+    Generation runs concurrently across setups (they are independent models/endpoints)."""
+    gold = executor.run_batch(db_ref, [str(it["gold_sql"]) for it in items])
+    for it, g in zip(items, gold, strict=True):
+        if not g.ok:
+            raise RuntimeError(f"gold SQL failed for {label} item {it.get('task_id')}: {g.error}")
+    task_ids = [str(it.get("task_id")) for it in items]
+    outputs: dict[str, list[str]] = {}
+    if cached is not None:
+        if cached.get("task_ids") != task_ids:
+            raise ValueError(f"{label}: cached task ids do not match the current item set")
+        for st in setups:
+            outputs[st.name] = [str(o) for o in cached["setups"][st.name]["outputs"]]
+    else:
+
+        def gen(st: Setup) -> list[str]:
+            if st.generator is None:
+                raise ValueError(f"setup {st.name!r} has no generator")
+            outs = st.generator.generate([st.prompt(it) for it in items])
+            if len(outs) != len(items):
+                raise RuntimeError(f"{st.name}: got {len(outs)} outputs for {len(items)} items")
+            return list(outs)
+
+        with ThreadPoolExecutor(
+            max_workers=max(1, len(setups)), thread_name_prefix="setup"
+        ) as pool:
+            futures = {pool.submit(gen, st): st.name for st in setups}
+            for fut in as_completed(futures):
+                outputs[futures[fut]] = fut.result()  # any failure aborts the whole pass
+    blocks: dict[str, Any] = {}
+    misses: list[dict[str, Any]] = []
+    for st in setups:  # stable order
+        blocks[st.name], m = _judge(
+            items, gold, outputs[st.name], executor, db_ref, set_name=set_name, setup=st.name
+        )
+        misses.extend(m)
+    return {
+        "status": "scored",
+        "n": len(items),
+        "sha256": sha256_hex(canonical_json(list(items)).encode("utf-8")),
+        "task_ids": task_ids,
+        "setups": blocks,
+        "misses": misses,
+    }
+
+
+PENDING_HUMAN = {
+    "status": "pending",
+    "reason": "no human set is sealed for this run (Gate B never ran); nothing was scored on it",
+}
+
+
+def score_open_set(
+    items: Sequence[Mapping[str, Any]],
+    setups: Sequence[Setup],
+    executor: Executor,
+    *,
+    db_ref: str,
+    schema_ddl: str,
+    set_name: str = "dev",
+    cached: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    """The same scoring on an UNSEALED item set (dev): per-item vectors for every setup."""
+    return _score_set(
+        items, setups, executor, db_ref=db_ref, schema_ddl=schema_ddl, set_name=set_name,
+        cached=cached, label=set_name,
+    )  # fmt: skip
+
+
+def score_setups(
+    store: Store,
+    run_id: str,
+    setups: Sequence[Setup],
+    executor: Executor,
+    *,
+    db_ref: str,
+    schema_ddl: str,
+    cached: Mapping[str, Any] | None = None,
+    on_set: Callable[[str, dict[str, Any]], None] | None = None,
+) -> dict[str, Any]:
+    """Score arbitrary setups (base, student, teachers with any prompt) on the sealed held-out set
+    and, when one is sealed, the human set. Returns a JSON-able payload with the PER-ITEM vectors,
+    outputs, extracted SQL, verifier reasons and pre-classified misses (task ids and result shapes,
+    never question or gold text), so the gate can be recomputed offline and nothing is lost
+    (plan gap 8). ``cached`` is a previous payload: its outputs are re-executed and re-verified
+    with NO generator call (the B3 re-score path). A missing human set is the explicit marker
+    ``{"status": "pending"}``. This is the only sealed-set access of the fair comparison."""
+    if len({st.name for st in setups}) != len(setups):
+        raise ValueError("setup names must be unique")
+    payload: dict[str, Any] = {
+        "format": VECTOR_FORMAT, "run_id": run_id, "setups": [st.name for st in setups],
+        "sets": {},
+    }  # fmt: skip
+    for name, items in (
+        ("heldout", store.load_heldout(run_id)),
+        ("human", store.load_human(run_id)),
+    ):
+        if items is None:
+            payload["sets"][name] = dict(PENDING_HUMAN)
+            continue
+        prev = ((cached or {}).get("sets") or {}).get(name)
+        if cached is not None and (prev is None or prev.get("status") != "scored"):
+            raise ValueError(f"cached payload has no scored {name!r} set to re-score")
+        block = _score_set(
+            items, setups, executor, db_ref=db_ref, schema_ddl=schema_ddl, set_name=name,
+            cached=prev if cached is not None else None, label=name,
+        )  # fmt: skip
+        if prev is not None and cached is not None and prev.get("sha256") != block["sha256"]:
+            raise ValueError(f"cached {name!r} set was scored on a different item set")
+        payload["sets"][name] = block
+        if on_set is not None:
+            on_set(name, block)
+    return payload
 
 
 # ---------------------------------------------------------------- student diagnostics

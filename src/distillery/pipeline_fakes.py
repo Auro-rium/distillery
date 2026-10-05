@@ -101,7 +101,7 @@ class GoldOracle:
 
 def question_of(messages: Sequence[Mapping[str, Any]]) -> str | None:
     """Recover the question from a prompt built by ``prompts.build_messages``."""
-    for m in messages:
+    for m in reversed(messages):  # the LAST turn: few-shot prompts carry earlier example turns
         content = str(m.get("content", ""))
         if "Question: " in content:
             return content.split("Question: ", 1)[1].split("\n\n/no_think", 1)[0].strip()

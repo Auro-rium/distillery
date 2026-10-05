@@ -215,3 +215,31 @@ Fault plan (from the A5 plan): (a) the LLM transport wrapper raises 503 for N ca
 ## 2026-10-06 (A4): hosting stays on free Render; the autonomy claim is bounded by it
 User decision: stay on free Render. Changes: `autoDeploy: false` (a push can no longer restart the instance under a running pipeline; the live service `distillery`, `srv-dauuokk1nsns73fqcv70`, differs in name from the blueprint's `distillery-api`, so its dashboard Auto-Deploy must also be switched Off by hand), a GitHub Actions keep-alive hitting `/api/health` every 10 minutes, the supervisor in-process with the server, and the audit log (`GET /api/runs/{id}/audit`).
 **Stated limit:** the free instance's disk is wiped when the **instance** restarts. Autonomy is therefore proven for worker crashes, provider and network faults and sandbox failures inside one instance lifetime. A host restart is out of scope unless a persistent disk is added later. Memory headroom on the 512 MB instance: `docs/proofs/evidence/a4_memory.json`.
+
+## 2026-10-05 (pre-registration, recorded BEFORE any B2 scoring): fair teacher comparison (workstream B)
+**Why.** The P4 gate compared the student with a zero-shot teacher. B asks whether the student still wins against a teacher that is given examples and against the stronger teacher model. It is cheap and needs no retraining.
+
+**Setups.**
+- S0 = Super zero-shot (the P4 prompt).
+- S1 = Super with k=8 examples.
+- S2 = Ultra with k=8 examples (the Ultra model id is mapped onto the teacher role).
+- Student = the promoted adapter `4bebc793...`.
+
+**The k=8 examples.** One fixed set for every question, drawn deterministically (seed 1234), stratified across train families, from the train split only.
+
+**"Strongest teacher" is picked on dev (150), not held-out**, so held-out is not used for selection.
+
+**Claim rule.** "Beats the teacher" only if the lower bound of the student / strongest-teacher ratio CI is **> 1.0**, using the same bootstrap as the gate.
+
+**Disclosure.** The held-out re-score is a post-hoc analysis. The original P4 gate decision stands unchanged.
+
+**Verifier fixes (B3)** apply symmetrically to every model: any confirmed false-negative fix to `taskpacks/sql/verifier.py` is applied once and every setup is re-scored from its cached outputs, with before/after reported for every model. No thresholds, splits or metrics change.
+
+## 2026-10-06 (amendment to the 2026-10-05 B pre-registration, recorded BEFORE any B2 scoring): implementation details fixed by the code
+These close gaps the pre-registration left open; no model has been called and no result exists. They change no threshold, split or metric.
+- **Dev tie-break.** If two or more teacher setups tie on dev accuracy, the LATER one (S2 over S1 over S0) is the "strongest teacher": the claim must clear the harder opponent, so a tie never makes the comparison easier.
+- **Few-shot layout.** The k=8 examples are chat turns: `[system, (user, assistant) x 8, user]`. Each example user turn has exactly the zero-shot format (schema, `Question:`, `/no_think`); the assistant turn is the template gold SQL of that TRAIN task; the final user turn is byte-identical to the S0 prompt. Selection (`prompts.select_fewshot_examples`): families sorted then shuffled with `random.Random(1234)`, tasks within a family sorted by id then shuffled with the same generator, round-robin over families, so 8 of the 10 train families appear once.
+- **What is scored.** Held-out (300) for base, student, S0, S1, S2; dev (150) for S0, S1, S2 only (selection). The base is re-scored only so that the P4 gate (base 25.7%, student 92.3%, S0 90.0%) can be recomputed from the saved per-item vectors; if the regenerated counts differ from P4's (277, 270, 77 of 300) the difference is reported next to the claim, not hidden.
+- **Claim rule.** `student_correct/teacher_correct` ratio, `paired_bootstrap_ratio_ci` with the gate's own `bootstrap_resamples` and `seed`; claim only if the lower bound is strictly above 1.0 (a bound of exactly 1.0 is not a claim). The comparison is against the strongest teacher chosen on dev; the other two teachers are reported for information only.
+- **Human set.** Scored with the same setups only if it is already sealed in the run; otherwise recorded as `pending`, never as a result.
+- **B3.** Rule-based classification (`misses.py`) is a hint for the user's review and changes no score. Only confirmed verifier false negatives are fixed, once, in `taskpacks/sql/verifier.py`, and every model is re-scored from its cached outputs (re-execution only).
