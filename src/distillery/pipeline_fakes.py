@@ -124,6 +124,13 @@ class FakeTransport:
         self.schema_glitch_rate = schema_glitch_rate
         self.salt = salt
         self.calls: list[dict[str, Any]] = []
+        # A3: the planner's ControllerAction answer (JSON text). The default is a valid, in-bounds
+        # adjust_hparams so a dry run with the controller on exercises the full accept path.
+        self.controller_response: str = json.dumps(
+            {"action": "adjust_hparams", "family": None,
+             "hparams": {"lr": 2e-4, "n_epochs": 3, "lora_r": None},
+             "rationale": "fake controller: raise the learning rate for the next round"}
+        )  # fmt: skip
         self.chat = SimpleNamespace(completions=SimpleNamespace(create=self._create))
 
     async def _create(
@@ -158,6 +165,8 @@ class FakeTransport:
             return json.dumps({"clean": True})
         if schema == "FailureClusters":
             return self._clusters(messages)
+        if schema == "ControllerAction":
+            return self.controller_response
         question = question_of(messages)
         if question is None:
             raise AssertionError("FakeTransport: unrecognised prompt (no question found)")

@@ -168,6 +168,11 @@ class Ledger:
                 return self._daily[d]
         return self.store.spend_on_day(d, PLAYGROUND) if self.store else 0.0
 
+    def remaining(self) -> float:
+        """Headroom under the tighter of the run and project caps (>= 0)."""
+        with self._lock:
+            return max(0.0, min(self.run_cap - self._run, self.project_cap - self._project))
+
     def preflight(self, estimated_usd: float) -> None:
         if estimated_usd < 0:
             raise ValueError("estimate must be >= 0")

@@ -35,15 +35,18 @@ from typing import Any, Literal, Protocol
 import openai
 from pydantic import BaseModel, ConfigDict, Field
 
+from distillery import controller as controller_mod
 from distillery import evaluator as evaluator_mod
 from distillery import paraphrase as paraphrase_mod
 from distillery.budget import (
     BASIS_CEILING,
     Ledger,
+    UnknownPriceError,
     sandbox_seconds,
     spend_lines,
 )
 from distillery.config import Config, ConfigError
+from distillery.controller import Accepted, ControllerAction, ControllerState, Rejected
 from distillery.errors import RetryableRunError, RunSuspended
 from distillery.evaluator import ExpectedArtifact, ModelScores, score_model
 from distillery.finetune import (
@@ -140,6 +143,20 @@ STUDENT_COST_UNAVAILABLE = (
 DRY_PREFIX = "dry-"
 EVAL_REQUEUE_PASSES = 2  # extra passes over eval items whose LLM call failed retryably
 _SCHEMA_OVERHEAD_TOKENS = 120  # rough prompt overhead of the JSON-schema instruction (estimate)
+
+
+def _apply_hparams(base: HyperParameters, hp: Mapping[str, Any]) -> HyperParameters:
+    """Overlay validated controller overrides. lora_alpha scales with lora_r (alpha/r kept)."""
+    upd: dict[str, Any] = {}
+    if hp.get("lr") is not None:
+        upd["learning_rate"] = float(hp["lr"])
+    if hp.get("n_epochs") is not None:
+        upd["n_epochs"] = int(hp["n_epochs"])
+    if hp.get("lora_r") is not None:
+        upd["lora_r"] = int(hp["lora_r"])
+        if base.lora_r and base.lora_alpha:
+            upd["lora_alpha"] = max(8, round(base.lora_alpha * upd["lora_r"] / base.lora_r))
+    return base.model_copy(update=upd)
 
 
 def _planned_trained_tokens(train_jsonl: bytes, chars_per_token: int, n_epochs: int | None) -> int:
@@ -255,6 +272,10 @@ class PipelineConfig(BaseModel):
     paraphrases_per_task: int = Field(default=3, ge=0)
     train_row_cap: int = Field(default=2000, ge=1)
     paraphrase_seed: int = 1234
+    # A3: let the planner (Ultra) propose the round action; code validates it against the
+    # pre-registered bounds (controller.py) and falls back to the rules on rejection. Off by
+    # default: with it off no stage, key or report byte changes.
+    controller: bool = False
 
     def extra_tasks(self) -> int:
         return self.round_extra_tasks or max(10, self.scale.train // 4)
@@ -811,6 +832,10 @@ class Pipeline:
         self.counters: dict[str, dict[str, int]] = {}
         self.usage: dict[str, dict[str, dict[str, int]]] = {}
         self._results: dict[str, dict[str, Any]] = {}
+        self._hp_by_round: dict[int, HyperParameters] = {}  # A3: validated controller overrides
+
+    def _hp(self, r: int) -> HyperParameters:
+        return self._hp_by_round.get(r, self.cfg.hyperparameters)
 
     # ---- plumbing --------------------------------------------------------
     def _snap(self) -> tuple[dict[str, dict[str, int]], dict[str, int]]:
@@ -1518,7 +1543,8 @@ class Pipeline:
         def fn() -> dict[str, Any]:
             ft = self.deps.finetune
             base_model = self.config.require_model("student")
-            self._finetune_preflight(len(rows))
+            hp = self._hp(r)
+            self._finetune_preflight(len(rows), hp)
             rdir = self.run_dir / f"round{r}"
             train_p, val_p = rdir / "train.jsonl", rdir / "dev.jsonl"
             atomic_write_bytes(
@@ -1533,7 +1559,7 @@ class Pipeline:
             # Refuse BEFORE any upload/job: planned tokens x price when the price exists,
             # else the operator ceiling.
             planned = _planned_trained_tokens(
-                train_p.read_bytes(), self.cfg.chars_per_token, self.cfg.hyperparameters.n_epochs
+                train_p.read_bytes(), self.cfg.chars_per_token, hp.n_epochs
             )
             pre_usd, pre_basis = self.ledger.preflight_finetune(
                 base_model, planned, self.cfg.finetune_estimate_usd
@@ -1555,7 +1581,7 @@ class Pipeline:
                     train_id, val_id = ft.upload(train_p), ft.upload(val_p)
                     try:
                         jid = ft.create_job(
-                            base_model, train_id, val_id, self.cfg.hyperparameters,
+                            base_model, train_id, val_id, hp,
                             suffix=self._job_suffix(r), seed=self.cfg.seed,
                         )  # fmt: skip
                     except (openai.APIStatusError, openai.APIConnectionError) as exc:
@@ -1650,16 +1676,16 @@ class Pipeline:
 
         return self._stage(
             name,
-            {"rows": rows_hash, "hp": self.cfg.hyperparameters.to_request(),
+            {"rows": rows_hash, "hp": self._hp(r).to_request(),
              "est": float(self.cfg.finetune_estimate_usd or 0.0),
              "student": self.config.model_ids.get("student"), "seed": self.cfg.seed},
             [upstream],
             fn,
         )  # fmt: skip
 
-    def _finetune_preflight(self, train_rows: int) -> None:
+    def _finetune_preflight(self, train_rows: int, hp: HyperParameters | None = None) -> None:
         """Refuse (before any upload or spend) hyperparameters that would under-train."""
-        hp = self.cfg.hyperparameters
+        hp = hp or self.cfg.hyperparameters
         try:
             require_explicit_hyperparameters(hp)
         except ConfigError as exc:
@@ -1873,8 +1899,11 @@ class Pipeline:
         return self._stage(f"analysis_r{r}", {}, [f"dev_eval_r{r}"], fn)
 
     def _stage_targeted(
-        self, r: int, analysis: Mapping[str, Any], split: Mapping[str, Any]
-    ) -> dict[str, Any]:
+        self, r: int, analysis: Mapping[str, Any], split: Mapping[str, Any],
+        targets: Sequence[str] | None = None,
+    ) -> dict[str, Any]:  # fmt: skip
+        families = tuple(analysis["target_families"] if targets is None else targets)
+
         def fn() -> dict[str, Any]:
             known_gold = {_digest(t.gold_sql) for t in self.tasks_by_id.values()}
             known_gold |= set(split["heldout_gold_sha256"])
@@ -1882,7 +1911,7 @@ class Pipeline:
                 self.db_ref,
                 self.cfg.extra_tasks(),
                 self.cfg.seed + 1000 * r,
-                families=tuple(analysis["target_families"]),
+                families=families,
             )
             fresh: list[SqlTask] = []
             c: Counter[str] = Counter(generated=len(rep.tasks))
@@ -1899,9 +1928,14 @@ class Pipeline:
             out["counters"] = {**c, **out["counters"], "new_tasks": len(fresh)}
             return out
 
-        res = self._stage(
-            f"targeted_r{r}", {"extra": self.cfg.extra_tasks()}, [f"analysis_r{r}"], fn
-        )
+        cfg_in: dict[str, Any] = {"extra": self.cfg.extra_tasks()}
+        up = [f"analysis_r{r}"]
+        if (
+            targets is not None
+        ):  # A3: only when the controller steered, so the default key is intact
+            cfg_in["families"] = list(families)
+            up.append(f"controller_r{r}")
+        res = self._stage(f"targeted_r{r}", cfg_in, up, fn)
         for d in res["tasks"]:  # also on a cached result, so later rounds dedupe identically
             self.tasks_by_id[d["task_id"]] = _task_from(d)
         return res
@@ -1925,6 +1959,91 @@ class Pipeline:
                     "counters": {"branch_skipped": 0}}  # fmt: skip
 
         return self._stage(f"sandbox_branch_r{r}", {"parent": parent}, [f"targeted_r{r}"], fn)
+
+    # ---- A3: controller ------------------------------------------------------
+    def _controller_state(
+        self, r: int, dv: Mapping[str, Any], an: Mapping[str, Any],
+        rows: Sequence[Mapping[str, Any]], train_fams: Sequence[str], split: Mapping[str, Any],
+    ) -> ControllerState:  # fmt: skip
+        """Dev data, budget and caps only: nothing sealed is reachable from here."""
+        n_by: Counter[str] = Counter(d["family"] for d in split["dev"])
+        bad: Counter[str] = Counter(f["family"] for f in dv["failures"])
+        hp = self._hp(r)
+        base_model = self.config.require_model("student")
+        text = "\n".join(canonical_json(x) for x in rows) + "\n"
+        per_epoch, fixed = 0.0, None
+        if self.ledger.has_finetune_price(base_model):
+            per_epoch = self.ledger.estimate_finetune_cost(
+                base_model,
+                _planned_trained_tokens(text.encode("utf-8"), self.cfg.chars_per_token, 1),
+            )
+        else:
+            fixed = float(self.cfg.finetune_estimate_usd or 0.0)
+        try:  # a missing price is caught by the per-chunk LLM preflight later, not guessed here
+            data_usd = self.ledger.estimate_llm_cost(
+                self.config.model_ids["teacher"],
+                self.cfg.extra_tasks() * self.cfg.candidates_per_task * 1200,
+                self.cfg.extra_tasks() * self.cfg.candidates_per_task * self.cfg.est_output_tokens,
+            )
+        except (UnknownPriceError, KeyError):
+            data_usd = 0.0
+        blocked = set(split["heldout_families"]) | set(split["stress_families"])
+        return ControllerState(
+            round=r, max_rounds=self.cfg.max_rounds, dev_acc=float(dv["dev_acc"]),
+            dev_acc_by_family={f: 1.0 - bad[f] / n for f, n in sorted(n_by.items())},
+            clusters=list(an["clusters"]),
+            allowed_families=tuple(sorted(set(train_fams) - blocked)),
+            remaining_usd=self.ledger.remaining(), data_usd=data_usd,
+            ft_usd_per_epoch=per_epoch, ft_usd_fixed=fixed,
+            current_lr=hp.learning_rate, current_n_epochs=hp.n_epochs, current_lora_r=hp.lora_r,
+            batch_size=hp.batch_size, packing=hp.packing, train_rows=len(rows),
+            min_planned_steps=self.cfg.min_planned_steps, dry_run=self.cfg.dry_run,
+        )  # fmt: skip
+
+    def _stage_controller(
+        self, r: int, dv: Mapping[str, Any], an: Mapping[str, Any],
+        rows: Sequence[Mapping[str, Any]], train_fams: Sequence[str], split: Mapping[str, Any],
+    ) -> dict[str, Any]:  # fmt: skip
+        """Cached as ``controller_r{r}``: a resume replays the decision, it never re-asks."""
+
+        def fn() -> dict[str, Any]:
+            state = self._controller_state(r, dv, an, rows, train_fams, split)
+            (res,) = self.runner.map(
+                "planner", [controller_mod.build_messages(state)],
+                purpose="controller", stage=f"controller_r{r}", schema=ControllerAction,
+            )  # fmt: skip
+            proposal: dict[str, Any] | None = None
+            verdict: Accepted | Rejected
+            if res is None or res.parsed is None:
+                verdict = Rejected("planner returned no schema-valid action")
+            else:
+                proposal = res.parsed.model_dump()
+                verdict = controller_mod.validate(res.parsed, state)
+            if isinstance(verdict, Accepted):
+                a = verdict.action
+                hp = a.hparams.model_dump(exclude_none=True) if a.action == "adjust_hparams" else {}
+                effective = {
+                    "action": a.action,
+                    "hparams": hp,
+                    "family": a.family if a.action == "more_data" else None,
+                }
+                reason = f"accepted; estimate ${verdict.estimate_usd:.4f}"
+            else:  # fallback: the existing rule-based decision (targets = analysis families)
+                effective = {"action": "new_round", "hparams": {}, "family": None}
+                reason = verdict.reason
+            accepted = isinstance(verdict, Accepted)
+            out = {
+                "proposal": proposal, "accepted": accepted, "reason": reason,
+                "effective": effective, "fallback_used": not accepted,
+                "counters": {"controller_rejected": int(not accepted)},
+            }  # fmt: skip
+            detail = {"round": r, **{k: v for k, v in out.items() if k != "counters"}}
+            self.store.add_experiment(self.run_id, "controller_decision", detail)
+            self.store.add_audit("controller", "controller_decision", self.run_id, detail)
+            self.say(f"[controller r{r}] {'accepted' if out['accepted'] else 'rejected'}: {reason}")
+            return out
+
+        return self._stage(f"controller_r{r}", {"controller": 1}, [f"analysis_r{r}"], fn)
 
     # ---- rounds ------------------------------------------------------------
     def _run_rounds(self, split: Mapping[str, Any], para: Mapping[str, Any]) -> dict[str, Any]:
@@ -1962,10 +2081,24 @@ class Pipeline:
                 break
             an = self._stage_analysis(r, dv, train_fams, split["heldout_families"])
             rec["clusters"] = an["clusters"]
-            if not an["target_families"]:
+            targets: list[str] | None = None
+            if self.cfg.controller:
+                ctl = self._stage_controller(r, dv, an, rows, train_fams, split)
+                rec["controller"] = {k: ctl[k] for k in ("accepted", "effective", "reason")}
+                eff = ctl["effective"]
+                if eff["action"] == "stop":
+                    stop = "controller stop"
+                    break
+                if eff["hparams"]:
+                    self._hp_by_round[r + 1] = _apply_hparams(
+                        self.cfg.hyperparameters, eff["hparams"]
+                    )
+                if eff["family"] is not None:
+                    targets = [eff["family"]]
+            if not (an["target_families"] or targets):
                 stop = "failure analysis produced no usable target families"
                 break
-            tg = self._stage_targeted(r, an, split)
+            tg = self._stage_targeted(r, an, split, targets)
             rec["targeted_new_rows"] = len(tg["rows"])
             if not tg["rows"]:
                 stop = "targeted generation produced no new verified rows"
