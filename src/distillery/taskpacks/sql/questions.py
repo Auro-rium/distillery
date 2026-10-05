@@ -48,6 +48,15 @@ class SqlTask(BaseModel):
     tables: tuple[str, ...] = ()
     template: str = ""
 
+    @property
+    def gold_answer(self) -> str:
+        """Pack-interface name for the gold answer (``gold_sql`` stays the stored field)."""
+        return self.gold_sql
+
+    @property
+    def order_matters(self) -> bool:
+        return self.requires_order
+
 
 @dataclass(frozen=True)
 class Template:

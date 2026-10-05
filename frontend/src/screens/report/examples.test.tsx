@@ -78,7 +78,7 @@ describe("ExampleBrowser: master list and side-by-side", () => {
     expect(marks()).toContain("people"); // base vs gold
     expect(marks()).toContain("8"); // teacher vs gold
     const strings = [ex().gold_sql, ex().base_sql, ex().teacher_sql];
-    for (const m of marks()) expect(strings.some((s) => s.includes(m))).toBe(true);
+    for (const m of marks()) expect(strings.some((s) => s!.includes(m))).toBe(true);
     expect(container.querySelector('[data-model="student"]')!.textContent).toContain("same tokens as gold");
     const gold = () => [...container.querySelectorAll("mark.diff-gold")].map((m) => m.textContent!.trim());
     expect(gold()).toEqual([]);
@@ -133,5 +133,26 @@ describe("ExamplesCard: loading, error and empty are different states", () => {
     stubExamples([], 200, { "X-Examples-Available": "true" });
     render(<ExamplesCard id="r" />);
     await waitFor(() => screen.getByText("No examples returned for this run"));
+  });
+});
+
+describe("ExampleBrowser: pack-neutral answer fields", () => {
+  const calls = (over: Partial<Example> = {}): Example => ({
+    kind: "fixed", task_id: "c1", family: "single_call", heldout_class: "seen", question: "Refund invoice 7",
+    gold_answer: '[{"tool":"refund_invoice","args":{"id":7}}]', base_answer: "[]",
+    student_answer: '[{"tool":"refund_invoice","args":{"id":7}}]', teacher_answer: "[]",
+    base_ok: false, student_ok: true, teacher_ok: false, ...over,
+  });
+  it("reads *_answer (no *_sql at all) and tags the blocks with the pack's language", () => {
+    const { container } = render(<ExampleBrowser result={res([calls()])} language="json" />);
+    expect(container.querySelector('[data-model="gold"] code')!.textContent).toBe(calls().gold_answer);
+    expect(container.querySelector('[data-model="gold"] .code-block')!.getAttribute("data-language")).toBe("json");
+    expect(container.querySelector('[data-model="base"] code')!.textContent).toBe("[]");
+    expect(screen.getByRole("region").getAttribute("aria-label")).toContain("tool calls");
+  });
+  it("still reads the SQL pack's *_sql fields when no *_answer is sent (older servers)", () => {
+    const { container } = render(<ExampleBrowser result={res([ex()])} />);
+    expect(container.querySelector('[data-model="student"] code')!.textContent).toBe(ex().student_sql);
+    expect(container.querySelector('[data-model="student"] .code-block')!.getAttribute("data-language")).toBe("sql");
   });
 });

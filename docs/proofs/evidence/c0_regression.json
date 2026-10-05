@@ -1,0 +1,13 @@
+{
+  "baseline_sha256": "483601dd3343fa253eac0d50cd9a9df9a330405ab78877540d4aa1e200029ebc",
+  "command": "python -m distillery --root <tmp> run --dry-run --run-id dry-base --scale tiny",
+  "differences": [],
+  "identical": true,
+  "ignored_time_fields": [
+    "$.finetune[0].events[0].created_at",
+    "$.finetune[1].events[0].created_at",
+    "$.finetune[2].events[0].created_at"
+  ],
+  "n_ignored": 3,
+  "new_sha256": "483601dd3343fa253eac0d50cd9a9df9a330405ab78877540d4aa1e200029ebc"
+}

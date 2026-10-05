@@ -20,6 +20,8 @@ export interface Config {
   models: { planner: string | null; teacher: string | null; triage: string | null; student: string | null };
   thresholds: { ratio_lower_bound_min: number; mcnemar_alpha: number; bootstrap_resamples: number };
   run_cap_usd: number;
+  // Task packs this server can run (absent on older servers: treat as just "sql").
+  packs?: { name: string; language: string; answer_label: string }[];
   playground: {
     enabled: boolean;
     per_ip_per_hour: number;
@@ -342,10 +344,15 @@ export interface Example {
   family: string;
   heldout_class: string;
   question: string;
-  gold_sql: string;
-  base_sql: string;
-  student_sql: string;
-  teacher_sql: string;
+  // Pack-neutral fields (every pack); the *_sql fields are the SQL pack's own names for the same strings.
+  gold_answer?: string;
+  base_answer?: string;
+  student_answer?: string;
+  teacher_answer?: string;
+  gold_sql?: string;
+  base_sql?: string;
+  student_sql?: string;
+  teacher_sql?: string;
   base_ok: boolean;
   student_ok: boolean;
   teacher_ok: boolean;
@@ -361,7 +368,7 @@ export interface ExamplesResult {
 }
 
 export interface NewRunBody {
-  pack: "sql";
+  pack: string; // a name from Config.packs
   scale: "tiny" | "small" | "full" | "gated";
   dry_run: boolean;
   budget_usd?: number;

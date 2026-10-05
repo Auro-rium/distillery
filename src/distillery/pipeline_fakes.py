@@ -39,8 +39,8 @@ from distillery.orchestrator import DRY_PREFIX, Deps, PipelineConfig, Scale
 from distillery.sandbox import FakeSandbox
 from distillery.sandbox_executor import AsyncBridge
 from distillery.student import FakeStudent, StudentServer
+from distillery.taskpacks.base import PackTask, get_pack
 from distillery.taskpacks.sql.executor import LocalExecutor
-from distillery.taskpacks.sql.questions import SqlTask
 
 FAKE_MODELS = {
     "planner": "fake-planner",
@@ -79,9 +79,9 @@ class GoldOracle:
     def __init__(self) -> None:
         self._gold: dict[str, str] = {}
 
-    def observe(self, tasks: Sequence[SqlTask]) -> None:
+    def observe(self, tasks: Sequence[PackTask]) -> None:
         for t in tasks:
-            self._gold[t.question] = t.gold_sql
+            self._gold[t.question] = t.gold_answer
 
     def observe_gold(self, pairs: Mapping[str, str]) -> None:
         """Register question -> gold SQL pairs that did not come from task generation (the
@@ -411,8 +411,8 @@ class DryRun:
     base: FakeBaseFactory
 
 
-def dry_run_id(scale: str) -> str:
-    return f"{DRY_PREFIX}sql-{scale}"
+def dry_run_id(scale: str, pack: str = "sql") -> str:
+    return f"{DRY_PREFIX}{pack}-{scale}"
 
 
 def build_dry_run(
@@ -426,8 +426,11 @@ def build_dry_run(
     run_cap_usd: float = DRY_RUN_CAP_USD,
     on_stage: Callable[[str], None] | None = None,
     garbage_student: bool = False,
+    pack: str = "sql",
     **pipeline_overrides: Any,
 ) -> DryRun:
+    get_pack(pack)  # unknown pack names fail here, before anything is built
+    pipeline_overrides["pack"] = pack
     oracle = GoldOracle()
     human_path = pipeline_overrides.get("human_set_path")
     if human_path is not None:  # fakes must know the human gold, like every other task set

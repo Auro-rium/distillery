@@ -87,6 +87,23 @@ def example_kind(e: dict[str, Any]) -> str | None:
     return None
 
 
+_ANSWER_MODELS = ("gold", "base", "student", "teacher")
+
+
+def with_answer_fields(e: dict[str, Any]) -> dict[str, Any]:
+    """Copy of an example with the pack-neutral ``<model>_answer`` fields added. A pack stores its
+    answers as ``<model>_<answer_key>`` (SQL: ``gold_sql`` ...); those stay (API compatibility),
+    and ``*_answer`` mirrors them so the UI can read one field name for every pack."""
+    out = dict(e)
+    for m in _ANSWER_MODELS:
+        if f"{m}_answer" in out:
+            continue
+        key = next((k for k in out if k.startswith(f"{m}_") and k not in (f"{m}_ok",)), None)
+        if key is not None and isinstance(out[key], str):
+            out[f"{m}_answer"] = out[key]
+    return out
+
+
 def filter_examples(report: dict[str, Any], kind: str, limit: int) -> tuple[list[Any], bool]:
     """Returns (items, available). ``available`` is False when the report has no examples field."""
     items = stored_examples(report)
@@ -95,7 +112,7 @@ def filter_examples(report: dict[str, Any], kind: str, limit: int) -> tuple[list
     picked = [
         e for e in items if isinstance(e, dict) and (kind == "all" or example_kind(e) == kind)
     ]
-    return picked[:limit], True
+    return [with_answer_fields(e) for e in picked[:limit]], True
 
 
 def example_totals(report: dict[str, Any]) -> dict[str, int | None]:

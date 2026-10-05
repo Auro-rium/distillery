@@ -9,7 +9,7 @@ const ExampleBrowser = lazy(() => import("./ExampleBrowser"));
 /** The API keeps at most this many per kind; asking for the maximum returns every stored one. */
 const LIMIT = 200;
 
-export function ExamplesCard({ id }: { id: string }) {
+export function ExamplesCard({ id, language }: { id: string; language?: string }) {
   const [res, retry] = useAsync(() => api.examples(id, "all", LIMIT), id);
   return (
     <Card title="Examples: fixed, still wrong, regressed" className="rp-ex">
@@ -24,7 +24,7 @@ export function ExamplesCard({ id }: { id: string }) {
       )}
       {res.state === "ok" && res.data.items.length > 0 && (
         <Suspense fallback={<Spinner label="Loading examples" />}>
-          <ExampleBrowser result={res.data} />
+          <ExampleBrowser result={res.data} language={language} />
         </Suspense>
       )}
     </Card>

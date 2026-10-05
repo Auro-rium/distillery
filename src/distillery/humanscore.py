@@ -169,7 +169,7 @@ def score_human_run(
         }
         block = evaluator_mod.score_sealed_human(
             store, run_id, gens, deps.executor,
-            db_ref=pipe.db_ref, schema_ddl=pipe.ddl, gate_cfg=gate_cfg,
+            db_ref=pipe.db_ref, schema_ddl=pipe.ddl, gate_cfg=gate_cfg, pack=pipe.pack,
             trained=trained, expected=expected,
         )  # fmt: skip
     except BaseException:
