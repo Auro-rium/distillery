@@ -14,7 +14,7 @@
 /* ---------- dossier tabs: every panel stays mounted, the inactive ones are hidden here ---------- */
 .rp .rp-tab[data-state="inactive"] { display: none; }
 .rp-tabs { margin-top: var(--space-2); }
-.rp .rp-tablist { border-bottom: 1px solid var(--line); margin-bottom: var(--space-4); overflow-x: auto; min-width: 0; }
+.rp .rp-tablist { border-bottom: 1px solid var(--line); margin-bottom: var(--space-4); min-width: 0; display: flex; flex-wrap: wrap; }
 .rp .rp-tablist .tabs-trigger { background: transparent; border: 0; font: 500 .82rem/1 var(--font-mono); letter-spacing: .08em; text-transform: uppercase; cursor: pointer; }
 .rp .rp-tab { animation: swap-in var(--dur-2) var(--ease) backwards; }
 

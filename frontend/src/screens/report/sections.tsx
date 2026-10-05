@@ -1,5 +1,5 @@
 import type { CSSProperties, ReactNode } from "react";
-import { NOT_MEASURED, fmtInt, fmtNumber, fmtPercent, fmtText, fmtUsd } from "../../api/format";
+import { NOT_MEASURED, fmtInt, fmtNumber, fmtP, fmtPercent, fmtText, fmtUsd } from "../../api/format";
 import type { AccTriple, FinetuneRecord, Report, SandboxCostPer1k, TeacherCostPer1k } from "../../api/types";
 import { AccuracyBars, ChartLegend, CiNumberLine, DiscordantMatrix, LossChart, MODEL_LABEL, StressBars, type ModelKey } from "../../charts";
 import { Badge, Card, CopyButton, EmptyState, Stat } from "../../components";
@@ -45,10 +45,10 @@ export function GateDetails({ r }: { r: Report }) {
         title="Discordant pairs, student vs base"
         studentOnly={g.student_only_vs_base}
         baseOnly={g.base_only_vs_student}
-        caption={`Held-out items where exactly one of the two models is right; McNemar's exact test compares these two counts (p ${fmtNumber(g.mcnemar_p, 4)}, alpha ${fmtNumber(t.mcnemar_alpha, 2)}).`}
+        caption={`Held-out items where exactly one of the two models is right; McNemar's exact test compares these two counts (p ${fmtP(g.mcnemar_p)}, alpha ${fmtNumber(t.mcnemar_alpha, 2)}).`}
       />
       <div className="rp-stats">
-        <Stat label="McNemar exact p" value={fmtNumber(g.mcnemar_p, 4)} hint={`alpha ${fmtNumber(t.mcnemar_alpha, 2)}`} />
+        <Stat label="McNemar exact p" value={fmtP(g.mcnemar_p)} hint={`alpha ${fmtNumber(t.mcnemar_alpha, 2)}`} />
         <Stat label="Bootstrap resamples" value={fmtInt(g.bootstrap_resamples_used)} hint={`skipped ${fmtInt(g.bootstrap_skipped)}`} />
         <Stat label="Held-out n" value={fmtInt(g.n)} />
       </div>

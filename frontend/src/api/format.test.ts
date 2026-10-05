@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fmtInt, fmtNumber, fmtPercent, fmtText, fmtUsd } from "./format";
+import { fmtInt, fmtNumber, fmtP, fmtPercent, fmtText, fmtUsd } from "./format";
 
 const ABSENT = [null, undefined, NaN, Infinity];
 describe("format helpers", () => {
@@ -24,5 +24,14 @@ describe("format helpers", () => {
   it("passes backend strings through verbatim", () => {
     const s = "unavailable: serving path undecided (spike S4)";
     for (const f of [fmtNumber, fmtPercent, fmtUsd, fmtInt]) expect(f(s)).toBe(s);
+  });
+});
+
+describe("fmtP", () => {
+  it("keeps fixed decimals for ordinary p-values and never rounds a real tiny p to zero", () => {
+    expect(fmtP(0.0215)).toBe("0.0215");
+    expect(fmtP(1.6e-57)).toBe("1.6e-57");
+    expect(fmtP(0)).toBe("0.0000");
+    expect(fmtP(null)).toBe(fmtNumber(null));
   });
 });

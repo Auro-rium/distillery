@@ -6,6 +6,15 @@ import { cx } from "../ui/cx";
 import { NL_AXIS_Y, NL_DOMAIN_PAD, NL_HEIGHT, NL_MIN_SPAN, PAD } from "./constants";
 import { ChartFigure, DataPoint, finite, scale, useChartWidth, type Formatter } from "./core";
 
+const LABEL_GAP_PX = 44;
+/** Distance (px) from either edge inside which a centred label would be clipped. */
+const EDGE_PX = 110;
+
+/** Anchor a label away from the nearer edge so it is never clipped by the svg box. */
+function edgeAnchor(px: number, width: number): "start" | "middle" | "end" {
+  return px < EDGE_PX ? "start" : px > width - EDGE_PX ? "end" : "middle";
+}
+
 export interface CiNumberLineProps {
   point: number | null | undefined;
   lo: number | null | undefined;
@@ -45,6 +54,9 @@ export function CiNumberLine(props: CiNumberLineProps) {
   const span = Math.max(max - min, NL_MIN_SPAN);
   const x = scale(min - span * NL_DOMAIN_PAD, max + span * NL_DOMAIN_PAD, PAD.left / 2, width - PAD.right);
   const y = NL_AXIS_Y;
+  // The threshold value sits under the axis next to the lower-bound label; when the two are this close
+  // (in px) they collide, so the value moves into the threshold name above the axis instead.
+  const crowded = ok && finite(threshold) && Math.abs(x(lo) - x(threshold)) < LABEL_GAP_PX;
 
   return (
     <ChartFigure title={props.title} caption={props.caption} className={cx("ci-line", `is-${state}`, props.className)}>
@@ -56,8 +68,10 @@ export function CiNumberLine(props: CiNumberLineProps) {
             <g className="ci-threshold">
               <rect className="ci-fail-zone" x={PAD.left / 2} y={y - 22} width={Math.max(0, x(threshold) - PAD.left / 2)} height={44} />
               <line x1={x(threshold)} x2={x(threshold)} y1={y - 26} y2={y + 26} />
-              <text x={x(threshold)} y={y + 42} textAnchor="middle" className="ci-lab thr">{fmt(threshold)}</text>
-              <text x={x(threshold)} y={y - 32} textAnchor="middle" className="ci-lab thr-name">{props.thresholdLabel ?? "threshold"}</text>
+              {!crowded && <text x={x(threshold)} y={y + 42} textAnchor="middle" className="ci-lab thr">{fmt(threshold)}</text>}
+              <text x={x(threshold)} y={y - 32} textAnchor={edgeAnchor(x(threshold), width)} className="ci-lab thr-name">
+                {props.thresholdLabel ?? "threshold"}{crowded ? ` ${fmt(threshold)}` : ""}
+              </text>
             </g>
           )}
           {ok && (

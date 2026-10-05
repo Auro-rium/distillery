@@ -15,6 +15,12 @@ export function fmtNumber(v: Val, digits = 3): string {
   return v.toFixed(digits);
 }
 
+/** A p-value: fixed decimals, or scientific notation when that would round a real value to 0. */
+export function fmtP(v: Val, digits = 4): string {
+  if (typeof v === "number" && num(v) && v > 0 && v < 10 ** -digits) return v.toExponential(1);
+  return fmtNumber(v, digits);
+}
+
 /** `v` is a fraction (0.7); shown as a percentage. The x100 is display scaling only. */
 export function fmtPercent(v: Val, digits = 1): string {
   if (typeof v === "string") return v;

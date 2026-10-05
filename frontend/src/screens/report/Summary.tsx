@@ -1,5 +1,5 @@
 import { useId, useState } from "react";
-import { fmtInt, fmtNumber } from "../../api/format";
+import { fmtInt, fmtNumber, fmtP } from "../../api/format";
 import type { Report } from "../../api/types";
 import { LabelTag } from "./label";
 import { useStickyTop } from "./useStickyTop";
@@ -30,7 +30,7 @@ export function Summary({ r }: { r: Report }) {
         <dl className="rp-facts">
           <div><dt>Held-out</dt><dd>n={fmtInt(g.n)}</dd></div>
           <div><dt>Ratio lower bound</dt><dd>{fmtNumber(g.ratio_lo)} <span className="rp-need">needs ≥ {fmtNumber(t.ratio_lower_bound_min, 2)}</span></dd></div>
-          <div><dt>McNemar p</dt><dd>{fmtNumber(g.mcnemar_p, 4)} <span className="rp-need">alpha {fmtNumber(t.mcnemar_alpha, 2)}</span></dd></div>
+          <div><dt>McNemar p</dt><dd>{fmtP(g.mcnemar_p)} <span className="rp-need">alpha {fmtNumber(t.mcnemar_alpha, 2)}</span></dd></div>
         </dl>
         {reasons.length > 0 ? (
           <button type="button" className="rp-toggle" aria-expanded={open} aria-controls={panel} onClick={() => setOpen((o) => !o)}>
