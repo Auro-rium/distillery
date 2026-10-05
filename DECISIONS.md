@@ -192,3 +192,22 @@ The smoke runs trained 3, 6 and 9 optimizer steps at provider defaults, far belo
 
 ## 2026-10-04 (result + carry-over, recorded BEFORE P4 starts): P1.12 picked learning rate 1e-4
 P1.12 ran exactly as pre-registered (`docs/proofs/evidence/p1_12_decision.json`): dev accuracy base 33/150 (Wilson [0.161, 0.293]), arm A lr 1e-4 **142/150** ([0.898, 0.973]), arm B lr 2e-4 141/150 ([0.890, 0.968]). Both qualify; A wins (higher count). Per the carry-over rule, `PINNED_HYPERPARAMETERS` is now LoRA r 16, alpha 32, learning rate 1e-4, batch 4, 3 epochs, packing false, context 8192, warmup 0, weight decay 0, max grad norm 1.0, dropout 0. With the 300-step floor, a run needs >= 400 training rows (was 1,600 at batch 16). Caveats recorded now: dev shares templates with train (in-distribution), and the pilot trained on gold SQL while P4 trains on teacher SQL. Gate, thresholds, sets, seeds and max_rounds 1 are unchanged.
+
+## 2026-10-05 (pre-registration, recorded BEFORE any B2 scoring): fair teacher comparison (workstream B)
+**Why.** The P4 gate compared the student with a zero-shot teacher. B asks whether the student still wins against a teacher that is given examples and against the stronger teacher model. It is cheap and needs no retraining.
+
+**Setups.**
+- S0 = Super zero-shot (the P4 prompt).
+- S1 = Super with k=8 examples.
+- S2 = Ultra with k=8 examples (the Ultra model id is mapped onto the teacher role).
+- Student = the promoted adapter `4bebc793...`.
+
+**The k=8 examples.** One fixed set for every question, drawn deterministically (seed 1234), stratified across train families, from the train split only.
+
+**"Strongest teacher" is picked on dev (150), not held-out**, so held-out is not used for selection.
+
+**Claim rule.** "Beats the teacher" only if the lower bound of the student / strongest-teacher ratio CI is **> 1.0**, using the same bootstrap as the gate.
+
+**Disclosure.** The held-out re-score is a post-hoc analysis. The original P4 gate decision stands unchanged.
+
+**Verifier fixes (B3)** apply symmetrically to every model: any confirmed false-negative fix to `taskpacks/sql/verifier.py` is applied once and every setup is re-scored from its cached outputs, with before/after reported for every model. No thresholds, splits or metrics change.
