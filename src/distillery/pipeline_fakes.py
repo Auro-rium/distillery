@@ -228,6 +228,28 @@ class FakeFineTune:
     job_status: dict[str, str] = field(default_factory=dict)  # test override for ``get``
     _base_models: dict[str, str] = field(default_factory=dict)
     _hps: dict[str, dict[str, Any]] = field(default_factory=dict)
+    # chaos rehearsal: the "provider" outlives a killed child, so created jobs (and how many
+    # create_job calls were billed) are kept in this file, like a real provider's job list
+    state_path: Path | None = None
+    create_calls: int = 0
+
+    def __post_init__(self) -> None:
+        if self.state_path is not None and self.state_path.exists():
+            d = json.loads(self.state_path.read_text(encoding="utf-8"))
+            self.created, self.suffixes = list(d["created"]), dict(d["suffixes"])
+            self._base_models, self._hps = dict(d["base_models"]), dict(d["hps"])
+            self.create_calls = int(d["create_calls"])
+
+    def _save(self) -> None:
+        if self.state_path is not None:
+            self.state_path.write_text(
+                json.dumps(
+                    {"created": self.created, "suffixes": self.suffixes, "create_calls":
+                     self.create_calls, "base_models": self._base_models, "hps": self._hps},
+                    sort_keys=True,
+                ),
+                encoding="utf-8",
+            )  # fmt: skip
 
     def upload(self, path: Path | str) -> str:
         p = Path(path)
@@ -245,10 +267,13 @@ class FakeFineTune:
         seed: int | None = None,
     ) -> str:
         jid = f"ftjob-{hashlib.sha256((training_file + str(suffix)).encode()).hexdigest()[:12]}"
-        self.created.append(jid)
+        self.create_calls += 1
+        if jid not in self.created:
+            self.created.append(jid)
         self.suffixes[jid] = suffix or ""
         self._base_models[jid] = model
         self._hps[jid] = require_explicit_hyperparameters(hyperparameters).to_request()
+        self._save()
         return jid
 
     def list_jobs(self, *, limit: int = 100, max_pages: int = 5) -> list[JobInfo]:
@@ -434,6 +459,7 @@ def build_dry_run(
     fail_rounds: frozenset[int] = frozenset(),
     run_cap_usd: float = DRY_RUN_CAP_USD,
     on_stage: Callable[[str], None] | None = None,
+    finetune_state: Path | None = None,
     garbage_student: bool = False,
     **pipeline_overrides: Any,
 ) -> DryRun:
@@ -443,7 +469,7 @@ def build_dry_run(
         confirmed = read_confirmed(human_path)
         oracle.observe_gold({str(it["question"]): str(it["gold_sql"]) for it in confirmed.items})
     transport = FakeTransport(oracle, error_rates)
-    ft = FakeFineTune(fail_rounds=fail_rounds)
+    ft = FakeFineTune(fail_rounds=fail_rounds, state_path=finetune_state)
     base = FakeBaseFactory(
         oracle,
         (error_rates or {}).get("fake-student-base", DEFAULT_ERROR_RATES["fake-student-base"]),

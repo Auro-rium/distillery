@@ -201,3 +201,17 @@ The planner (Ultra) may propose a round action, but only code decides. Bounds fi
 - **Family:** must be in train \ stress \ held-out families; anything else is rejected.
 - **Rejection:** a rejected action falls back to the existing rule-based decision; the reason is logged.
 - **Default off:** `PipelineConfig.controller` defaults to False; with it off, behaviour and report are unchanged. The gate stays pure code and never sees controller output.
+
+## 2026-10-06 (pre-registration, recorded BEFORE any A5 chaos run, local or hosted): A5 chaos pass criteria
+A5: pre-register chaos pass criteria. A `chaos-` run is judged PASS only if ALL of the following hold; a failure is reported as the result, and the criteria are not changed afterwards.
+- a verdict is reached (PROMOTE or REJECT both count);
+- every injected fault is visible in the audit log and was recovered;
+- the audit log shows exactly one `admin` action (the start) and zero others;
+- exactly one fine-tune job was billed;
+- spend <= cap.
+
+Fault plan (from the A5 plan): (a) the LLM transport wrapper raises 503 for N calls; (b) a connection-error window of 60 s (network drop); (c) the supervisor SIGKILLs the child once in `teacher_data` and once in `finetune_r1` (tests adoption); (d) the sandbox returns exit -1 for k jobs in `dev_eval`. `DISTILLERY_CHAOS=<json plan>` is honoured only for run ids that start with `chaos-`. Each injection is logged as audit actor `chaos`.
+
+## 2026-10-06 (A4): hosting stays on free Render; the autonomy claim is bounded by it
+User decision: stay on free Render. Changes: `autoDeploy: false` (a push can no longer restart the instance under a running pipeline; the live service `distillery`, `srv-dauuokk1nsns73fqcv70`, differs in name from the blueprint's `distillery-api`, so its dashboard Auto-Deploy must also be switched Off by hand), a GitHub Actions keep-alive hitting `/api/health` every 10 minutes, the supervisor in-process with the server, and the audit log (`GET /api/runs/{id}/audit`).
+**Stated limit:** the free instance's disk is wiped when the **instance** restarts. Autonomy is therefore proven for worker crashes, provider and network faults and sandbox failures inside one instance lifetime. A host restart is out of scope unless a persistent disk is added later. Memory headroom on the 512 MB instance: `docs/proofs/evidence/a4_memory.json`.

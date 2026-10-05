@@ -1,0 +1,24 @@
+name: keepalive
+# Free Render instances sleep after ~15 minutes without traffic, which would kill an unattended run
+# (plan A4). This pings /api/health every 10 minutes. The URL is the repository variable
+# DISTILLERY_HEALTH_URL (Settings -> Secrets and variables -> Actions -> Variables); the default is
+# the hosted service. Note: GitHub may delay or skip scheduled runs under load and disables
+# scheduled workflows in repositories with no activity for 60 days.
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: GET /api/health
+        env:
+          URL: ${{ vars.DISTILLERY_HEALTH_URL || 'https://distillery.onrender.com/api/health' }}
+        run: |
+          # a sleeping instance needs about a minute to wake: allow it, retry once
+          curl --fail --silent --show-error --max-time 120 --retry 2 --retry-delay 20 "$URL"

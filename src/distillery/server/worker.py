@@ -65,15 +65,21 @@ def redact(text: str, secrets: Sequence[str]) -> str:
     return text
 
 
+ChildHook = Callable[[str, Callable[[], None]], Callable[[], None]]
+
+
 def run_child(
     argv: Sequence[str],
     env: dict[str, str],
     job: Job,
     log: Callable[[str], None],
     kill_after_s: float,
+    on_child: ChildHook | None = None,
 ) -> int:
     """Run ``argv`` in its OWN process group; ``job.interrupt`` sends SIGINT to the whole group
-    and SIGKILLs it after ``kill_after_s`` if it is still alive."""
+    and SIGKILLs it after ``kill_after_s`` if it is still alive. ``on_child(run_id, kill)`` runs
+    once the child exists (``kill`` SIGKILLs its group) and returns a stop callback (chaos
+    supervisor, plan A5)."""
     proc = subprocess.Popen(  # noqa: S603
         argv, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
         start_new_session=True,
@@ -105,11 +111,14 @@ def run_child(
         interrupt()
     elif job.suspend_requested:
         suspend()
+    stop_hook = on_child(job.run_id, lambda: _signal(signal.SIGKILL)) if on_child else None
     try:
         for line in proc.stdout or ():
             log(line.rstrip("\n"))
         return proc.wait()
     finally:
+        if stop_hook is not None:
+            stop_hook()
         for t in timers:
             t.cancel()
         _signal(signal.SIGKILL)  # reap stragglers of the group (no-op if all exited)
@@ -120,6 +129,7 @@ def subprocess_executor(
     admin_token: str | None,
     secrets: Sequence[str],
     kill_after_s: float = KILL_AFTER_INTERRUPT_S,
+    on_child: ChildHook | None = None,
 ) -> Executor:
     """Run ``python -m distillery run`` as a child so cancel can send SIGINT: the pipeline's
     paid-resource context managers then cancel provider jobs on the way out. Dry runs use the
@@ -146,7 +156,7 @@ def subprocess_executor(
                 argv += ["--finetune-estimate-usd", str(job.finetune_estimate_usd)]
             if job.scale == "gated":  # pre-registered protocol: one round (DECISIONS 2026-10-03)
                 argv += ["--max-rounds", "1"]
-        return run_child(argv, env, job, log, kill_after_s)
+        return run_child(argv, env, job, log, kill_after_s, on_child)
 
     return run
 

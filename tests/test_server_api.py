@@ -369,7 +369,9 @@ def test_live_gated_run_is_one_round_and_others_keep_cli_default(monkeypatch, tm
     from distillery.server import worker as w
 
     seen: list[list[str]] = []
-    monkeypatch.setattr(w, "run_child", lambda argv, env, job, log, k: seen.append(argv) or 0)
+    monkeypatch.setattr(
+        w, "run_child", lambda argv, env, job, log, k, hook=None: seen.append(argv) or 0
+    )
     ex = w.subprocess_executor(str(tmp_path), "tok", ())
     ex(w.Job("r1", "gated", dry_run=False), lambda _line: None)
     ex(w.Job("r2", "small", dry_run=False), lambda _line: None)

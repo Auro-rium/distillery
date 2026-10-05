@@ -231,6 +231,10 @@ class SandboxExecutor:
         self._lock = threading.Lock()
         self.stats = ExecutorStats()
 
+    def wrap_sandbox(self, sandbox: Sandbox) -> None:
+        """Swap the sandbox (fault injection wraps the live one; images already built stay)."""
+        self._sandbox = sandbox
+
     def register(self, db_ref: str, data: bytes | Path) -> None:
         self._registered[db_ref] = data
 

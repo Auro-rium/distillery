@@ -23,7 +23,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from distillery import errors, humanset
+from distillery import chaos, errors, humanset
 from distillery.budget import BudgetExceeded, Ledger, spend_lines
 from distillery.config import Config, ConfigError, load_config
 from distillery.driver import driving
@@ -315,17 +315,31 @@ def _cmd_run(
     )
     store = _store_for(root, run_id)
     try:
+        plan = chaos.plan_for(run_id, env)  # None for every run id that is not a chaos run
+    except ValueError as exc:
+        store.close()
+        out(f"refused: {exc}")
+        return EXIT_REFUSED
+    try:
         with AsyncBridge() as bridge:
             if dry:
                 dr = build_dry_run(
                     pcfg.scale, bridge, seed=args.seed, max_rounds=args.max_rounds,
                     headroom_max_base_acc=args.max_base_acc, human_set_path=human_set,
+                    finetune_state=store.run_dir(run_id) / "fake_finetune_state.json"
+                    if plan is not None else None,
                 )  # fmt: skip
                 config, pcfg, deps = dr.config, dr.pipeline_cfg, dr.deps
             elif deps_factory is not None:
                 deps = deps_factory(config, pcfg, bridge)
             else:
                 deps = make_live_deps(config, pcfg, bridge, env=env)
+            if plan is not None:
+                deps = chaos.instrument(
+                    deps, plan, store.run_dir(run_id),
+                    lambda action, detail: store.add_audit("chaos", action, run_id, detail),
+                    dry_run=dry,
+                )  # fmt: skip
             with driving(store.run_dir(run_id)), _suspend_on_sigterm():
                 report = Pipeline(pcfg, config, deps, store, run_id, say=out).run()
     except (ConfigRefusal, ConfigError, humanset.HumanSetError) as exc:

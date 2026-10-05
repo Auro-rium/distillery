@@ -1,0 +1,18 @@
+{
+  "what": "local dry run, scale tiny, fakes only; peak resident memory vs the 512 MB free Render instance",
+  "command": "/usr/bin/time -v python -m distillery --root <tmp> run --pack sql --scale tiny --dry-run (PYTHONPATH=<worktree>/src, Python 3.13)",
+  "exit_status": 0,
+  "wall_clock_s": 5.32,
+  "child_max_rss_kb": 61560,
+  "child_max_rss_mb": 60.1,
+  "server_import_max_rss_kb": 57792,
+  "server_import_max_rss_mb": 56.4,
+  "sum_mb_server_plus_child_upper_bound": 116.6,
+  "instance_limit_mb": 512,
+  "headroom_mb": 395.4,
+  "caveats": [
+    "measures the pipeline's own memory with fake models (no live openai/httpx connection pools, no real student sandbox client); the live path adds the real clients, whose size was not measured here",
+    "server figure is import of create_app only (peak RSS after importing the app module), not a serving process with traffic; the sum is therefore an approximate bound, not a measurement of a running instance",
+    "scale tiny only; gated runs hold larger task sets in memory (not measured)"
+  ]
+}
