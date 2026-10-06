@@ -56,6 +56,7 @@ from distillery.server.worker import (
     QueueFullError,
     RunConflictError,
     Worker,
+    make_probe,
     subprocess_executor,
 )
 from distillery.taskpacks.base import get_pack, pack_names
@@ -194,6 +195,8 @@ def create_app(settings: ServerSettings) -> FastAPI:
     worker = Worker(
         executor, secrets, max_restarts=settings.max_restarts,
         restart_backoff_s=settings.restart_backoff_s, on_audit=audit, on_final=on_final,
+        probe=settings.probe or make_probe(settings.config.nebius_base_url),
+        outage_poll_s=settings.outage_poll_s, max_outage_wait_s=settings.max_outage_wait_s,
     )  # fmt: skip
     reader.worker = worker
     limiter = sse.StreamLimiter(settings.sse_max_streams, settings.sse_max_streams_per_ip)
@@ -242,13 +245,27 @@ def create_app(settings: ServerSettings) -> FastAPI:
 
     def health_of(run_id: str, job: Job | None) -> dict[str, Any]:
         run_dir = reader.store_for(run_id).run_dir(run_id)
-        return run_health(run_id, run_dir, job, settings.watchdog)
+        out = run_health(run_id, run_dir, job, settings.watchdog)
+        out["outage"] = {
+            "waiting": bool(job and job.outage_waiting),
+            "since": job.outage_since if job and job.outage_waiting else None,
+            "waited_total_s": round(job.outage_waited_total_s, 1) if job else 0.0,
+        }
+        return out
 
     def run_health_rows() -> list[dict[str, Any]]:
         return [health_of(j.run_id, j) for j in worker.jobs()[-MAX_HEALTH_RUNS:]]
 
     tele = telemetry.install(app, _telemetry_extra)
-    tele.collectors.append(lambda: prometheus_lines(run_health_rows(), dog, heartbeat.rss_mb()))
+
+    def _metric_lines() -> list[str]:
+        lines = prometheus_lines(run_health_rows(), dog, heartbeat.rss_mb())
+        lines.append("# TYPE distillery_provider_reachable gauge")
+        if worker.provider_reachable is not None:  # the last probe (only run around a restart)
+            lines.append(f"distillery_provider_reachable {int(worker.provider_reachable)}")
+        return lines
+
+    tele.collectors.append(_metric_lines)
 
     if settings.allowed_origins:
         app.add_middleware(

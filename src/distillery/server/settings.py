@@ -50,6 +50,9 @@ class ServerSettings:
     max_pending_jobs: int = 5  # queued + running, enforced for anonymous dry runs
     max_restarts: int = 6  # supervisor: restarts per run (exit 75 or killed by a signal)
     restart_backoff_s: float = 30.0  # supervisor: first backoff, doubled per restart
+    outage_poll_s: float = 30.0  # supervisor (A7): probe interval while the provider is unreachable
+    max_outage_wait_s: float = 6 * 3600.0  # supervisor (A7): outage wait cap per run
+    probe: Callable[[], str | None] | None = None  # None = real DNS+TLS probe of the base URL
     reconcile_on_start: bool = True  # re-submit runs a previous server process left unfinished
     shutdown_grace_s: float = 30.0  # SIGINT -> SIGKILL grace for a live child (cancel + shutdown)
     # Peer addresses whose X-Forwarded-For is believed. Default: none, the header is ignored.
@@ -170,4 +173,6 @@ def settings_from_env(
             p.strip() for p in (e.get("DISTILLERY_TRUSTED_PROXIES") or "").split(",") if p.strip()
         ),
         watchdog=parse_watchdog(e),
+        outage_poll_s=_num(e, "DISTILLERY_OUTAGE_POLL_S", 30.0, minimum=0.05),
+        max_outage_wait_s=_num(e, "DISTILLERY_MAX_OUTAGE_WAIT_S", 6 * 3600.0),
     )

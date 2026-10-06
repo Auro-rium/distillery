@@ -408,7 +408,7 @@ def test_health_endpoint_states_and_metrics(tmp_path: Path) -> None:
         assert h["heartbeat_age_s"] == pytest.approx(1, abs=2) and h["attempt"] == 1
         assert set(h) == {
             "run_id", "state", "stage", "heartbeat_age_s", "progress_age_s", "progress", "rss_mb",
-            "attempt", "restarts", "watchdog_kills", "open_incidents", "recent_incidents",
+            "attempt", "restarts", "watchdog_kills", "open_incidents", "recent_incidents", "outage",
         }  # fmt: skip
         (run_dir / heartbeat.FILE).write_text(
             json.dumps(hb(at=now - 1, progress_at=now - 500, pid=os.getpid()))
@@ -434,7 +434,7 @@ def test_health_endpoint_states_and_metrics(tmp_path: Path) -> None:
             "distillery_run_progress_total", "distillery_run_rss_mb",
             "distillery_run_restarts_total", "distillery_watchdog_kills_total",
             "distillery_incidents_total", "distillery_server_rss_mb",
-            "distillery_http_requests_total",  # the existing ones are kept
+            "distillery_provider_reachable", "distillery_http_requests_total",  # the existing ones are kept
         ):  # fmt: skip
             assert name in text, name
         assert f'distillery_run_progress_total{{run_id="{rid}"}} 5' in text
