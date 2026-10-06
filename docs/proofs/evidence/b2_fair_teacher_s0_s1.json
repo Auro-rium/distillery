@@ -1,0 +1,195 @@
+{
+ "run_id": "sql-gated-20261004T155134Z-66ff347c",
+ "dry_run": false,
+ "label": null,
+ "adapter_sha256": "4bebc793ba4158532adc33ca5085f37003aad46b679db9085cc89864fa8f553f",
+ "heldout_sealed_sha256": "cf92bf60e3c734f63035273395e629f3dafe0afab8397c4b01e2976f683dd878",
+ "student_base_model": "Qwen/Qwen3-1.7B",
+ "teacher_model": "nvidia/nemotron-3-super-120b-a12b",
+ "ultra_model": "nvidia/Nemotron-3-Ultra-550b-a55b",
+ "fewshot": {
+  "k": 8,
+  "seed": 1234,
+  "task_ids": [
+   "sql-fecda3af7caa",
+   "sql-8cff8654ad1a",
+   "sql-61fa1dab70b6",
+   "sql-548a1cb90cb0",
+   "sql-712b979cba6b",
+   "sql-dd4624c81dcf",
+   "sql-0d65757b8de3",
+   "sql-4ae137723a45"
+  ]
+ },
+ "teacher_setups_scored": [
+  "S0",
+  "S1"
+ ],
+ "teacher_setups_deferred": [
+  "S2"
+ ],
+ "dev_block_file": "dev_vectors.json",
+ "vectors_file": "vectors.json",
+ "analysis": {
+  "strongest_teacher": {
+   "setup": "S1",
+   "dev_accuracy": {
+    "S0": 0.8466666666666667,
+    "S1": 0.9333333333333333
+   },
+   "tie_break": "later setup wins a tie (S2 > S1 > S0), recorded in DECISIONS.md",
+   "selected_on": "dev",
+   "deferred": [
+    "S2"
+   ]
+  },
+  "claims": {
+   "heldout": {
+    "status": "scored",
+    "n": 300,
+    "accuracy": {
+     "base": 0.25666666666666665,
+     "student": 0.9233333333333333,
+     "S0": 0.9,
+     "S1": 0.9333333333333333
+    },
+    "vs_strongest_teacher": {
+     "teacher": "S1",
+     "claim": false,
+     "ratio_point": 0.9892857142857143,
+     "ratio_lo": 0.9565217391304348,
+     "ratio_hi": 1.022140221402214,
+     "threshold": "ratio lower bound > 1.0",
+     "student_correct": 277,
+     "teacher_correct": 280,
+     "n": 300,
+     "bootstrap_resamples": 10000,
+     "seed": 1234
+    },
+    "vs_each_teacher_for_information": {
+     "S0": {
+      "claim": false,
+      "ratio_point": 1.025925925925926,
+      "ratio_lo": 0.9857651245551602,
+      "ratio_hi": 1.0671641791044777,
+      "threshold": "ratio lower bound > 1.0",
+      "student_correct": 277,
+      "teacher_correct": 270,
+      "n": 300,
+      "bootstrap_resamples": 10000,
+      "seed": 1234
+     },
+     "S1": {
+      "claim": false,
+      "ratio_point": 0.9892857142857143,
+      "ratio_lo": 0.9565217391304348,
+      "ratio_hi": 1.022140221402214,
+      "threshold": "ratio lower bound > 1.0",
+      "student_correct": 277,
+      "teacher_correct": 280,
+      "n": 300,
+      "bootstrap_resamples": 10000,
+      "seed": 1234
+     }
+    }
+   },
+   "human": {
+    "status": "pending",
+    "reason": "no human set is sealed for this run (Gate B never ran); nothing was scored on it"
+   }
+  },
+  "claim_rule": "student/teacher ratio CI lower bound > 1.0, gate bootstrap",
+  "p4_reproduction": {
+   "reproduced": true,
+   "n": 300,
+   "expected_n": 300,
+   "correct": {
+    "student": 277,
+    "teacher": 270,
+    "base": 77
+   },
+   "expected_correct": {
+    "student": 277,
+    "teacher": 270,
+    "base": 77
+   },
+   "accuracy": {
+    "student": 0.9233333333333333,
+    "teacher": 0.9,
+    "base": 0.25666666666666665
+   },
+   "differences": {
+    "student": 0,
+    "teacher": 0,
+    "base": 0
+   },
+   "gate_decision_recomputed": "PROMOTE",
+   "gate": {
+    "decision": "PROMOTE",
+    "n": 300,
+    "base_acc": 0.25666666666666665,
+    "student_acc": 0.9233333333333333,
+    "teacher_acc": 0.9,
+    "student_ci": [
+     0.8875898961498251,
+     0.9483723882133924
+    ],
+    "ratio_point": 1.025925925925926,
+    "ratio_lo": 0.9857651245551602,
+    "ratio_hi": 1.0671641791044777,
+    "bootstrap_resamples_used": 10000,
+    "bootstrap_skipped": 0,
+    "student_only_vs_base": 202,
+    "base_only_vs_student": 2,
+    "mcnemar_p": 1.6266184059419292e-57,
+    "thresholds": {
+     "ratio_lower_bound_min": 0.85,
+     "mcnemar_alpha": 0.05,
+     "bootstrap_resamples": 10000,
+     "seed": 1234
+    },
+    "reasons": [
+     "ratio lower bound 0.986 >= 0.85 (point 1.026)",
+     "McNemar exact p=0.0000 < 0.05 (student-only 202, base-only 2)"
+    ]
+   },
+   "reference": "docs/proofs/evidence/p4_run_summary.json (gate_heldout)"
+  },
+  "disclosure": "post-hoc re-score; the original P4 gate decision stands unchanged"
+ },
+ "b3_summary": {
+  "base": {
+   "convention_mismatch": 3,
+   "verifier_fn_candidate": 4,
+   "genuine": 216
+  },
+  "student": {
+   "convention_mismatch": 0,
+   "verifier_fn_candidate": 0,
+   "genuine": 23
+  },
+  "S0": {
+   "convention_mismatch": 0,
+   "verifier_fn_candidate": 0,
+   "genuine": 30
+  },
+  "S1": {
+   "convention_mismatch": 0,
+   "verifier_fn_candidate": 0,
+   "genuine": 20
+  }
+ },
+ "spend_usd_this_command": 0.0,
+ "usage_by_purpose": {
+  "fair_s0": {},
+  "fair_s1": {},
+  "fair_s2": {}
+ },
+ "usage_before": {
+  "fair_s0": {},
+  "fair_s1": {},
+  "fair_s2": {}
+ },
+ "llm_errors": {},
+ "source_tree_unchanged": true
+}
