@@ -264,3 +264,6 @@ User decision: the full B2 estimate ($9.30, of which Ultra few-shot is ~$6.90) d
 - **If S2 is scored later,** the dev pick is redone over S0, S1, S2 with the same rule, and the claim is re-stated against that pick. The earlier S0/S1-only result is kept in the record, not replaced.
 - `--student-concurrency` lowers in-flight sandbox generations so B2 does not crowd A5 out of the sandbox operation cap; it changes speed only, not outputs.
 - Nothing else changes: same few-shot set (seed 1234, k=8, train only), same claim rule (ratio CI lower bound > 1.0), same gate bootstrap.
+
+## 2026-10-06 (amendment, recorded BEFORE drafting or scoring): agent-authored Gate B file fixed
+`.distillery/humanset/questions.txt` (gitignored, kept out of git like every sealed source): **N = 100 questions, sha256 `f791e32967f0e59aad7da28f8e53c4e183f5b99134662fc738b888d80c24da0a`**. Author's split: 25 simple, 49 medium, 26 hard (target was 25/45/30; reported, not changed). The author's reference SQL (`reference.jsonl`) is used only to review teacher drafts during confirmation; it is never a gate input and never shown to a model. The file is not edited after this entry; drafting discards and confirm rejections are reported as counts.
