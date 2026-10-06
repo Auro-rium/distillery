@@ -249,3 +249,11 @@ The tool-call pack reserves its stress families by the SAME written rule as the 
 
 ## 2026-10-07 (amendment to the A3 pre-registration, recorded BEFORE any controller run): lora_alpha follows lora_r
 When a validated `adjust_hparams` changes `lora_r`, `lora_alpha` is rescaled to keep the pinned alpha/r ratio (`max(8, round(alpha * r_new / r_old))`, orchestrator `_apply_hparams`). This was an implementation choice not stated in the 2026-10-06 bounds; it is fixed here before any run uses the controller. `lora_alpha` is not itself a controller-proposable parameter.
+
+## 2026-10-06 (amendment to the 2026-10-03 Gate B procedure, recorded BEFORE any question is written, drafted or scored): Gate B questions are agent-authored
+The user delegated writing the Gate B question file to a Claude subagent (Opus 5.5), because no human question file exists. This replaces "the user supplies the questions (no LLM writes or edits them)" and "confirmed item by item by the user". Everything else in the 2026-10-03 Gate B rule stands (gold drafted by the teacher at temperature 0.8, k = 3, kept only if all three execute to the same non-empty result; same thresholds, 10,000 resamples, seed 1234; sealed after training, scored once; disclosed teacher-solvable bias).
+- **Label.** This set is called the **agent-authored set** in every report and claim. It is never called human-written. The code keeps its `human*` names for file formats only.
+- **Blindness (instruction-based, disclosed).** The author gets the schema DDL and a plain-language description of the workload only. It is told not to open the question templates, training/dev rows, run stores or sealed files. This cannot be enforced technically; it is disclosed as such.
+- **Size.** Target 100 questions, fixed in the file before drafting. N and the file sha256 are recorded here by amendment before scoring.
+- **Confirmation.** The authoring subagent (which knows each question's intent) reviews every teacher draft (question, SQL, result rows) and confirms or rejects it; decisions go to `decisions.jsonl`. The user is not the confirmer.
+- **No targeting.** The author is not told which families the student trained on, nor told to avoid the stress concepts. It tags the SQL constructs each question needs in a separate file used only for post-hoc analysis, never as a gate input.
