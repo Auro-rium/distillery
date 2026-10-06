@@ -173,6 +173,26 @@ def test_dry_run_end_to_end_without_human_set(tmp_path: Path) -> None:
     assert ev["rescore"]["model_calls"] == 0 and all(v["before"] == v["after"] for v in ba.values())
 
 
+def test_a_deferred_setup_is_absent_everywhere_and_never_picked(tmp_path: Path) -> None:
+    """DECISIONS.md 2026-10-06: S2 deferred on budget. It is not scored, not picked on dev, not a
+    claim opponent, and the evidence names it as deferred; a later run with all setups in the
+    same --out reuses the cached S0/S1/student outputs."""
+    ev = ft.dry_run(tmp_path, say=lambda _m: None, teacher_names=("S0", "S1"))
+    work = tmp_path / "work"
+    vec = json.loads((work / "vectors.json").read_text())
+    dev = json.loads((work / "dev_vectors.json").read_text())
+    assert set(vec["setups"]) == {"base", "student", "S0", "S1"}
+    assert set(dev["setups"]) == {"S0", "S1"}
+    st = ev["analysis"]["strongest_teacher"]
+    assert st["setup"] in {"S0", "S1"} and st["deferred"] == ["S2"]
+    assert set(ev["analysis"]["claims"]["heldout"]["vs_each_teacher_for_information"]) == {
+        "S0",
+        "S1",
+    }
+    assert ev["teacher_setups_scored"] == ["S0", "S1"] and ev["teacher_setups_deferred"] == ["S2"]
+    assert ev["usage_by_purpose"]["fair_s2"] == {}
+
+
 def test_dry_run_scores_a_sealed_human_set_when_present(tmp_path: Path) -> None:
     f = confirmed_file(tmp_path / "human.json")
     ev = ft.dry_run(tmp_path / "o", human_set=f, say=lambda _m: None)

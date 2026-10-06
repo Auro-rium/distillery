@@ -60,6 +60,19 @@ def main(argv: list[str] | None = None) -> int:  # noqa: C901, PLR0911, PLR0912
     ap.add_argument("--env-file", default=None)
     ap.add_argument("--budget-usd", type=float, default=None, help="live: per-run spend cap")
     ap.add_argument("--i-approve-spend", action="store_true")
+    ap.add_argument(
+        "--student-concurrency",
+        type=int,
+        default=None,
+        help="sandbox generations in flight per model (default: the run's own); lower it when a "
+        "live run shares the sandbox operation cap",
+    )
+    ap.add_argument(
+        "--setups",
+        default=",".join(ft.TEACHER_SETUPS),
+        help="teacher setups to score, comma separated (default all; a left-out setup is recorded "
+        "as deferred, DECISIONS.md 2026-10-06)",
+    )
     a = ap.parse_args(argv)
     out = Path(a.out)
 
@@ -113,7 +126,16 @@ def main(argv: list[str] | None = None) -> int:  # noqa: C901, PLR0911, PLR0912
             if a.rescore:
                 res = ft.rescore_from_cache(out, run_id, config, deps)
             else:
-                res = ft.run_fair_teacher(root, out, run_id, config, deps)
+                names = tuple(x.strip() for x in a.setups.split(",") if x.strip())
+                if not names or any(x not in ft.TEACHER_SETUPS for x in names):
+                    print(
+                        f"refused: --setups must name some of {ft.TEACHER_SETUPS}", file=sys.stderr
+                    )
+                    return 2
+                res = ft.run_fair_teacher(
+                    root, out, run_id, config, deps, teacher_names=names,
+                    student_concurrency=a.student_concurrency,
+                )  # fmt: skip
         print(json.dumps(res, indent=1, default=str)[:4000])
         return 0
     except (ft.FairTeacherRefusal, ConfigError) as exc:

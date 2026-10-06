@@ -257,3 +257,10 @@ The user delegated writing the Gate B question file to a Claude subagent (Opus 5
 - **Size.** Target 100 questions, fixed in the file before drafting. N and the file sha256 are recorded here by amendment before scoring.
 - **Confirmation.** The authoring subagent (which knows each question's intent) reviews every teacher draft (question, SQL, result rows) and confirms or rejects it; decisions go to `decisions.jsonl`. The user is not the confirmer.
 - **No targeting.** The author is not told which families the student trained on, nor told to avoid the stress concepts. It tags the SQL constructs each question needs in a separate file used only for post-hoc analysis, never as a gate input.
+
+## 2026-10-06 (amendment to the B pre-registration, recorded BEFORE any B2 scoring): S2 (Ultra, k=8) deferred on budget
+User decision: the full B2 estimate ($9.30, of which Ultra few-shot is ~$6.90) does not fit the $19.50 project cap next to the A5 live run. B2 runs now with **S0 and S1 only**; S2 runs later only if the console balance allows, in the same output directory (outputs are cached by prompt digest, so S0, S1, base and student are not regenerated).
+- **Strongest teacher (now)** is picked on dev among the scored setups (S0, S1), tie to the later one, as pre-registered. Any claim made now reads "vs the strongest of zero-shot and 8-shot Super"; it is **not** a claim against Ultra, and the report lists S2 as `deferred`.
+- **If S2 is scored later,** the dev pick is redone over S0, S1, S2 with the same rule, and the claim is re-stated against that pick. The earlier S0/S1-only result is kept in the record, not replaced.
+- `--student-concurrency` lowers in-flight sandbox generations so B2 does not crowd A5 out of the sandbox operation cap; it changes speed only, not outputs.
+- Nothing else changes: same few-shot set (seed 1234, k=8, train only), same claim rule (ratio CI lower bound > 1.0), same gate bootstrap.

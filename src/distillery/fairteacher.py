@@ -78,17 +78,25 @@ class FairTeacherRefusal(RuntimeError):
 # ---------------------------------------------------------------- pure analysis
 
 
+def scored_teachers(block: Mapping[str, Any]) -> tuple[str, ...]:
+    """The teacher setups present in a scored block, in pre-registered order. A deferred setup
+    (DECISIONS.md 2026-10-06: S2 deferred on budget) is simply absent, never filled in."""
+    return tuple(n for n in TEACHER_SETUPS if n in block["setups"])
+
+
 def pick_strongest(dev_block: Mapping[str, Any]) -> dict[str, Any]:
-    """The strongest teacher by DEV accuracy. A tie goes to the later setup (S2 > S1 > S0): the
-    claim must clear the harder opponent, so a tie never makes the comparison easier."""
-    acc = {n: float(dev_block["setups"][n]["accuracy"]) for n in TEACHER_SETUPS}
+    """The strongest teacher by DEV accuracy among the setups scored. A tie goes to the later setup
+    (S2 > S1 > S0): the claim must clear the harder opponent, so a tie never makes it easier."""
+    names = scored_teachers(dev_block)
+    acc = {n: float(dev_block["setups"][n]["accuracy"]) for n in names}
     best = max(acc.values())
-    chosen = [n for n in TEACHER_SETUPS if acc[n] == best][-1]
+    chosen = [n for n in names if acc[n] == best][-1]
     return {
         "setup": chosen,
         "dev_accuracy": acc,
         "tie_break": "later setup wins a tie (S2 > S1 > S0), recorded in DECISIONS.md",
         "selected_on": "dev",
+        "deferred": [n for n in TEACHER_SETUPS if n not in names],
     }
 
 
@@ -203,7 +211,7 @@ def analyse(
         student = [bool(x) for x in block["setups"][STUDENT]["correct"]]
         per = {
             n: claim_rule(student, [bool(x) for x in block["setups"][n]["correct"]], cfg)
-            for n in TEACHER_SETUPS
+            for n in scored_teachers(block)
         }
         claims[set_name] = {
             "status": "scored",
@@ -497,13 +505,17 @@ def build_teacher_generators(pipe: Pipeline, cache_dir: Path) -> dict[str, Gener
 
 
 def teacher_setups(
-    gens: Mapping[str, Generator], ddl: str, shots: Sequence[Mapping[str, str]]
+    gens: Mapping[str, Generator],
+    ddl: str,
+    shots: Sequence[Mapping[str, str]],
+    names: Sequence[str] = TEACHER_SETUPS,
 ) -> list[Setup]:
     zero: PromptBuilder = lambda it: build_messages(  # noqa: E731
         str(it["question"]), ddl, role="eval_teacher"
     )
     few: PromptBuilder = lambda it: build_fewshot_messages(str(it["question"]), ddl, shots)  # noqa: E731
-    return [Setup(S0, gens[S0], zero), Setup(S1, gens[S1], few), Setup(S2, gens[S2], few)]
+    every = [Setup(S0, gens[S0], zero), Setup(S1, gens[S1], few), Setup(S2, gens[S2], few)]
+    return [t for t in every if t.name in names]
 
 
 def _dump(path: Path, obj: Any) -> None:
@@ -522,6 +534,8 @@ def run_fair_teacher(
     say: Callable[[str], None] = print,
     k: int = FEWSHOT_K,
     seed: int = FEWSHOT_SEED,
+    teacher_names: Sequence[str] = TEACHER_SETUPS,
+    student_concurrency: int | None = None,
 ) -> dict[str, Any]:
     """Rebuild the finished run (like ``humanscore.score_human_run``), pick the strongest teacher
     on dev, score base/student/S0/S1/S2 on held-out (and the human set when sealed), save per-item
@@ -539,6 +553,8 @@ def run_fair_teacher(
         cfg_block = report["config"]
         gate_cfg = GateThresholds.model_validate(cfg_block["gate_thresholds"])
         pcfg = PipelineConfig.model_validate(cfg_block["pipeline"])
+        if student_concurrency is not None:  # serving speed only; outputs do not depend on it
+            pcfg = pcfg.model_copy(update={"student_concurrency": student_concurrency})
         pipe = Pipeline(
             pcfg, config.model_copy(update={"gate": gate_cfg}), deps, store, run_id, say=say
         )
@@ -575,7 +591,7 @@ def run_fair_teacher(
         )
         say(f"[fair] {k} examples drawn from train (seed {seed}): {[e['family'] for e in shots]}")
         gens = build_teacher_generators(pipe, cache_dir)
-        setups_t = teacher_setups(gens, pipe.ddl, shots)
+        setups_t = teacher_setups(gens, pipe.ddl, shots, teacher_names)
 
         spent0 = pipe.ledger.spent()
         snap0 = pipe.sink.snapshot()
@@ -631,6 +647,8 @@ def run_fair_teacher(
             "teacher_model": config.require_model("teacher"),
             "ultra_model": config.require_model("planner"),
             "fewshot": {"k": k, "seed": seed, "task_ids": [e["task_id"] for e in shots]},
+            "teacher_setups_scored": [n for n in TEACHER_SETUPS if n in teacher_names],
+            "teacher_setups_deferred": [n for n in TEACHER_SETUPS if n not in teacher_names],
             "dev_block_file": "dev_vectors.json",
             "vectors_file": "vectors.json",
             "analysis": analysis,
@@ -689,7 +707,11 @@ def rescore_from_cache(
 
 
 def dry_run(
-    out: Path, *, human_set: Path | None = None, say: Callable[[str], None] = print
+    out: Path,
+    *,
+    human_set: Path | None = None,
+    say: Callable[[str], None] = print,
+    teacher_names: Sequence[str] = TEACHER_SETUPS,
 ) -> dict[str, Any]:
     """Offline, free: build a finished dry run with the fake models, then run the whole fair
     comparison and the cached re-score on it. Everything is FAKE and labelled; it exercises the
@@ -707,6 +729,8 @@ def dry_run(
             Pipeline(dr.pipeline_cfg, dr.config, dr.deps, store, run_id, say=lambda _m: None).run()
         finally:
             store.close()
-        evidence = run_fair_teacher(src, out / "work", run_id, dr.config, dr.deps, say=say)
+        evidence = run_fair_teacher(
+            src, out / "work", run_id, dr.config, dr.deps, say=say, teacher_names=teacher_names
+        )
         evidence["rescore"] = rescore_from_cache(out / "work", run_id, dr.config, dr.deps, say=say)
     return evidence
