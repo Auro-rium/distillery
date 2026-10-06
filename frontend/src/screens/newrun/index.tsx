@@ -21,6 +21,7 @@ export default function NewRun() {
   const [budget, setBudget] = useState("");
   const [token, setToken] = useState(""); // component state only, never persisted
   const [approve, setApprove] = useState(false);
+  const [runId, setRunId] = useState(""); // optional; blank lets the server name the run
   const [err, setErr] = useState<string | null>(null);
   const [badField, setBadField] = useState<"budget" | "token" | "approve" | null>(null);
   const [cfgErr, setCfgErr] = useState<unknown>(null);
@@ -48,6 +49,7 @@ export default function NewRun() {
     if (!dry && !approve) return fail("approve", "Tick the spend approval box to start a live run.");
     const body: NewRunBody = { pack, scale, dry_run: dry };
     if (cap !== undefined) body.budget_usd = cap;
+    if (runId.trim()) body.run_id = runId.trim();
     if (!dry) body.approve_spend = true;
     setAdminToken(token);
     setBusy(true);
@@ -97,6 +99,9 @@ export default function NewRun() {
                 onChange={(e) => { setToken(e.target.value); if (badField === "token") setBadField(null); }}
                 aria-invalid={badField === "token" || undefined}
               />
+            </Field>
+            <Field label="Run id (optional)" help="Blank lets the server name the run. Dry runs need the 'dry-' prefix; a 'chaos-' id opts a run into the server's fault-injection plan.">
+              <Input value={runId} autoComplete="off" spellCheck={false} onChange={(e) => setRunId(e.target.value)} />
             </Field>
             <Field
               className="span-2"

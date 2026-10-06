@@ -56,6 +56,15 @@ describe("NewRun form", () => {
     const post = f.mock.calls.find((c) => c[1]?.method === "POST")!;
     expect(JSON.parse(post[1]!.body as string).pack).toBe("toolcall");
   });
+  it("posts an optional run id (trimmed) and omits it when blank", async () => {
+    const f = setup(() => json({ run_id: "dry-chaos-x" }, 202));
+    await waitFor(() => expect((screen.getByLabelText("Budget cap (USD)") as HTMLInputElement).value).toBe("5"));
+    fireEvent.change(screen.getByLabelText("Run id (optional)"), { target: { value: " dry-chaos-x " } });
+    fireEvent.click(screen.getByRole("button", { name: /start dry run/i }));
+    await screen.findByText("LIVE VIEW");
+    const post = f.mock.calls.find((c) => c[1]?.method === "POST")!;
+    expect(JSON.parse(post[1]!.body as string).run_id).toBe("dry-chaos-x");
+  });
   it("blocks a live run without token or approval, without calling the API", async () => {
     const f = setup(() => json({}, 202));
     fireEvent.click(screen.getByLabelText(/^\s*Dry run \(fake/));
