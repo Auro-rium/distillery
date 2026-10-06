@@ -23,7 +23,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from distillery import chaos, errors, humanset
+from distillery import chaos, errors, heartbeat, humanset
 from distillery.budget import BudgetExceeded, Ledger, spend_lines
 from distillery.config import Config, ConfigError, load_config
 from distillery.driver import driving
@@ -324,7 +324,8 @@ def _cmd_run(
         out(f"refused: {exc}")
         return EXIT_REFUSED
     try:
-        with AsyncBridge() as bridge:
+        # the watchdog's proof of life/progress for the whole attempt, deps construction included
+        with heartbeat.running(store.run_dir(run_id)), AsyncBridge() as bridge:
             if dry:
                 dr = build_dry_run(
                     pcfg.scale, bridge, seed=args.seed, max_rounds=args.max_rounds,

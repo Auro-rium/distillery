@@ -32,6 +32,7 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
+from distillery import heartbeat
 from distillery.finetune import TrainedArtifact
 from distillery.sandbox import Job, RunResult, Sandbox
 from distillery.sandbox_executor import AsyncBridge
@@ -549,6 +550,8 @@ class SandboxCpuStudent:
             )
             for i, r in zip(redo, again, strict=True):
                 results[i] = r
+            heartbeat.bump("student_retry")
+        heartbeat.bump("student_batch")  # the whole generate call came back
         outputs: list[str] = []
         failed = 0
         for chunk, res in zip(chunks, results, strict=True):

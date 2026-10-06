@@ -22,6 +22,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Protocol
 
+from distillery import heartbeat
+
 MAX_CONCURRENCY = 40  # our ceiling; the documented beta cap is 50 in-flight operations
 BETA_INFLIGHT_CAP = 50
 DEFAULT_BASE_URL = "https://api.tokenfactory.nebius.com/sandboxes"
@@ -176,6 +178,7 @@ class _SandboxBase:
         result = await self.run(
             image_ref, shell=setup_shell, files=files, timeout=timeout, disposable=False
         )
+        heartbeat.bump("sandbox_branch")  # an image build can take many minutes: count its end
         if result.error is not None or result.image_uuid is None:
             raise SandboxError(f"branch produced no image (error={result.error!r})")
         if result.exit_code != 0:
@@ -194,6 +197,11 @@ class _SandboxBase:
         sem = asyncio.Semaphore(concurrency)
 
         async def one(job: Job) -> RunResult:
+            res = await _one(job)
+            heartbeat.bump("sandbox_job")  # ok, failed or timed out: the job came back
+            return res
+
+        async def _one(job: Job) -> RunResult:
             async with sem:
                 try:
                     return await self.run(
