@@ -1,0 +1,77 @@
+{
+ "what": "Gate B on the agent-authored set (DECISIONS.md 2026-10-06 amendments): the promoted P4 adapter scored once, post hoc",
+ "label": "AGENT-AUTHORED set (Claude Opus 5.5 subagent, blind to templates by instruction), NOT human-written; confirmer = the authoring subagent, not a human. The report's own note text says 'confirmed by a human' (generic wording of the human-set code); that wording does not apply here.",
+ "run_id": "sql-gated-20261004T155134Z-66ff347c",
+ "adapter_sha256": "4bebc793ba4158532adc33ca5085f37003aad46b679db9085cc89864fa8f553f",
+ "question_file_sha256": "f791e32967f0e59aad7da28f8e53c4e183f5b99134662fc738b888d80c24da0a",
+ "confirmed_file_sha256": "68816123b3ab5c9fd322fd5d3fe256fa8931ade9517e944538ca9bd83d34d892",
+ "db_sha256": "03864579a97c4336039620d125c6811ee513dce2b9ceb3796d282354cc96d02c",
+ "n": 86,
+ "counts": {
+  "confirmed": 86,
+  "discarded": 13,
+  "discarded_by_reason": {
+   "disagree": 12,
+   "empty": 1,
+   "exec_error": 0,
+   "llm_error": 0,
+   "no_sql": 0
+  },
+  "duplicates_dropped": 0,
+  "kept": 87,
+  "questions": 100,
+  "rejected": 1,
+  "skipped": 0,
+  "undecided": 0
+ },
+ "skeleton_in_train": 0,
+ "independent_check": "all 87 kept teacher drafts execute to the same result as the author's blind reference SQL",
+ "accuracy": {
+  "base": 0.38372093023255816,
+  "student": 0.4069767441860465,
+  "teacher": 0.9883720930232558
+ },
+ "gate": {
+  "base_acc": 0.38372093023255816,
+  "base_only_vs_student": 11,
+  "bootstrap_resamples_used": 10000,
+  "bootstrap_skipped": 0,
+  "decision": "REJECT",
+  "mcnemar_p": 0.8388197422027588,
+  "n": 86,
+  "ratio_hi": 0.5176470588235295,
+  "ratio_lo": 0.3058823529411765,
+  "ratio_point": 0.4117647058823529,
+  "reasons": [
+   "ratio lower bound 0.306 < 0.85 (point 0.412)",
+   "McNemar exact p=0.8388 >= 0.05 (student-only 13, base-only 11)"
+  ],
+  "student_acc": 0.4069767441860465,
+  "student_ci": [
+   0.3092912327785102,
+   0.5126172690420929
+  ],
+  "student_only_vs_base": 13,
+  "teacher_acc": 0.9883720930232558,
+  "thresholds": {
+   "bootstrap_resamples": 10000,
+   "mcnemar_alpha": 0.05,
+   "ratio_lower_bound_min": 0.85,
+   "seed": 1234
+  }
+ },
+ "decision": "REJECT",
+ "gate_a_decision_unchanged": "PROMOTE",
+ "bias_disclosed": "Selection bias, disclosed: gold SQL was drafted by the teacher and kept only when every drafted sample executed, was non-empty and agreed with the others, then confirmed by a human. Only teacher-solvable questions survive, so teacher accuracy here is high by construction and hard questions are under-represented. Discard and rejection counts are reported.",
+ "spend_usd_this_command": 0.04602209999999651,
+ "drafting_spend_usd": 0.174308,
+ "generation_errors": {
+  "base": 0,
+  "student": 0
+ },
+ "unparseable": {
+  "base": 0,
+  "student": 0,
+  "teacher": 0
+ }
+}
