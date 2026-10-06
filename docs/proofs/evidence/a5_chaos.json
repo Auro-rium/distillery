@@ -1,0 +1,118 @@
+{
+ "run_id": "chaos-sql-gated-20261007b",
+ "mode": "live, local server driving Nebius Token Factory directly (not Render)",
+ "decision": "PROMOTE",
+ "decision_reasons": [
+  "ratio lower bound 1.022 >= 0.85 (point 1.061)",
+  "McNemar exact p=0.0000 < 0.05 (student-only 204, base-only 1)"
+ ],
+ "pass": true,
+ "checks": {
+  "verdict_reached": true,
+  "every_injection_in_audit_and_recovered": true,
+  "exactly_one_admin_action_the_start": true,
+  "exactly_one_finetune_job_billed": true,
+  "spend_within_cap": true
+ },
+ "injections": {
+  "kill_child": 2,
+  "inject_net_window": 1,
+  "inject_llm_503": 3,
+  "inject_sandbox_exit_-1": 2
+ },
+ "supervisor_restarts": 4,
+ "unplanned_faults_recovered": [
+  "17:40 sandbox adapter upload ReadError (exit 75, restart 3)",
+  "17:44 sandbox file GET read timeout, uplink ~0.55 MB/s vs 120 s transport timeout (exit 75, restart 4)"
+ ],
+ "finetune_jobs": [
+  "ftjob-cef976e3a58a40e3a995c2fafc5bcaa8"
+ ],
+ "spend_usd": {
+  "finetune": 2.3016,
+  "llm": 1.8902,
+  "sandbox": 0.0
+ },
+ "spend_total_usd": 4.1918,
+ "earlier_attempt": "chaos-sql-gated-20261007 cancelled after a laptop suspend (DNS outage) burned 5 of 6 restarts in headroom; spent 0.0",
+ "audit": [
+  {
+   "at": "2026-10-06T16:29:43.863703+00:00",
+   "actor": "admin",
+   "action": "start",
+   "detail": "{\"budget_usd\":8.0,\"dry_run\":false,\"scale\":\"gated\"}"
+  },
+  {
+   "at": "2026-10-06T17:00:32.360272+00:00",
+   "actor": "chaos",
+   "action": "kill_child",
+   "detail": "{\"signal\":\"SIGKILL\",\"stage\":\"teacher_data\"}"
+  },
+  {
+   "at": "2026-10-06T17:00:32.416698+00:00",
+   "actor": "supervisor",
+   "action": "restart",
+   "detail": "{\"attempt\":1,\"backoff_s\":30.0,\"exit_code\":-9}"
+  },
+  {
+   "at": "2026-10-06T17:01:18.632798+00:00",
+   "actor": "chaos",
+   "action": "inject_llm_503",
+   "detail": "{\"model\":\"nvidia/nemotron-3-super-120b-a12b\",\"n\":1,\"of\":3}"
+  },
+  {
+   "at": "2026-10-06T17:01:18.636114+00:00",
+   "actor": "chaos",
+   "action": "inject_llm_503",
+   "detail": "{\"model\":\"nvidia/nemotron-3-super-120b-a12b\",\"n\":2,\"of\":3}"
+  },
+  {
+   "at": "2026-10-06T17:01:18.639248+00:00",
+   "actor": "chaos",
+   "action": "inject_llm_503",
+   "detail": "{\"model\":\"nvidia/nemotron-3-super-120b-a12b\",\"n\":3,\"of\":3}"
+  },
+  {
+   "at": "2026-10-06T17:01:51.857559+00:00",
+   "actor": "chaos",
+   "action": "inject_net_window",
+   "detail": "{\"model\":\"nvidia/nemotron-3-super-120b-a12b\",\"seconds\":60.0}"
+  },
+  {
+   "at": "2026-10-06T17:23:19.703345+00:00",
+   "actor": "chaos",
+   "action": "kill_child",
+   "detail": "{\"signal\":\"SIGKILL\",\"stage\":\"finetune_r1\"}"
+  },
+  {
+   "at": "2026-10-06T17:23:19.760822+00:00",
+   "actor": "supervisor",
+   "action": "restart",
+   "detail": "{\"attempt\":2,\"backoff_s\":60.0,\"exit_code\":-9}"
+  },
+  {
+   "at": "2026-10-06T17:35:48.603593+00:00",
+   "actor": "chaos",
+   "action": "inject_sandbox_exit_-1",
+   "detail": "{\"n\":1,\"of\":2,\"stage\":\"dev_eval_r1\"}"
+  },
+  {
+   "at": "2026-10-06T17:35:48.607354+00:00",
+   "actor": "chaos",
+   "action": "inject_sandbox_exit_-1",
+   "detail": "{\"n\":2,\"of\":2,\"stage\":\"dev_eval_r1\"}"
+  },
+  {
+   "at": "2026-10-06T17:40:10.583443+00:00",
+   "actor": "supervisor",
+   "action": "restart",
+   "detail": "{\"attempt\":3,\"backoff_s\":120.0,\"exit_code\":75}"
+  },
+  {
+   "at": "2026-10-06T17:44:26.726354+00:00",
+   "actor": "supervisor",
+   "action": "restart",
+   "detail": "{\"attempt\":4,\"backoff_s\":240.0,\"exit_code\":75}"
+  }
+ ]
+}
