@@ -18,6 +18,7 @@ import signal
 import subprocess  # noqa: S404 - runs our own CLI with a fixed argv, never a shell
 import sys
 import threading
+import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 
@@ -69,6 +70,22 @@ def redact(text: str, secrets: Sequence[str]) -> str:
 ChildHook = Callable[[str, Callable[[], None]], Callable[[], None]]
 
 
+@dataclass(frozen=True)
+class ChildInfo:
+    """What the watchdog may know about the running child (plan A6): ``kill`` SIGKILLs its whole
+    process group, which the supervisor sees as a negative exit code and restarts (a safe resume).
+    It is deliberately NOT a SIGINT (that cancels paid jobs) or a SIGTERM (that is a suspend: no
+    restart)."""
+
+    pid: int
+    started_at: float  # wall clock, comparable with the heartbeat file's timestamps
+    alive: Callable[[], bool]
+    kill: Callable[[], None]
+
+
+WatchHook = Callable[[Job, ChildInfo], Callable[[], None]]  # returns a stop callback
+
+
 def run_child(
     argv: Sequence[str],
     env: dict[str, str],
@@ -76,11 +93,13 @@ def run_child(
     log: Callable[[str], None],
     kill_after_s: float,
     on_child: ChildHook | None = None,
+    watch: WatchHook | None = None,
 ) -> int:
     """Run ``argv`` in its OWN process group; ``job.interrupt`` sends SIGINT to the whole group
     and SIGKILLs it after ``kill_after_s`` if it is still alive. ``on_child(run_id, kill)`` runs
     once the child exists (``kill`` SIGKILLs its group) and returns a stop callback (chaos
-    supervisor, plan A5)."""
+    supervisor, plan A5); ``watch(job, info)`` is the same idea with more to look at (the
+    watchdog, plan A6)."""
     proc = subprocess.Popen(  # noqa: S603
         argv, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
         start_new_session=True,
@@ -113,6 +132,11 @@ def run_child(
     elif job.suspend_requested:
         suspend()
     stop_hook = on_child(job.run_id, lambda: _signal(signal.SIGKILL)) if on_child else None
+    watch_stop = (
+        watch(job, ChildInfo(proc.pid, time.time(), lambda: proc.poll() is None,
+                             lambda: _signal(signal.SIGKILL)))
+        if watch else None
+    )  # fmt: skip
     try:
         for line in proc.stdout or ():
             log(line.rstrip("\n"))
@@ -120,6 +144,8 @@ def run_child(
     finally:
         if stop_hook is not None:
             stop_hook()
+        if watch_stop is not None:
+            watch_stop()
         for t in timers:
             t.cancel()
         _signal(signal.SIGKILL)  # reap stragglers of the group (no-op if all exited)
@@ -131,6 +157,7 @@ def subprocess_executor(
     secrets: Sequence[str],
     kill_after_s: float = KILL_AFTER_INTERRUPT_S,
     on_child: ChildHook | None = None,
+    watch: WatchHook | None = None,
 ) -> Executor:
     """Run ``python -m distillery run`` as a child so cancel can send SIGINT: the pipeline's
     paid-resource context managers then cancel provider jobs on the way out. Dry runs use the
@@ -143,6 +170,7 @@ def subprocess_executor(
         ]  # fmt: skip
         env = dict(os.environ)
         env["PYTHONUNBUFFERED"] = "1"
+        env["DISTILLERY_ATTEMPT"] = str(job.restarts + 1)  # shown in the child's heartbeat
         if job.dry_run:
             argv.append("--dry-run")
             env.pop("NEBIUS_API_KEY", None)
@@ -157,7 +185,9 @@ def subprocess_executor(
                 argv += ["--finetune-estimate-usd", str(job.finetune_estimate_usd)]
             if job.scale == "gated":  # pre-registered protocol: one round (DECISIONS 2026-10-03)
                 argv += ["--max-rounds", "1"]
-        return run_child(argv, env, job, log, kill_after_s, on_child)
+        if watch is None:  # the pre-A6 call shape, kept for callers that stub ``run_child``
+            return run_child(argv, env, job, log, kill_after_s, on_child)
+        return run_child(argv, env, job, log, kill_after_s, on_child, watch)
 
     return run
 
@@ -211,6 +241,10 @@ class Worker:
             if job.suspend is not None:
                 job.suspend()
         self._thread.join(join_timeout_s)
+
+    @property
+    def stopping(self) -> bool:
+        return self._stopping
 
     def jobs(self) -> list[Job]:
         with self._lock:

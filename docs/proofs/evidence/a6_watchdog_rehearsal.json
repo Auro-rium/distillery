@@ -1,0 +1,141 @@
+{
+  "audit": [
+    {
+      "action": "start",
+      "actor": "admin",
+      "at": "2026-10-06T15:47:08.184603+00:00",
+      "detail": {
+        "budget_usd": null,
+        "dry_run": true,
+        "scale": "tiny"
+      },
+      "run_id": "dry-chaos-watchdog"
+    },
+    {
+      "action": "inject_hang",
+      "actor": "chaos",
+      "at": "2026-10-06T15:47:10.367072+00:00",
+      "detail": {
+        "seconds": 120.0,
+        "stage": "teacher_data"
+      },
+      "run_id": "dry-chaos-watchdog"
+    },
+    {
+      "action": "incident_detected",
+      "actor": "watchdog",
+      "at": "2026-10-06T15:47:14.606330+00:00",
+      "detail": {
+        "heartbeat_age_s": 0.29456615447998047,
+        "kind": "stalled",
+        "progress_age_s": 4.195221900939941,
+        "rss_mb": 54.1,
+        "stage": "teacher_data"
+      },
+      "run_id": "dry-chaos-watchdog"
+    },
+    {
+      "action": "kill_child",
+      "actor": "watchdog",
+      "at": "2026-10-06T15:47:14.609573+00:00",
+      "detail": {
+        "kind": "stalled",
+        "signal": "SIGKILL",
+        "stage": "teacher_data"
+      },
+      "run_id": "dry-chaos-watchdog"
+    },
+    {
+      "action": "restart",
+      "actor": "supervisor",
+      "at": "2026-10-06T15:47:14.618724+00:00",
+      "detail": {
+        "attempt": 1,
+        "backoff_s": 0.2,
+        "exit_code": -9
+      },
+      "run_id": "dry-chaos-watchdog"
+    },
+    {
+      "action": "incident_resolved",
+      "actor": "watchdog",
+      "at": "2026-10-06T15:47:16.594530+00:00",
+      "detail": {
+        "kind": "stalled",
+        "recovery_s": 2.0,
+        "stage": "teacher_data"
+      },
+      "run_id": "dry-chaos-watchdog"
+    }
+  ],
+  "checks": {
+    "detected_as_stalled_not_hung": true,
+    "exactly_one_admin_action_the_start": true,
+    "exactly_one_kill_sigkill": true,
+    "hang_injected_and_audited_first": true,
+    "health_endpoint_finished": true,
+    "incident_resolved_audited": true,
+    "kill_audited_after_detection_before_restart": true,
+    "metrics_exposed": true,
+    "no_escalation": true,
+    "supervisor_restarted_once": true,
+    "verdict_reached": true
+  },
+  "decision": "REJECT",
+  "dry_run": true,
+  "health": {
+    "attempt": 2,
+    "heartbeat_age_s": 2.0,
+    "open_incidents": [],
+    "progress": 367,
+    "progress_age_s": 2.0,
+    "recent_incidents": [
+      {
+        "action": "incident_detected",
+        "at": "2026-10-06T15:47:14.606330+00:00",
+        "heartbeat_age_s": 0.29456615447998047,
+        "kind": "stalled",
+        "progress_age_s": 4.195221900939941,
+        "rss_mb": 54.1,
+        "stage": "teacher_data"
+      },
+      {
+        "action": "kill_child",
+        "at": "2026-10-06T15:47:14.609573+00:00",
+        "kind": "stalled",
+        "signal": "SIGKILL",
+        "stage": "teacher_data"
+      },
+      {
+        "action": "incident_resolved",
+        "at": "2026-10-06T15:47:16.594530+00:00",
+        "kind": "stalled",
+        "recovery_s": 2.0,
+        "stage": "teacher_data"
+      }
+    ],
+    "restarts": 1,
+    "rss_mb": 59.6,
+    "run_id": "dry-chaos-watchdog",
+    "stage": "final_eval",
+    "state": "finished",
+    "watchdog_kills": 1
+  },
+  "label": "FAKE models and fake fine-tune: a rehearsal, not a result",
+  "pass": true,
+  "plan": {
+    "hang": {
+      "seconds": 120.0,
+      "stage": "teacher_data"
+    }
+  },
+  "run_id": "dry-chaos-watchdog",
+  "supervisor_restarts": 1,
+  "watchdog_thresholds": {
+    "grace_s": 0.0,
+    "heartbeat_interval_s": 0.5,
+    "hung_after_s": 30.0,
+    "note": "rehearsal-sized; production defaults are stall 2400 s, grace 300 s",
+    "stall_after_s": 4.0
+  }
+}

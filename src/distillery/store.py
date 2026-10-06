@@ -40,7 +40,7 @@ CREATE TABLE IF NOT EXISTS audit (
     action TEXT NOT NULL, run_id TEXT, detail_json TEXT NOT NULL);
 """
 
-AUDIT_ACTORS = frozenset({"admin", "supervisor", "controller", "chaos"})
+AUDIT_ACTORS = frozenset({"admin", "supervisor", "controller", "chaos", "watchdog"})
 
 
 def canonical_json(obj: Any) -> str:

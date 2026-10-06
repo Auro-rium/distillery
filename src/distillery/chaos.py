@@ -9,6 +9,7 @@ optional; unknown keys are refused so a typo cannot silently disable a fault)::
      "net_window":    {"after_calls": 20, "seconds": 60},  # every LLM call fails for S seconds
      "kill":          ["teacher_data", "finetune_r1"], # supervisor SIGKILLs the child, once each
      "sandbox_fail":  {"stage": "dev_eval", "jobs": 2},  # k sandbox jobs return exit -1
+     "hang":          {"stage": "teacher_data", "seconds": 60},  # plan A6: the stage goes silent
      "hold_s": 0.0,                  # dry rehearsal only: the (fake) stage lingers this long so
      "poll_s": 0.2}                  # the supervisor can catch it; poll_s = supervisor probe period
 
@@ -17,6 +18,12 @@ is injected at most the planned number of times across restarts of the child: th
 live in ``chaos_state.json`` and the kills in ``chaos_kill_<stage>.done`` marker files, both in the
 run dir. The kill is done by the supervisor (the server process), never by the child itself, and
 a fine-tune kill waits until a job exists, so the resume has something to adopt.
+
+``hang`` (plan A6) is the one fault the child injects into itself, because it is the child that must
+stop making progress: on entering the stage it sleeps ``seconds`` without bumping the heartbeat's
+progress counter (the heartbeat THREAD keeps beating, so the watchdog sees ``stalled``, not
+``hung``). It happens at most once per run (``chaos_hang_<stage>.done`` marker, written before the
+sleep so the watchdog's SIGKILL and the resume cannot hang again), and is audited first.
 """
 
 from __future__ import annotations
@@ -47,7 +54,7 @@ from distillery.taskpacks.sql.executor import LocalExecutor
 ENV = "DISTILLERY_CHAOS"
 PREFIXES = ("chaos-", "dry-chaos-")
 STATE_FILE = "chaos_state.json"
-_KEYS = frozenset({"llm_503", "net_window", "kill", "sandbox_fail", "hold_s", "poll_s"})
+_KEYS = frozenset({"llm_503", "net_window", "kill", "sandbox_fail", "hang", "hold_s", "poll_s"})
 
 AuditFn = Callable[[str, dict[str, Any]], None]  # action, detail (actor is always "chaos")
 
@@ -65,6 +72,8 @@ class ChaosPlan:
     kill_stages: tuple[str, ...] = ()
     sandbox_stage: str = ""
     sandbox_jobs: int = 0
+    hang_stage: str = ""
+    hang_seconds: float = 0.0
     hold_s: float = 0.0
     poll_s: float = 0.2
 
@@ -74,11 +83,13 @@ class ChaosPlan:
         if not isinstance(raw, dict) or not set(raw) <= _KEYS:
             raise ValueError(f"{ENV}: a JSON object with keys from {sorted(_KEYS)} is required")
         a, w, s = raw.get("llm_503", {}), raw.get("net_window", {}), raw.get("sandbox_fail", {})
+        h = raw.get("hang", {})
         return cls(
             llm_503_after=int(a.get("after_calls", 0)), llm_503_n=int(a.get("n", 0)),
             net_after=int(w.get("after_calls", 0)), net_seconds=float(w.get("seconds", 0.0)),
             kill_stages=tuple(str(x) for x in raw.get("kill", ())),
             sandbox_stage=str(s.get("stage", "")), sandbox_jobs=int(s.get("jobs", 0)),
+            hang_stage=str(h.get("stage", "")), hang_seconds=float(h.get("seconds", 0.0)),
             hold_s=float(raw.get("hold_s", 0.0)), poll_s=float(raw.get("poll_s", 0.2)),
         )  # fmt: skip
 
@@ -93,6 +104,26 @@ def plan_for(run_id: str, env: Mapping[str, str] | None = None) -> ChaosPlan | N
 
 def kill_marker(run_dir: Path, stage: str) -> Path:
     return run_dir / f"chaos_kill_{stage}.done"
+
+
+def hang_marker(run_dir: Path, stage: str) -> Path:
+    return run_dir / f"chaos_hang_{stage}.done"
+
+
+def _hang(
+    plan: ChaosPlan, run_dir: Path, stage: str, audit: AuditFn,
+    sleep: Callable[[float], None] = time.sleep,
+) -> None:  # fmt: skip
+    """Go silent for ``hang_seconds`` inside the planned stage, once per run. Marker and audit row
+    first: the sleep is what the watchdog is expected to cut short with a SIGKILL."""
+    marker = hang_marker(run_dir, stage)
+    if plan.hang_seconds <= 0 or stage != plan.hang_stage or marker.exists():
+        return
+    marker.write_text(str(time.time()))
+    audit("inject_hang", {"stage": stage, "seconds": plan.hang_seconds})
+    end = time.monotonic() + plan.hang_seconds
+    while (left := end - time.monotonic()) > 0:
+        sleep(min(0.2, left))  # no heartbeat.bump here: that is the whole point
 
 
 class ChaosState:
@@ -277,6 +308,7 @@ def instrument(
             inner_on_stage(name)
         if not name.startswith("finetune"):  # fine-tune holds in poll (after the job exists)
             _hold(plan, run_dir, name)
+        _hang(plan, run_dir, name, audit)
 
     deps.on_stage = on_stage
     deps.transport = ChaosTransport(deps.transport, plan, state, audit)
@@ -345,5 +377,5 @@ class ChaosSupervisor:
 
 __all__ = [
     "ENV", "ChaosPlan", "ChaosSandbox", "ChaosState", "ChaosSupervisor", "ChaosTransport",
-    "instrument", "is_chaos_run", "kill_marker", "plan_for",
+    "hang_marker", "instrument", "is_chaos_run", "kill_marker", "plan_for",
 ]  # fmt: skip

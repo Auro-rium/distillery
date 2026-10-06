@@ -19,7 +19,7 @@ from starlette.background import BackgroundTask
 from starlette.concurrency import run_in_threadpool
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from distillery import chaos, humanset
+from distillery import chaos, heartbeat, humanset
 from distillery.evaluator import EXAMPLES_PER_KIND
 from distillery.orchestrator import DRY_PREFIX, SCALES
 from distillery.server import autonomy, sse, telemetry
@@ -43,6 +43,13 @@ from distillery.server.views import (
     example_totals,
     filter_examples,
     tree_from_report,
+)
+from distillery.server.watchdog import (
+    AlertSink,
+    Watchdog,
+    prometheus_lines,
+    recent_incidents,
+    run_health,
 )
 from distillery.server.worker import (
     Job,
@@ -157,13 +164,29 @@ def create_app(settings: ServerSettings) -> FastAPI:
     chaos_supervisor = chaos.ChaosSupervisor(
         chaos.plan_for, lambda rid: reader.store_for(rid).run_dir(rid), chaos_probe, chaos_audit
     )
+    # the watchdog (plan A6) rides on the default subprocess executor only: an injected test
+    # executor has no child process to watch. ``worker`` is bound below, before any child starts.
+    dog = Watchdog(
+        settings.watchdog, lambda rid: reader.store_for(rid).run_dir(rid),
+        lambda actor, action, rid, detail: reader.store_for(rid).add_audit(
+            actor, action, rid, detail
+        ),
+        stopping=lambda: worker.stopping, alerts=AlertSink(settings.watchdog.alert_webhook_url),
+    )  # fmt: skip
     executor = settings.executor or subprocess_executor(
-        str(settings.root), admin, secrets, settings.shutdown_grace_s, on_child=chaos_supervisor
+        str(settings.root),
+        admin,
+        secrets,
+        settings.shutdown_grace_s,
+        on_child=chaos_supervisor,
+        watch=dog if settings.watchdog.enabled else None,
     )
 
     def audit(actor: str, action: str, run_id: str | None, detail: dict[str, Any]) -> None:
         store = reader.store_for(run_id) if run_id else reader.real
         store.add_audit(actor, action, run_id, detail)
+        if actor == "supervisor" and action == "restarts_exhausted" and run_id:
+            dog.emit("restarts_exhausted", run_id, "supervisor", "", detail)
 
     def on_final(job: Job, code: int | None) -> None:
         autonomy.mark_final(reader.store_for(job.run_id).run_dir(job.run_id), code, job.error)
@@ -210,9 +233,22 @@ def create_app(settings: ServerSettings) -> FastAPI:
             "version": _version(),
             "runs_by_status": runs,
             "playground_spent_today_usd": playground.ledger.playground_spent(),
+            "run_health": run_health_rows(),
+            "watchdog": {"enabled": settings.watchdog.enabled, **dog.stats()},
+            "server_rss_mb": heartbeat.rss_mb(),
         }
 
+    MAX_HEALTH_RUNS = 20  # label cardinality: the worker's most recent jobs only
+
+    def health_of(run_id: str, job: Job | None) -> dict[str, Any]:
+        run_dir = reader.store_for(run_id).run_dir(run_id)
+        return run_health(run_id, run_dir, job, settings.watchdog)
+
+    def run_health_rows() -> list[dict[str, Any]]:
+        return [health_of(j.run_id, j) for j in worker.jobs()[-MAX_HEALTH_RUNS:]]
+
     tele = telemetry.install(app, _telemetry_extra)
+    tele.collectors.append(lambda: prometheus_lines(run_health_rows(), dog, heartbeat.rss_mb()))
 
     if settings.allowed_origins:
         app.add_middleware(
@@ -398,6 +434,16 @@ def create_app(settings: ServerSettings) -> FastAPI:
             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
             background=BackgroundTask(release),
         )
+
+    @app.get("/api/runs/{run_id}/health")
+    def run_health_view(run_id: str) -> dict[str, Any]:
+        """Heartbeat, progress and watchdog incidents of one run. Read-only, nothing secret."""
+        check_id(run_id)
+        if not local(run_id):
+            raise ApiError(404, "not_found", "no such run")
+        out = health_of(run_id, worker.get(run_id))
+        out["recent_incidents"] = recent_incidents(reader.store_for(run_id).list_audit(run_id))
+        return out
 
     @app.get("/api/runs/{run_id}/report")
     def run_report(run_id: str) -> dict[str, Any]:
