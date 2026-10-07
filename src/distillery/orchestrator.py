@@ -30,7 +30,7 @@ from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from pathlib import Path
-from typing import Any, Literal, Protocol
+from typing import Any, Literal, Protocol, cast
 
 import openai
 from pydantic import BaseModel, ConfigDict, Field
@@ -38,6 +38,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from distillery import controller as controller_mod
 from distillery import evaluator as evaluator_mod
 from distillery import heartbeat
+from distillery import naturaltrain as natural_mod
 from distillery import paraphrase as paraphrase_mod
 from distillery.budget import (
     BASIS_CEILING,
@@ -264,6 +265,13 @@ class PipelineConfig(BaseModel):
     # pre-registered bounds (controller.py) and falls back to the rules on rejection. Off by
     # default: with it off no stage, key or report byte changes.
     controller: bool = False
+    # N1 (DECISIONS.md 2026-10-07): extra externally authored, teacher-verified rows
+    # (naturaltrain.py) appended to the round-1 rows after an overlap drop. Paths are machine-local
+    # (excluded from dumps); the file's sha256 is recorded and checked. Unset: no stage, key or
+    # report byte changes.
+    natural_train_path: str | None = Field(default=None, exclude=True)
+    natural_train_sha256: str | None = None
+    natural_exclude_paths: tuple[str, ...] = Field(default=(), exclude=True)
 
     def extra_tasks(self) -> int:
         return self.round_extra_tasks or max(10, self.scale.train // 4)
@@ -805,6 +813,8 @@ class Pipeline:
         self.usage: dict[str, dict[str, dict[str, int]]] = {}
         self._results: dict[str, dict[str, Any]] = {}
         self._hp_by_round: dict[int, HyperParameters] = {}  # A3: validated controller overrides
+        self._natural: natural_mod.NaturalSet | None = None  # N1, loaded after the schema stage
+        self._natural_exclude_sha: list[str] = []
 
     def _hp(self, r: int) -> HyperParameters:
         return self._hp_by_round.get(r, self.cfg.hyperparameters)
@@ -879,6 +889,16 @@ class Pipeline:
             if bool(prev.get("dry_run")) != self.cfg.dry_run:
                 raise ConfigRefusal(
                     f"run {self.run_id!r} was created with a different dry_run flag"
+                )
+            # N1: once an attempt trained on natural rows, every later attempt must use the same
+            # file (a swap between restarts would buy a second fine-tune and mix adapters). A run
+            # that never had one (e.g. a copy of P4's store) may add one.
+            prev_nat = (prev.get("config") or {}).get("natural_train_sha256")
+            if prev_nat is not None and prev_nat != self.cfg.natural_train_sha256:
+                raise ConfigRefusal(
+                    f"run {self.run_id!r} was started with natural train file sha256 "
+                    f"{str(prev_nat)[:12]}; this attempt has "
+                    f"{str(self.cfg.natural_train_sha256)[:12]}"
                 )
         meta = {
             "run_id": self.run_id,
@@ -955,8 +975,62 @@ class Pipeline:
             {"kind": kind, "image": image, "student": self.config.require_model("student")},
         )
 
+    def _resolve_natural(self) -> None:
+        """N1: pin the natural train file by sha256 (recorded in run_meta and the report) before
+        anything runs. The content is checked after the schema stage (``_load_natural``)."""
+        path, want = self.cfg.natural_train_path, self.cfg.natural_train_sha256
+        if path is None:
+            if want is not None or self.cfg.natural_exclude_paths:
+                raise ConfigRefusal(
+                    "natural_train_sha256 / natural_exclude_paths need natural_train_path"
+                )
+            return
+        if self.pack.name != "sql":
+            raise ConfigRefusal("natural train rows exist for the sql pack only")
+        try:
+            sha = natural_mod.file_sha256(path)
+            self._natural_exclude_sha = [
+                natural_mod.file_sha256(p) for p in self.cfg.natural_exclude_paths
+            ]
+        except natural_mod.NaturalTrainError as exc:
+            raise ConfigRefusal(str(exc)) from None
+        if want is None:
+            self.cfg = self.cfg.model_copy(update={"natural_train_sha256": sha})
+        elif want != sha:
+            raise ConfigRefusal(
+                f"natural train file sha256 {sha[:12]} != the configured {want[:12]}"
+            )
+
+    def _load_natural(self) -> None:
+        """Refuse (before any paid stage) a natural train file drafted against another database or
+        whose rows are not byte-identical to this run's training prompt format."""
+        assert self.cfg.natural_train_path is not None  # noqa: S101 - caller checks
+        try:
+            ns = natural_mod.read_natural(self.cfg.natural_train_path)
+        except natural_mod.NaturalTrainError as exc:
+            raise ConfigRefusal(str(exc)) from None
+        if ns.file_sha256 != self.cfg.natural_train_sha256:
+            raise ConfigRefusal("natural train file changed since the run was configured")
+        db_sha = str(self._results["schema"]["db_sha256"])
+        if ns.db_sha256 != db_sha:
+            raise ConfigRefusal(
+                "natural train file was drafted against a different database "
+                f"({ns.db_sha256[:12]} != this run's {db_sha[:12]})"
+            )
+        for i, (row, q, sql) in enumerate(zip(ns.rows, ns.questions, ns.sqls, strict=True)):
+            want = self.pack.to_training_row(
+                cast(PackTask, _NaturalQ(q)), sql, context_text=self.ddl
+            )
+            if canonical_json(row) != canonical_json(want):
+                raise ConfigRefusal(
+                    f"natural train row {i} is not in this run's training format "
+                    "(prompt or schema text differs)"
+                )
+        self._natural = ns
+
     def _preconditions(self) -> None:
         self._resolve_serving()
+        self._resolve_natural()
         self._check_identity()
         if self.cfg.max_rounds < 1:
             raise ConfigRefusal("max_rounds must be >= 1")
@@ -989,6 +1063,8 @@ class Pipeline:
         if self.cfg.dry_run:
             self.say(DRY_RUN_LABEL)
         self._stage_schema()
+        if self.cfg.natural_train_path is not None:
+            self._load_natural()
         self._stage_questions()
         self._stage_crosscheck()
         self._stage_selftest()
@@ -1531,7 +1607,7 @@ class Pipeline:
             base_model = self.config.require_model("student")
             hp = self._hp(r)
             self._finetune_preflight(len(rows), hp)
-            rdir = self.run_dir / f"round{r}"
+            rdir = self.run_dir / self._round_dir(r)
             train_p, val_p = rdir / "train.jsonl", rdir / "dev.jsonl"
             atomic_write_bytes(
                 train_p, ("\n".join(canonical_json(x) for x in rows) + "\n").encode("utf-8")
@@ -1634,6 +1710,8 @@ class Pipeline:
                             "job_id": art.job_id,
                             "checkpoint_id": art.checkpoint_id,
                             "adapter_sha256": art.adapter_sha256,
+                            # N1: which rows this adapter was trained on (absent = none)
+                            **self._natural_tag(),
                         },
                     )
                     ft_usd, ft_basis = self.ledger.record_finetune(
@@ -1670,14 +1748,24 @@ class Pipeline:
                 },
             }
 
-        return self._stage(
-            name,
-            {"rows": rows_hash, "hp": self._hp(r).to_request(),
-             "est": float(self.cfg.finetune_estimate_usd or 0.0),
-             "student": self.config.model_ids.get("student"), "seed": self.cfg.seed},
-            [upstream],
-            fn,
-        )  # fmt: skip
+        ft_inputs: dict[str, Any] = {
+            "rows": rows_hash, "hp": self._hp(r).to_request(),
+            "est": float(self.cfg.finetune_estimate_usd or 0.0),
+            "student": self.config.model_ids.get("student"), "seed": self.cfg.seed,
+        }  # fmt: skip
+        if self.cfg.natural_train_sha256 is not None:  # keyed only when set: old keys unchanged
+            ft_inputs["natural"] = self.cfg.natural_train_sha256
+        return self._stage(name, ft_inputs, [upstream], fn)
+
+    def _natural_tag(self) -> dict[str, str]:
+        sha = self.cfg.natural_train_sha256
+        return {} if sha is None else {"natural_train_sha256": sha}
+
+    def _round_dir(self, r: int) -> str:
+        """``round{r}``; an N1 run trains into its own directory so a copy of an earlier run's
+        store keeps that run's adapter files intact (same file names otherwise)."""
+        sha = self.cfg.natural_train_sha256
+        return f"round{r}" if sha is None else f"round{r}-n{sha[:8]}"
 
     def _finetune_preflight(self, train_rows: int, hp: HyperParameters | None = None) -> None:
         """Refuse (before any upload or spend) hyperparameters that would under-train."""
@@ -1808,13 +1896,19 @@ class Pipeline:
         return done, errors
 
     def _expected(self, r: int) -> ExpectedArtifact:
+        want = self.cfg.natural_train_sha256  # N1: never pick an adapter trained on other rows
         found = [
             d
             for n, d in self.store.list_experiments(self.run_id)
-            if n == "expected_artifact" and d.get("round") == r
+            if n == "expected_artifact"
+            and d.get("round") == r
+            and d.get("natural_train_sha256") == want
         ]
         if not found:
-            raise PipelineError(f"no expected_artifact recorded for round {r}")
+            raise PipelineError(
+                f"no expected_artifact recorded for round {r}"
+                + ("" if want is None else f" with natural train sha256 {want[:12]}")
+            )
         d = found[-1]
         return ExpectedArtifact(str(d["job_id"]), str(d["checkpoint_id"]), str(d["adapter_sha256"]))
 
@@ -2047,8 +2141,12 @@ class Pipeline:
         dev = [self.pack.task_from(d) for d in split["dev"]]
         train_fams = sorted({d["family"] for d in split["train"]})
         rows: list[dict[str, Any]] = list(para["rows"])  # originals + verified paraphrases
-        rounds: list[dict[str, Any]] = []
         upstream = "paraphrase"
+        if self._natural is not None:  # N1: appended after the overlap drop, nothing removed
+            nat = self._stage_natural(split)
+            rows += list(nat["rows"])
+            upstream = "natural_train"
+        rounds: list[dict[str, Any]] = []
         parent_image = self.deps.sandbox_image
         stop = f"reached max_rounds={self.cfg.max_rounds}"
         for r in range(1, self.cfg.max_rounds + 1):
@@ -2108,6 +2206,62 @@ class Pipeline:
             upstream = f"sandbox_branch_r{r}"
         best = max(rounds, key=lambda x: (x["dev_acc"], -x["round"]))  # ties: earliest round
         return {"rounds": rounds, "best_round": best["round"], "stop_reason": stop}
+
+    def _stage_natural(self, split: Mapping[str, Any]) -> dict[str, Any]:
+        """N1: drop natural rows whose question equals a sealed (gate/stress/human), dev or
+        excluded question (the evaluator decides; only a mask and counts come back)."""
+        ns = self._natural
+        assert ns is not None  # noqa: S101 - caller checks
+
+        def fn() -> dict[str, Any]:
+            try:
+                ov = evaluator_mod.natural_overlap(
+                    self.store, self.run_id, ns.questions,
+                    dev_questions=[str(d["question"]) for d in split["dev"]],
+                    exclude_paths=self.cfg.natural_exclude_paths, pack=self.pack,
+                )  # fmt: skip
+            except natural_mod.NaturalTrainError as exc:
+                raise ConfigRefusal(str(exc)) from None
+            rows = [r for r, k in zip(ns.rows, ov["keep"], strict=True) if k]
+            dropped = ov["dropped_by_overlap"]
+            report = {
+                "label": natural_mod.LABEL,
+                "file_sha256": ns.file_sha256,
+                "questions_sha256": ns.questions_sha256,
+                "reference_sha256": ns.reference_sha256,
+                "db_sha256": ns.db_sha256,
+                "exclude_files_sha256": list(self._natural_exclude_sha),
+                "exclude_questions": ov["exclude_questions"],
+                "rows_in_file": len(ns.rows),
+                "dropped_by_overlap": dropped,
+                "rows_appended": len(rows),
+                "heldout_skeleton_in_natural": ov["heldout_skeleton_in_natural"],
+                "round_dir": self._round_dir(1),
+                "row_cap_applied": False,
+                "note": "appended to the round-1 rows (originals + verified paraphrases) after "
+                "the overlap drop; train_row_cap is not re-applied (DECISIONS.md 2026-10-07: "
+                "nothing removed)",
+            }
+            self.say(
+                f"[natural] {len(rows)} of {len(ns.rows)} rows appended; dropped by overlap "
+                f"{dropped['total']}"
+            )
+            return {
+                "rows": rows,
+                "report": report,
+                "counters": {
+                    "natural_rows_in_file": len(ns.rows),
+                    "natural_rows_appended": len(rows),
+                    **{f"natural_dropped_{k}": int(v) for k, v in dropped.items()},
+                },
+            }
+
+        return self._stage(
+            "natural_train",
+            {"sha": self.cfg.natural_train_sha256, "exclude": sorted(self._natural_exclude_sha)},
+            ["split", "paraphrase"],
+            fn,
+        )
 
     # ---- stage 8: final held-out evaluation --------------------------------
     def _stage_final_eval(self, rounds: Mapping[str, Any]) -> dict[str, Any]:
@@ -2279,6 +2433,11 @@ class Pipeline:
                 "spot_check_file": "spot_check.json",
             },
             "paraphrase": para["report"],
+            **(
+                {"natural_train": self._results["natural_train"]["report"]}
+                if "natural_train" in self._results
+                else {}
+            ),
             "headroom": {
                 "base_dev_acc": self._results["headroom"]["base_dev_acc"],
                 "max_allowed": self.cfg.headroom_max_base_acc,
@@ -2320,6 +2479,11 @@ class Pipeline:
             },
             "stages": manifest_stages,
         }
+
+
+@dataclass(frozen=True)
+class _NaturalQ:
+    question: str
 
 
 def _pretty(obj: Any) -> str:
