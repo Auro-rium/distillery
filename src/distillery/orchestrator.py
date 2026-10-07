@@ -79,6 +79,7 @@ from distillery.store import Store, atomic_write_bytes, canonical_json, sha256_h
 from distillery.student import StudentServer
 from distillery.taskpacks.base import IN_DISTRIBUTION, STRESS, Pack, PackTask, get_pack
 from distillery.taskpacks.base import BatchExecutor as Executor
+from distillery.taskpacks.sql import schema as sql_schema
 
 log = logging.getLogger(__name__)
 
@@ -815,6 +816,7 @@ class Pipeline:
         self._hp_by_round: dict[int, HyperParameters] = {}  # A3: validated controller overrides
         self._natural: natural_mod.NaturalSet | None = None  # N1, loaded after the schema stage
         self._natural_exclude_sha: list[str] = []
+        self._natural_ddl = ""
 
     def _hp(self, r: int) -> HyperParameters:
         return self._hp_by_round.get(r, self.cfg.hyperparameters)
@@ -976,8 +978,9 @@ class Pipeline:
         )
 
     def _resolve_natural(self) -> None:
-        """N1: pin the natural train file by sha256 (recorded in run_meta and the report) before
-        anything runs. The content is checked after the schema stage (``_load_natural``)."""
+        """N1: pin the natural train file by sha256 (recorded in run_meta and the report) and
+        check its content (``_load_natural``) before anything runs or is recorded, so a refused
+        file never pins the run id."""
         path, want = self.cfg.natural_train_path, self.cfg.natural_train_sha256
         if path is None:
             if want is not None or self.cfg.natural_exclude_paths:
@@ -994,24 +997,26 @@ class Pipeline:
             ]
         except natural_mod.NaturalTrainError as exc:
             raise ConfigRefusal(str(exc)) from None
-        if want is None:
-            self.cfg = self.cfg.model_copy(update={"natural_train_sha256": sha})
-        elif want != sha:
+        if want is not None and want != sha:
             raise ConfigRefusal(
                 f"natural train file sha256 {sha[:12]} != the configured {want[:12]}"
             )
+        # the schema stage's own inputs, built in memory (deterministic; the stage re-checks)
+        db = sql_schema.build_database(self.cfg.db_seed)
+        self._load_natural(sha, sha256_hex(db), sql_schema.schema_ddl(self.cfg.db_seed))
+        if want is None:
+            self.cfg = self.cfg.model_copy(update={"natural_train_sha256": sha})
 
-    def _load_natural(self) -> None:
-        """Refuse (before any paid stage) a natural train file drafted against another database or
-        whose rows are not byte-identical to this run's training prompt format."""
+    def _load_natural(self, file_sha: str, db_sha: str, ddl: str) -> None:
+        """Refuse (before anything is recorded or spent) a natural train file drafted against
+        another database or whose rows are not byte-identical to this run's training format."""
         assert self.cfg.natural_train_path is not None  # noqa: S101 - caller checks
         try:
             ns = natural_mod.read_natural(self.cfg.natural_train_path)
         except natural_mod.NaturalTrainError as exc:
             raise ConfigRefusal(str(exc)) from None
-        if ns.file_sha256 != self.cfg.natural_train_sha256:
-            raise ConfigRefusal("natural train file changed since the run was configured")
-        db_sha = str(self._results["schema"]["db_sha256"])
+        if ns.file_sha256 != file_sha:
+            raise ConfigRefusal("natural train file changed while it was being checked")
         if ns.db_sha256 != db_sha:
             raise ConfigRefusal(
                 "natural train file was drafted against a different database "
@@ -1019,7 +1024,7 @@ class Pipeline:
             )
         for i, (row, q, sql) in enumerate(zip(ns.rows, ns.questions, ns.sqls, strict=True)):
             want = self.pack.to_training_row(
-                cast(PackTask, _NaturalQ(q)), sql, context_text=self.ddl
+                cast(PackTask, _NaturalQ(q)), sql, context_text=ddl
             )
             if canonical_json(row) != canonical_json(want):
                 raise ConfigRefusal(
@@ -1027,6 +1032,7 @@ class Pipeline:
                     "(prompt or schema text differs)"
                 )
         self._natural = ns
+        self._natural_ddl = ddl
 
     def _preconditions(self) -> None:
         self._resolve_serving()
@@ -1062,9 +1068,11 @@ class Pipeline:
         self.store.create_run(self.run_id)
         if self.cfg.dry_run:
             self.say(DRY_RUN_LABEL)
-        self._stage_schema()
-        if self.cfg.natural_train_path is not None:
-            self._load_natural()
+        schema = self._stage_schema()
+        if self._natural is not None and (
+            self._natural.db_sha256 != schema["db_sha256"] or self.ddl != self._natural_ddl
+        ):
+            raise ConfigRefusal("natural train file does not match this run's schema stage")
         self._stage_questions()
         self._stage_crosscheck()
         self._stage_selftest()

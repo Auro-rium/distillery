@@ -476,8 +476,26 @@ def test_db_mismatch_refuses_before_any_paid_stage(tmp_path: Path) -> None:
         pipe = _pipe(store, bridge, "dry-db", natural_train_path=str(nat))
         with pytest.raises(ConfigRefusal, match="different database"):
             pipe.run()
+        assert pipe.ran == []  # refused before any stage
+        assert not (pipe.run_dir / "run_meta.json").exists()  # and before the identity record
+        # a refused file never pins the run id: the corrected file runs in the same store
+        good = natural_doc(tmp_path / "good.json", NOVEL)
+        pipe2 = _pipe(store, bridge, "dry-db", natural_train_path=str(good))
+        rep = pipe2.run()
+        assert rep["natural_train"]["rows_appended"] == len(NOVEL)
         store.close()
-    assert pipe.ran == ["schema"]
+
+
+def test_resume_with_the_same_natural_file_is_a_full_cache_hit(n1: dict[str, Any]) -> None:
+    """The autonomy path: a restart with the same flags adopts every finished stage and starts
+    no second fine-tune."""
+    pipe = _pipe(
+        n1["store"], n1["bridge"], "dry-n1",
+        natural_train_path=str(n1["nat"]), natural_exclude_paths=(str(n1["excl"]),),
+    )  # fmt: skip
+    rep = pipe.run()
+    assert pipe.ran == []
+    assert rep["natural_train"] == n1["report"]["natural_train"]
 
 
 def test_rows_not_in_the_run_training_format_are_refused(tmp_path: Path) -> None:
