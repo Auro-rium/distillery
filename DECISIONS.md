@@ -282,3 +282,10 @@ A local DNS outage ("[Errno -3] Temporary failure in name resolution" reaching t
 - **Setup.** Same base (Qwen3-1.7B), same hyperparameters as P4 (lr 1e-4 pinned by P1.12), one fine-tune round, no controller changes. Reuses the P4 cached stages; only rows, fine-tune and evaluation are new.
 - **Budget.** Hard ceiling $5.00 of new spend (est. fine-tune ~$2.6, teacher drafting ~$0.8, scoring ~$0.4); recorded project spend to date $10.32 of $19.50. Preflight estimate is printed and checked before each paid step; stop on any overrun.
 - **Disclosure.** Authors and confirmer are Claude subagents, not humans; the teacher that drafts gold is also the teacher the student is compared with (selection bias, as for Gate B); N1-train and N1-eval share an author model family, so a gap vs a human-written set may remain.
+
+## 2026-10-07 (amendment, recorded BEFORE any N1 drafting, training or scoring): N1 question files fixed
+Both files are agent-authored (Claude Opus 5.5 subagents, blind to templates and to each other by instruction; each read only `schema.sql` and the db read-only). Kept out of git like every sealed source (`.distillery/`).
+- **N1-train:** `.distillery/natural/train_questions.txt`, **N = 320**, sha256 `4ccc1b198bd095ff9905da8373a96d6555feb9f6f8ac91610a7e998325fff504` (64 simple / 144 medium / 112 hard). Reference file 0-based.
+- **N1-eval:** `.distillery/natural_eval/questions.txt`, **N = 110 drafted** (at least 80 expected after teacher confirmation; the confirmed N and sha are recorded by a further amendment before scoring), sha256 `375e07ae97c6ec048a6e63c5b2727b5200b5020ba1b9778cd642691f23421ad7` (22 simple / 48 medium / 40 hard). Reference file `i` is 1-based.
+- Checked offline: zero exact (normalised) overlap between N1-train, N1-eval and the Gate B file.
+- Unchanged: gate thresholds, claim rule, $5.00 ceiling, one round, P4 hyperparameters.
