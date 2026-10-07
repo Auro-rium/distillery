@@ -18,6 +18,7 @@ from distillery.finetune import TrainedArtifact, sha256_file
 from distillery.gate import GateResult, evaluate_gate
 from distillery.humanset import SELECTION_BIAS_NOTE, HumanSetError, read_confirmed
 from distillery.misses import classify_miss
+from distillery.naturaltrain import read_question_texts
 from distillery.prompts import extract_sql
 from distillery.store import Store, canonical_json, sha256_hex
 from distillery.taskpacks.base import Pack, get_pack
@@ -498,6 +499,52 @@ def seal_human_set(
         "question_file_sha256": confirmed.question_file_sha256,
         "teacher_model": confirmed.teacher_model,
         "note": SELECTION_BIAS_NOTE,
+    }
+
+
+def natural_overlap(
+    store: Store,
+    run_id: str,
+    questions: Sequence[str],
+    *,
+    dev_questions: Iterable[str],
+    exclude_paths: Sequence[Path | str] = (),
+    pack: Pack | None = None,
+) -> dict[str, Any]:
+    """N1: which natural training questions may be trained on. A question is dropped when its
+    normalised text equals a sealed gate, stress or human question, a dev question, or a question
+    of any ``exclude_paths`` file (e.g. the Gate B and N1-eval question files). Returns a keep mask
+    parallel to ``questions`` and counts ONLY: no sealed text leaves this function."""
+    sealed: dict[str, set[str]] = {
+        "heldout": {normalise_question(str(it["question"])) for it in store.load_heldout(run_id)},
+        "stress": {
+            normalise_question(str(it["question"])) for it in (store.load_stress(run_id) or [])
+        },
+        "human": {
+            normalise_question(str(it["question"])) for it in (store.load_human(run_id) or [])
+        },
+        "dev": {normalise_question(q) for q in dev_questions},
+    }
+    excluded: set[str] = set()
+    for p in exclude_paths:
+        excluded |= set(read_question_texts(p))  # NaturalTrainError on a bad file
+    sealed["exclude_files"] = excluded
+    dropped = dict.fromkeys(sealed, 0)
+    keep: list[bool] = []
+    for q in questions:
+        hit = next((k for k, s in sealed.items() if normalise_question(q) in s), None)
+        keep.append(hit is None)
+        if hit is not None:
+            dropped[hit] += 1
+    pk = _pack(pack)
+    kept_skeletons = {pk.skeleton(q) for q, k in zip(questions, keep, strict=True) if k}
+    gate = sealed["heldout"]
+    return {
+        "keep": keep,
+        "dropped_by_overlap": {**dropped, "total": sum(dropped.values())},
+        # the held-out skeleton_in_train measure, restricted to what the natural rows add
+        "heldout_skeleton_in_natural": sum(pk.skeleton(q) in kept_skeletons for q in gate),
+        "exclude_questions": len(excluded),
     }
 
 

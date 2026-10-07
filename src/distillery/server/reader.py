@@ -11,6 +11,7 @@ from typing import Any
 
 from distillery.driver import driver_alive
 from distillery.humanset import RUN_PREFIX as HUMANSET_RUN_PREFIX
+from distillery.naturaltrain import RUN_PREFIX as NATURAL_RUN_PREFIX
 from distillery.orchestrator import DRY_PREFIX, cost_by_model, stage_rows
 from distillery.pipeline_fakes import DRY_RUN_CAP_USD
 from distillery.server.settings import ServerSettings
@@ -27,7 +28,7 @@ def valid_run_id(run_id: str) -> bool:
     return (
         bool(RUN_ID_RE.fullmatch(run_id))
         and run_id not in RESERVED_IDS
-        and not run_id.startswith(HUMANSET_RUN_PREFIX)  # a drafting ledger is not a run
+        and not run_id.startswith((HUMANSET_RUN_PREFIX, NATURAL_RUN_PREFIX))  # drafting ledgers
     )
 
 

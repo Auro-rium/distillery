@@ -80,6 +80,14 @@ def _parser() -> argparse.ArgumentParser:
         "--human-set", default=None, metavar="FILE",
         help="human_confirmed.json from confirm-heldout --finalize: sealed as Gate B",
     )  # fmt: skip
+    r.add_argument(
+        "--natural-train", default=None, metavar="FILE",
+        help="natural_train.json from scripts/natural_train.py draft: rows appended to round 1",
+    )  # fmt: skip
+    r.add_argument(
+        "--natural-exclude", action="append", default=[], metavar="FILE",
+        help="question file whose questions natural rows must not repeat (repeatable)",
+    )  # fmt: skip
     s = sub.add_parser("status", help="show stages and spend of a run")
     s.add_argument("run")
     g = sub.add_parser("report", help="print the report of a finished run")
@@ -301,6 +309,19 @@ def _cmd_run(
     if human_set is not None and not human_set.is_file():
         out(f"refused: human set file not found: {human_set}")
         return EXIT_REFUSED
+    natural: dict[str, Any] = {}
+    if args.natural_train:
+        for f in (args.natural_train, *args.natural_exclude):
+            if not Path(f).is_file():
+                out(f"refused: natural train/exclude file not found: {f}")
+                return EXIT_REFUSED
+        natural = {
+            "natural_train_path": str(args.natural_train),
+            "natural_exclude_paths": tuple(str(x) for x in args.natural_exclude),
+        }
+    elif args.natural_exclude:
+        out("refused: --natural-exclude needs --natural-train")
+        return EXIT_REFUSED
     pcfg = PipelineConfig(
         pack=args.pack,
         student_max_new_tokens=get_pack(args.pack).student_max_new_tokens,
@@ -315,6 +336,7 @@ def _cmd_run(
         headroom_max_base_acc=args.max_base_acc,
         finetune_estimate_usd=args.finetune_estimate_usd,
         **({} if args.min_planned_steps is None else {"min_planned_steps": args.min_planned_steps}),
+        **natural,
     )
     store = _store_for(root, run_id)
     try:
@@ -332,7 +354,7 @@ def _cmd_run(
                     headroom_max_base_acc=args.max_base_acc, human_set_path=human_set,
                     finetune_state=store.run_dir(run_id) / "fake_finetune_state.json"
                     if plan is not None else None,
-                    pack=args.pack,
+                    pack=args.pack, **natural,
                 )  # fmt: skip
                 config, pcfg, deps = dr.config, dr.pipeline_cfg, dr.deps
             elif deps_factory is not None:
