@@ -289,3 +289,9 @@ Both files are agent-authored (Claude Opus 5.5 subagents, blind to templates and
 - **N1-eval:** `.distillery/natural_eval/questions.txt`, **N = 110 drafted** (at least 80 expected after teacher confirmation; the confirmed N and sha are recorded by a further amendment before scoring), sha256 `375e07ae97c6ec048a6e63c5b2727b5200b5020ba1b9778cd642691f23421ad7` (22 simple / 48 medium / 40 hard). Reference file `i` is 1-based.
 - Checked offline: zero exact (normalised) overlap between N1-train, N1-eval and the Gate B file.
 - Unchanged: gate thresholds, claim rule, $5.00 ceiling, one round, P4 hyperparameters.
+
+## 2026-10-07 (amendment, recorded BEFORE N1 training or any N1 scoring): N1-eval confirmed set
+Teacher drafting (k=3, temp 0.8) of the 110 N1-eval questions: 98 kept, 12 discarded (8 disagree, 4 exec_error). Spend $0.2065 (estimate, ledger `humanset-375e07ae`).
+Confirmation is **mechanical, not by the authoring agent**: a kept draft is confirmed iff its result equals the result of the author's blind reference SQL (`compare_outcomes`, ordered only when the reference has a top-level ORDER BY). All 98 confirmed, 0 rejected. This is stricter than Gate B's judgment-based confirm on one axis (an independent reference must agree) and removes the confirmer's discretion.
+**N1-eval confirmed set: N = 98, `human_confirmed.json` sha256 `3ab039710037195134128743f82b1434c939d1e24efb6ff5ece484f0dc875beb`** (db sha256 prefix `03864579a97c4336`). Same bias as Gate B, disclosed: gold was drafted by the teacher and kept only where all three drafts executed non-empty and agreed with the reference, so the teacher's accuracy on this set is inflated and the base/student numbers are the informative ones.
+Round spend so far: $0.21 of the $5.00 ceiling.
