@@ -4,7 +4,7 @@
 
 Distillery turns a narrow, repetitive job that a big model does well (today: text-to-SQL over a synthetic SQLite database) into a small fine-tuned model that does it for a fraction of the cost. A planner agent (Nemotron 3 Ultra) designs the task set and reads the failures, a teacher (Nemotron 3 Super) writes training answers, a cheap triager (Nemotron 3 Nano) flags dirty output, and a small student (Qwen3-1.7B, LoRA) is fine-tuned on Token Factory. Every training example and every evaluation is verified by executing the SQL in a sandbox, and a pure-Python gate (no LLM anywhere in it) decides PROMOTE or REJECT from a sealed held-out set.
 
-> **Status: two small live runs have completed end to end on Nebius (n=20 and n=60 held-out); both were REJECTed by the gate and neither is a result.** The student was barely trained (provider-default hyperparameters, 3 to 9 optimizer steps), which is fixed and guarded. The benchmark was rebuilt and pre-registered in [DECISIONS.md](DECISIONS.md) (template gold, in-distribution gate set, separate stress set); the single properly configured run has not been made yet. Every number in this repo is either absent or labelled. See [STATUS.md](STATUS.md).
+> **Status (2026-10-07): one gated run PROMOTEd on the in-distribution gate set, and it did not carry over to an independently written question set.** On the pre-registered 300-question held-out set the 1.7B student scores 92.3% vs base 25.7% and teacher 90.0% (ratio CI [0.993, 1.061], McNemar p 1.6e-57; run cost $4.26). On 86 questions written blind by a separate agent (not by a human) it scores 40.7% vs base 38.4%: **REJECT**, so the result does not generalise beyond the templated phrasing. Every number below is from a recorded run in [docs/proofs/evidence](docs/proofs/evidence); see [STATUS.md](STATUS.md).
 
 ## How it works
 
@@ -77,15 +77,17 @@ Inference, fine-tuning and sandbox work run on Nebius Token Factory; the web app
 
 ## Results
 
-No gated run has been made on the pre-registered benchmark. The two earlier smoke runs (REJECT, student undertrained) are in [STATUS.md](STATUS.md). Nothing below is measured.
+Measured, from recorded runs (`docs/proofs/evidence/`, claims and procedure in [DECISIONS.md](DECISIONS.md)). The student is Qwen3-1.7B (LoRA); the teacher is Nemotron 3 Super.
 
-| Metric | Base Qwen3-1.7B | Fine-tuned student | Teacher (Nemotron 3 Super) |
-|---|---|---|---|
-| Held-out execution accuracy | TBD: no real run yet | TBD: no real run yet | TBD: no real run yet |
-| Student / teacher accuracy ratio, 95% lower bound | n/a | TBD: no real run yet | n/a |
-| McNemar p (student vs base) | n/a | TBD: no real run yet | n/a |
-| Cost per 1k tasks | TBD: no real run yet | TBD: no real run yet (serving path undecided) | TBD: no real run yet |
-| Total spend for the run | TBD: no real run yet | | |
+| Run | Set | Base | Student | Teacher | Verdict |
+|---|---|---|---|---|---|
+| P4 (gated) | 300 held-out, templated, in-distribution | 25.7% | 92.3% | 90.0% | **PROMOTE** (ratio CI [0.993, 1.061], McNemar p 1.6e-57, cost $4.26) |
+| P4 stress | stress set (concepts outside training) | 9% | 16% | 99% | not a pass: the student does not transfer to unseen concepts |
+| Gate B | 86 agent-authored natural questions | 38.4% | 40.7% | 98.8% (inflated: it drafted the gold) | **REJECT** (ratio lower bound 0.306, McNemar p 0.84) |
+| B2 fair teacher | same 300 held-out | n/a | 92.3% | 93.3% (8-shot Super, strongest on dev) | no beat-the-teacher claim (ratio 0.989, CI [0.957, 1.022]) |
+| A5 autonomy | fresh run under 8 injected faults | n/a | PROMOTE (ratio lower bound 1.022) | n/a | passed every check: 4 restarts, 1 adopted fine-tune job, $4.19 |
+
+Cost per 1k tasks is not yet reported (serving path is sandbox CPU, not a priced endpoint). The "agent-authored" set was written blind to the templates by a Claude subagent and confirmed by it; it is not human-written.
 
 `python -m distillery run ... --dry-run` prints a report that looks like this but uses fake models and fake prices; it is labelled "DRY RUN, numbers are NOT results" everywhere it appears.
 
@@ -138,7 +140,7 @@ Without `NEBIUS_API_KEY` the server starts in `replay-only` mode and serves the 
 
 ## Limitations
 
-- **No gated run on the final benchmark yet.** Two small live smoke runs exist (REJECT, undertrained student, n=20 and n=60). Results on the pre-registered benchmark are TBD.
+- **The win is in-distribution only.** The gated run PROMOTEd on templated questions but the student scored 40.7% vs base 38.4% on 86 independently phrased questions (REJECT) and 16% on the stress set. Next step is training on naturally phrased, teacher-verified data.
 - **Student serving is slow.** Base and student run on Nebius Sandbox CPU (measured about 10 to 29 s per sample for Qwen3-1.7B depending on concurrency, 0.6B about 7.8 s; 4 CPU / 4 GB, with 1.7B using about 93% of the RAM), because neither is on the serverless inference API. Sandbox pricing is unknown, so cost per 1k tasks for the student is reported as unavailable.
 - **The gate set shares question wording with training.** Phrasings are hand-written templates; most gate questions reuse a training question skeleton with different literals. The report states the measured rate; the stress set is the only unseen-structure signal.
 - **Toy database.** A synthetic schema with 89 templates in 12 families. Results say little about real-world text-to-SQL.

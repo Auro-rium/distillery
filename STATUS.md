@@ -1,6 +1,13 @@
 # STATUS
 
-**Date:** 2026-10-04 · **Phase:** proof mode (feature freeze; grounding prompt of 2026-10-03). The baseline is in `GROUND_TRUTH.md` · **Result claims:** none.
+**Date:** 2026-10-07 · **Phase:** proof mode (feature freeze; grounding prompt of 2026-10-03). The baseline is in `GROUND_TRUTH.md` · **Result claims:** P4 PROMOTE (in-distribution only); Gate B REJECT; A5 PASS (details below).
+
+## Results of 2026-10-07 (all evidence in `docs/proofs/evidence/`)
+- **A5 live chaos run: PASS** (`a5_chaos.json`). Run `chaos-sql-gated-20261007b` on Token Factory, 8 injected faults (2 kill, 3 llm_503, 1 net_window, 2 sandbox_exit), 4 restarts, 1 admin action, fine-tune job adopted not re-bought; verdict PROMOTE (ratio lower bound 1.022, McNemar 204 vs 1). Spend $4.19. The first attempt (`...a`) exhausted its restarts on a laptop-suspend DNS outage and was cancelled at $0, which led to A7.
+- **B2 fair teacher, S0 + S1 (S2 deferred on budget): no claim** (`b2_fair_teacher_s0_s1.json`). P4 reproduced exactly. Dev: S0 84.7%, S1 93.3% (strongest). Held-out: student 92.3% vs S1 93.3%, ratio 0.989, CI [0.957, 1.022]. Spend $1.65.
+- **Gate B on the agent-authored set (n=86): REJECT** (`gateb_agent_authored.json`). Base 38.4%, student 40.7%, teacher 98.8% (inflated, it drafted the gold), ratio lower bound 0.306, McNemar p 0.84. Spend $0.22. The set is agent-authored (blind to templates by instruction), never called human-written.
+- **A6 watchdog and A7 outage-aware restarts: merged** (`02ff4e4`), 817 tests pass. A5 follow-ups: adapter uploads retry in-process with a 600 s transport timeout; `score-human` takes the student base from the trained artifact.
+- **Reading:** the system is autonomous and the in-distribution win is real, but it does not transfer to naturally phrased questions or unseen concepts. Next: train on naturally phrased, teacher-verified data and score on a fresh agent-authored set (~$4 to $5, needs a console balance check; session spend so far ~$6.1 of the $19.5 cap per the ledger, ~$10.7 by the session estimate).
 
 ## Proof phase (2026-10-03)
 - **Phase 0, GROUND_TRUTH.md: done** (21 claims, each with path, command and output).
@@ -84,7 +91,7 @@ Verified live on 2026-10-01 after setting the env vars through the Render API: m
 - **Tests on merged main:** 474 backend, 330 frontend unit, ruff and mypy clean. Local Playwright (offline mocks) passes 105 when the machine is not overloaded; on this 4-core box a heavy parallel run produced 3 axe timeouts that pass when re-run with fewer workers (48/48), so that is load, not a regression.
 
 ## Config
-- Student `Qwen/Qwen3-0.6B` (LoRA) on Nebius Sandbox CPU. Budget: $19.50 project cap, $10 reserved for the demo. Live home (spend ledger): `.distillery/live` (gitignored). Prices: `.distillery/prices.json` and `deploy/prices.json` (LLM prices from the API listing; no fine-tune or sandbox price yet).
+- Student `Qwen/Qwen3-1.7B` (LoRA; 0.6B only in the early smoke runs) on Nebius Sandbox CPU. Budget: $19.50 project cap, $10 reserved for the demo. Live home (spend ledger): `.distillery/live` (gitignored). Prices: `.distillery/prices.json` and `deploy/prices.json` (LLM prices from the API listing; no fine-tune or sandbox price yet).
 
 ## Blockers (you)
 Billed spend and the fine-tune and sandbox prices from the console; approval of the step-5 estimate; demo video; Devpost submit; make the repo public.
