@@ -25,6 +25,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from distillery import heartbeat
 from distillery.errors import InfraError
 from distillery.sandbox import MAX_CONCURRENCY, Job, RunResult, Sandbox
 from distillery.taskpacks.sql import runner as _runner_mod
@@ -295,9 +296,11 @@ class SandboxExecutor:
 
     async def _batch(self, image: str, chunks: Sequence[Sequence[str]]) -> list[RunResult]:
         self.stats.jobs += len(chunks)
-        return await self._sandbox.run_batch(
+        out = await self._sandbox.run_batch(
             image, [self._job(c) for c in chunks], concurrency=self._concurrency
         )
+        heartbeat.bump("sql_batch")
+        return out
 
     async def _run_async(self, db_ref: str, sqls: Sequence[str]) -> list[ExecOutcome]:
         """Infrastructure failures never become verdicts (plan A2, gap 3a). A failed job is re-run

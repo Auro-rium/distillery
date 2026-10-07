@@ -6,6 +6,12 @@ the server did not send restarts the same argv after a backoff (30 s, 60 s, 120 
 Exit 0, 1 or 2, a user cancel, or a server shutdown are final for this process. A shutdown sends
 SIGTERM (suspend: paid jobs are left running and are adopted on the next start); a user cancel
 sends SIGINT (paid jobs are cancelled).
+
+Outage rule (plan A7): before a restart is COUNTED the supervisor probes the provider host (DNS +
+TCP + TLS from this process). If it is unreachable the restart is not counted: the run waits,
+polling the probe, and restarts at once when the host is back (capped per run by
+``MAX_OUTAGE_WAIT_S``, after which the normal counted path applies). A reachable host means a real
+provider or infrastructure fault, which keeps consuming the restart budget as before.
 """
 
 from __future__ import annotations
@@ -15,17 +21,25 @@ import os
 import queue
 import re
 import signal
+import socket
+import ssl
 import subprocess  # noqa: S404 - runs our own CLI with a fixed argv, never a shell
 import sys
 import threading
+import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
+from urllib.parse import urlparse
 
 MAX_LOG_LINES = 2000
 KILL_AFTER_INTERRUPT_S = 30.0
 EXIT_RETRYABLE = 75  # distillery.errors.EXIT_RETRYABLE (not imported: keep the server light)
 MAX_RESTARTS = 6
 RESTART_BACKOFF_S = 30.0
+OUTAGE_POLL_S = 30.0
+MAX_OUTAGE_WAIT_S = 6 * 3600.0
+DEFAULT_PROVIDER_HOST = "api.tokenfactory.nebius.com"
+PROBE_TIMEOUT_S = 5.0
 _ANSI = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]")  # colour codes from child tracebacks
 
 
@@ -53,6 +67,9 @@ class Job:
     suspend: Callable[[], None] | None = None  # SIGTERM: shutdown (paid jobs kept, adopted later)
     suspend_requested: bool = False
     restarts: int = 0
+    outage_waiting: bool = False  # plan A7: waiting for the provider host to come back
+    outage_since: float | None = None  # wall clock of the current outage's start
+    outage_waited_total_s: float = 0.0  # all outage waits of this run, against MAX_OUTAGE_WAIT_S
     wake: threading.Event = field(default_factory=threading.Event, repr=False)
 
 
@@ -69,6 +86,22 @@ def redact(text: str, secrets: Sequence[str]) -> str:
 ChildHook = Callable[[str, Callable[[], None]], Callable[[], None]]
 
 
+@dataclass(frozen=True)
+class ChildInfo:
+    """What the watchdog may know about the running child (plan A6): ``kill`` SIGKILLs its whole
+    process group, which the supervisor sees as a negative exit code and restarts (a safe resume).
+    It is deliberately NOT a SIGINT (that cancels paid jobs) or a SIGTERM (that is a suspend: no
+    restart)."""
+
+    pid: int
+    started_at: float  # wall clock, comparable with the heartbeat file's timestamps
+    alive: Callable[[], bool]
+    kill: Callable[[], None]
+
+
+WatchHook = Callable[[Job, ChildInfo], Callable[[], None]]  # returns a stop callback
+
+
 def run_child(
     argv: Sequence[str],
     env: dict[str, str],
@@ -76,11 +109,13 @@ def run_child(
     log: Callable[[str], None],
     kill_after_s: float,
     on_child: ChildHook | None = None,
+    watch: WatchHook | None = None,
 ) -> int:
     """Run ``argv`` in its OWN process group; ``job.interrupt`` sends SIGINT to the whole group
     and SIGKILLs it after ``kill_after_s`` if it is still alive. ``on_child(run_id, kill)`` runs
     once the child exists (``kill`` SIGKILLs its group) and returns a stop callback (chaos
-    supervisor, plan A5)."""
+    supervisor, plan A5); ``watch(job, info)`` is the same idea with more to look at (the
+    watchdog, plan A6)."""
     proc = subprocess.Popen(  # noqa: S603
         argv, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
         start_new_session=True,
@@ -113,6 +148,11 @@ def run_child(
     elif job.suspend_requested:
         suspend()
     stop_hook = on_child(job.run_id, lambda: _signal(signal.SIGKILL)) if on_child else None
+    watch_stop = (
+        watch(job, ChildInfo(proc.pid, time.time(), lambda: proc.poll() is None,
+                             lambda: _signal(signal.SIGKILL)))
+        if watch else None
+    )  # fmt: skip
     try:
         for line in proc.stdout or ():
             log(line.rstrip("\n"))
@@ -120,6 +160,8 @@ def run_child(
     finally:
         if stop_hook is not None:
             stop_hook()
+        if watch_stop is not None:
+            watch_stop()
         for t in timers:
             t.cancel()
         _signal(signal.SIGKILL)  # reap stragglers of the group (no-op if all exited)
@@ -131,6 +173,7 @@ def subprocess_executor(
     secrets: Sequence[str],
     kill_after_s: float = KILL_AFTER_INTERRUPT_S,
     on_child: ChildHook | None = None,
+    watch: WatchHook | None = None,
 ) -> Executor:
     """Run ``python -m distillery run`` as a child so cancel can send SIGINT: the pipeline's
     paid-resource context managers then cancel provider jobs on the way out. Dry runs use the
@@ -143,6 +186,7 @@ def subprocess_executor(
         ]  # fmt: skip
         env = dict(os.environ)
         env["PYTHONUNBUFFERED"] = "1"
+        env["DISTILLERY_ATTEMPT"] = str(job.restarts + 1)  # shown in the child's heartbeat
         if job.dry_run:
             argv.append("--dry-run")
             env.pop("NEBIUS_API_KEY", None)
@@ -157,9 +201,44 @@ def subprocess_executor(
                 argv += ["--finetune-estimate-usd", str(job.finetune_estimate_usd)]
             if job.scale == "gated":  # pre-registered protocol: one round (DECISIONS 2026-10-03)
                 argv += ["--max-rounds", "1"]
-        return run_child(argv, env, job, log, kill_after_s, on_child)
+        if watch is None:  # the pre-A6 call shape, kept for callers that stub ``run_child``
+            return run_child(argv, env, job, log, kill_after_s, on_child)
+        return run_child(argv, env, job, log, kill_after_s, on_child, watch)
 
     return run
+
+
+Probe = Callable[[], str | None]  # None = the provider is reachable, else the error text
+
+
+def provider_target(base_url: str | None) -> tuple[str, int, bool]:
+    """(host, port, tls) of the provider from its base URL; the Token Factory default if unset."""
+    parsed = urlparse(base_url or "")
+    host = parsed.hostname or DEFAULT_PROVIDER_HOST
+    tls = parsed.scheme != "http"
+    try:
+        port = parsed.port
+    except ValueError:
+        port = None
+    return host, port or (443 if tls else 80), tls
+
+
+def make_probe(base_url: str | None, timeout_s: float = PROBE_TIMEOUT_S) -> Probe:
+    """DNS resolution + TCP connect + TLS handshake to the provider host. Any answer at that
+    level counts as reachable (no HTTP request: no key is sent, nothing is billed)."""
+    host, port, tls = provider_target(base_url)
+
+    def probe() -> str | None:
+        try:
+            with socket.create_connection((host, port), timeout=timeout_s) as sock:
+                if tls:
+                    with ssl.create_default_context().wrap_socket(sock, server_hostname=host):
+                        pass
+        except (OSError, ssl.SSLError, ValueError) as exc:
+            return f"{type(exc).__name__}: {exc}"[:300]
+        return None
+
+    return probe
 
 
 AuditFn = Callable[[str, str, str, dict[str, object]], None]  # actor, action, run_id, detail
@@ -176,12 +255,21 @@ class Worker:
         restart_backoff_s: float = RESTART_BACKOFF_S,
         on_audit: AuditFn | None = None,
         on_final: FinalFn | None = None,
+        probe: Probe | None = None,
+        outage_poll_s: float = OUTAGE_POLL_S,
+        max_outage_wait_s: float = MAX_OUTAGE_WAIT_S,
+        clock: Callable[[], float] = time.monotonic,
     ) -> None:
         self._executor = executor
         self._max_restarts = max_restarts
         self._backoff_s = restart_backoff_s
         self._on_audit = on_audit
         self._on_final = on_final
+        self._probe = probe  # None: no outage handling (every restart is counted)
+        self._outage_poll_s = outage_poll_s
+        self._max_outage_wait_s = max_outage_wait_s
+        self._clock = clock
+        self.provider_reachable: bool | None = None  # result of the last probe, None = never run
         self._secrets = list(secrets)
         self._queue: queue.Queue[Job | None] = queue.Queue()
         self._jobs: dict[str, Job] = {}
@@ -211,6 +299,10 @@ class Worker:
             if job.suspend is not None:
                 job.suspend()
         self._thread.join(join_timeout_s)
+
+    @property
+    def stopping(self) -> bool:
+        return self._stopping
 
     def jobs(self) -> list[Job]:
         with self._lock:
@@ -273,6 +365,50 @@ class Worker:
             return False  # a person or the server ended it: never restart
         return code == EXIT_RETRYABLE or code < 0  # retryable failure, or killed (SIGKILL / OOM)
 
+    def _probe_now(self, probe: Probe) -> str | None:
+        try:
+            err = probe()
+        except Exception as exc:  # noqa: BLE001 - a broken probe must not stop the supervisor
+            err = f"probe failed: {type(exc).__name__}: {exc}"[:300]
+        self.provider_reachable = err is None
+        return err
+
+    def _wait_out_outage(self, job: Job) -> bool:
+        """True if the provider was unreachable and this call waited (the restart is then free:
+        the caller restarts without counting). False: reachable, no probe, a dry run, or the
+        per-run wait cap is spent, so the normal counted path applies."""
+        probe = self._probe
+        if probe is None or job.dry_run:
+            return False
+        if job.outage_waited_total_s >= self._max_outage_wait_s:
+            return False
+        err = self._probe_now(probe)
+        if err is None:
+            return False
+        started = self._clock()
+        job.outage_since = time.time()
+        job.outage_waiting = True
+        self._log(job, f"[supervisor] provider unreachable ({err}): waiting, restart not counted")
+        self._audit("outage_wait", job, since=job.outage_since, probe_error=err)
+        spent = job.outage_waited_total_s
+        waited = 0.0
+        try:
+            while err is not None:
+                if waited + spent >= self._max_outage_wait_s:
+                    self._audit("outage_cap", job, waited_s=round(waited, 1), probe_error=err)
+                    return False
+                if job.wake.wait(self._outage_poll_s):  # cancel / suspend / server stop
+                    return True
+                err = self._probe_now(probe)
+                waited = self._clock() - started
+                job.outage_waited_total_s = spent + waited
+            self._audit("outage_over", job, waited_s=round(waited, 1))
+            self._log(job, f"[supervisor] provider reachable after {waited:.0f} s: restarting")
+            return True
+        finally:
+            job.outage_waiting = False
+            job.outage_waited_total_s = spent + max(waited, self._clock() - started)
+
     def _supervise(self, job: Job) -> int | None:
         """Run the job, restarting it while the rules allow. Returns the last exit code (None if
         the executor itself raised)."""
@@ -285,6 +421,10 @@ class Worker:
                 return None
             if not self._restartable(job, code):
                 return code
+            if self._wait_out_outage(job):
+                if job.wake.is_set():  # cancel or shutdown during the wait
+                    return code
+                continue  # the provider is back: restart now, not counted, no backoff
             if job.restarts >= self._max_restarts:
                 self._audit("restarts_exhausted", job, exit_code=code, restarts=job.restarts)
                 return code

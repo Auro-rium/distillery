@@ -45,6 +45,8 @@ class Telemetry:
         self.inflight = 0
         self.streams_open = 0
         self.events: Counter[str] = Counter()  # named business events (playground answers, ...)
+        # extra Prometheus lines computed at scrape time (run health, plan A6); run OUTSIDE the lock
+        self.collectors: list[Callable[[], list[str]]] = []
 
     # -- recording ----------------------------------------------------------------------
     def begin(self, stream: bool) -> None:
@@ -165,6 +167,11 @@ class Telemetry:
             ]
             for name, n in sorted(self.events.items()):
                 out.append(f'distillery_events_total{{name="{name}"}} {n}')
+        for collect in self.collectors:
+            try:
+                out += collect()
+            except Exception:  # noqa: BLE001, S112 - a collector must never break the scrape
+                continue
         return "\n".join(out) + "\n"
 
 

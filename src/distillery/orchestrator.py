@@ -37,6 +37,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from distillery import controller as controller_mod
 from distillery import evaluator as evaluator_mod
+from distillery import heartbeat
 from distillery import paraphrase as paraphrase_mod
 from distillery.budget import (
     BASIS_CEILING,
@@ -371,6 +372,7 @@ class LedgerSink:
         self._agg: dict[str, dict[str, int]] = {}
 
     def record_call(self, record: CallRecord) -> None:
+        heartbeat.bump("llm_call")  # a failed attempt is still a call that came back
         with self._lock:
             a = self._agg.setdefault(
                 record.purpose,
@@ -771,7 +773,12 @@ class Pipeline:
         self.deps = deps
         self.store = store
         self.run_id = run_id
-        self.say = say
+
+        def _say(line: str) -> None:
+            heartbeat.bump("say")  # every log line is progress for the watchdog (no-op off ``run``)
+            say(line)
+
+        self.say = _say
         self.ledger = Ledger.from_config(run_id, config, store)
         self.sink = LedgerSink(self.ledger)
         llm_kwargs: dict[str, Any] = {}
@@ -829,10 +836,12 @@ class Pipeline:
         def wrapped() -> dict[str, Any]:
             self.ran.append(name)
             self.say(f"[stage] {name}")
+            heartbeat.set_stage(name)
             if self.deps.on_stage is not None:
                 self.deps.on_stage(name)
             snap = self._snap()
             res = fn()
+            heartbeat.bump("stage_end")
             extra = self._since(snap)
             res["metrics"] = extra
             return res
@@ -1582,6 +1591,17 @@ class Pipeline:
                 job_ref.append(jid)
                 return jid
 
+            def poll_update(i: JobInfo) -> None:
+                heartbeat.bump("finetune_poll")  # the job is being watched: progress
+                self.say(f"[finetune r{r}] {i.status}")
+
+            def poll_error(e: BaseException) -> None:
+                heartbeat.bump("finetune_poll_error")  # a handled poll error is still a watch
+                self.say(
+                    f"[finetune r{r}] status check failed ({type(e).__name__}); "
+                    "the job keeps running, still polling"
+                )
+
             outcome = "aborted"
             cost_line: dict[str, Any] = {}
             try:
@@ -1591,11 +1611,8 @@ class Pipeline:
                             handle.job_id,
                             interval_s=self.cfg.poll_interval_s,
                             timeout_s=self.cfg.poll_timeout_s,
-                            on_update=lambda i: self.say(f"[finetune r{r}] {i.status}"),
-                            on_error=lambda e: self.say(
-                                f"[finetune r{r}] status check failed ({type(e).__name__}); "
-                                "the job keeps running, still polling"
-                            ),
+                            on_update=poll_update,
+                            on_error=poll_error,
                         )
                     )
                     cks = ft.checkpoints(handle.job_id)

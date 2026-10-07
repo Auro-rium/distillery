@@ -14,6 +14,7 @@ from distillery.config import Config, load_config
 from distillery.llm import LLMClient, make_openai_client
 from distillery.server.local_models import LocalModels
 from distillery.server.local_models import from_env as local_models_from_env
+from distillery.server.watchdog import WatchdogConfig
 from distillery.taskpacks.sql import schema as sql_schema
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -49,10 +50,14 @@ class ServerSettings:
     max_pending_jobs: int = 5  # queued + running, enforced for anonymous dry runs
     max_restarts: int = 6  # supervisor: restarts per run (exit 75 or killed by a signal)
     restart_backoff_s: float = 30.0  # supervisor: first backoff, doubled per restart
+    outage_poll_s: float = 30.0  # supervisor (A7): probe interval while the provider is unreachable
+    max_outage_wait_s: float = 6 * 3600.0  # supervisor (A7): outage wait cap per run
+    probe: Callable[[], str | None] | None = None  # None = real DNS+TLS probe of the base URL
     reconcile_on_start: bool = True  # re-submit runs a previous server process left unfinished
     shutdown_grace_s: float = 30.0  # SIGINT -> SIGKILL grace for a live child (cancel + shutdown)
     # Peer addresses whose X-Forwarded-For is believed. Default: none, the header is ignored.
     trusted_proxies: tuple[str, ...] = ()
+    watchdog: WatchdogConfig = field(default_factory=WatchdogConfig)  # plan A6
     heartbeat_s: float = 15.0
     poll_s: float = 1.0
     demo_db_seed: int = 0
@@ -86,6 +91,46 @@ def parse_allowed_origins(raw: str | None) -> tuple[str, ...]:
         if origin not in out:
             out.append(origin)
     return tuple(out)
+
+
+def _num(env: Mapping[str, str], name: str, default: float, *, minimum: float = 0.0) -> float:
+    raw = (env.get(name) or "").strip()
+    if not raw:
+        return default
+    try:
+        v = float(raw)
+    except ValueError:
+        raise ValueError(f"{name} must be a number, got {raw!r}") from None
+    if v < minimum:
+        raise ValueError(f"{name} must be >= {minimum}, got {raw!r}")
+    return v
+
+
+def parse_watchdog(env: Mapping[str, str]) -> WatchdogConfig:
+    """``DISTILLERY_WATCHDOG=0`` disables it (default on, live and dry). A bad value raises at
+    startup, like the other settings: a typo must not silently turn a safeguard off."""
+    d = WatchdogConfig()
+    on = (env.get("DISTILLERY_WATCHDOG") or "1").strip().lower() not in ("0", "false", "off", "no")
+    limit = _num(env, "DISTILLERY_MEMORY_LIMIT_MB", 0.0)
+    pct = _num(env, "DISTILLERY_WATCHDOG_MEMORY_KILL_PCT", d.memory_kill_pct)
+    if not 0 < pct <= 100:
+        raise ValueError("DISTILLERY_WATCHDOG_MEMORY_KILL_PCT must be in (0, 100]")
+    url = (env.get("DISTILLERY_ALERT_WEBHOOK_URL") or "").strip() or None
+    if url is not None and not url.startswith(("http://", "https://")):
+        raise ValueError("DISTILLERY_ALERT_WEBHOOK_URL must be an http(s) URL")
+    return WatchdogConfig(
+        enabled=on,
+        hung_after_s=_num(env, "DISTILLERY_WATCHDOG_HUNG_AFTER_S", d.hung_after_s, minimum=1),
+        stall_after_s=_num(env, "DISTILLERY_WATCHDOG_STALL_AFTER_S", d.stall_after_s, minimum=1),
+        grace_s=_num(env, "DISTILLERY_WATCHDOG_GRACE_S", d.grace_s),
+        max_kills_per_stage=int(
+            _num(env, "DISTILLERY_WATCHDOG_MAX_KILLS_PER_STAGE", d.max_kills_per_stage)
+        ),
+        memory_limit_mb=limit or None,
+        memory_kill_pct=pct,
+        poll_s=_num(env, "DISTILLERY_WATCHDOG_POLL_S", d.poll_s, minimum=0.05),
+        alert_webhook_url=url,
+    )
 
 
 def default_playground_llm(config: Config) -> LLMClient | None:
@@ -127,4 +172,7 @@ def settings_from_env(
         trusted_proxies=tuple(
             p.strip() for p in (e.get("DISTILLERY_TRUSTED_PROXIES") or "").split(",") if p.strip()
         ),
+        watchdog=parse_watchdog(e),
+        outage_poll_s=_num(e, "DISTILLERY_OUTAGE_POLL_S", 30.0, minimum=0.05),
+        max_outage_wait_s=_num(e, "DISTILLERY_MAX_OUTAGE_WAIT_S", 6 * 3600.0),
     )
