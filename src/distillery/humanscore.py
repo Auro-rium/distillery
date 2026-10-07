@@ -140,6 +140,10 @@ def score_human_run(
     except evaluator_mod.ArtifactMismatchError as exc:
         raise HumanScoreRefusal(f"adapter check failed: {exc}") from None
 
+    # the student base is whatever was TRAINED, not whatever the environment's role says
+    pipe.config = pipe.config.model_copy(
+        update={"model_ids": {**pipe.config.model_ids, "student": trained.base_model}}
+    )
     pipe._resolve_serving()  # noqa: SLF001 - same live wiring as final_eval
     deps = pipe.deps
     if deps.student_factory is None or deps.base_factory is None:

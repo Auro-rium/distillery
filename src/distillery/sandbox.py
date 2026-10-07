@@ -30,7 +30,13 @@ DEFAULT_BASE_URL = "https://api.tokenfactory.nebius.com/sandboxes"
 _TIMEOUT_GRACE_S = 5.0
 # The SDK's default per-request transport timeout (10 s) cut a ~70 MB LoRA adapter upload
 # (POST /v1/files) on a slow link in the P4 run; uploads and polls get a realistic budget.
-TRANSPORT_TIMEOUT_S = 120.0
+# 120 s still cut it on a ~0.55 MB/s uplink in A5 (two unplanned restarts), so it is 600 s now:
+# a hang is the A6 watchdog's job, not this timeout's.
+TRANSPORT_TIMEOUT_S = 600.0
+# A branch run that ships files may be repeated after a transport error: the failure is almost
+# always the upload (content-addressed, so repeating it is idempotent) and a repeat at worst
+# leaves one unused image. A branch without files is never repeated.
+UPLOAD_RETRIES = 3
 # The SDK truncates stdout/stderr at 65535 bytes by default, which would cut a JSON result set
 # mid-way (the S4 spike already needed 400000). Ask for more explicitly on every run.
 TRUNCATE_OUTPUT_AT = 1_000_000
@@ -522,7 +528,9 @@ class ContreeSandbox(_SandboxBase):
         contree_error, timed_out_error = _sdk_error_types()
         transient = _transient_error_types()
         # only a disposable run may be repeated whole: it keeps no image, so a repeat is harmless
-        attempts = 1 + (self._run_retries if disposable else 0)
+        attempts = 1 + (
+            self._run_retries if disposable else UPLOAD_RETRIES if files else 0
+        )
         async with self._global_sem:
             backstop = None if timeout is None else timeout + _TIMEOUT_GRACE_S
             for attempt in range(attempts):
@@ -538,7 +546,11 @@ class ContreeSandbox(_SandboxBase):
                     if attempt + 1 < attempts:
                         await asyncio.sleep(self._backoff(attempt))
                         continue
-                    note = "" if disposable else " (branch run: not resubmitted, not idempotent)"
+                    note = (
+                        ""
+                        if disposable or files
+                        else " (branch run: not resubmitted, not idempotent)"
+                    )
                     raise SandboxError(_short(exc) + note) from exc
                 except contree_error as exc:
                     raise SandboxError(_short(exc)) from exc

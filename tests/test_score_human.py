@@ -249,6 +249,24 @@ def _direct(finished: Path, f: Path, **kw: Any):  # type: ignore[no-untyped-def]
     return dr, result
 
 
+def test_student_base_comes_from_the_trained_artifact_not_the_environment(
+    finished: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from distillery.orchestrator import Pipeline
+
+    seen: list[str] = []
+    real = Pipeline._resolve_serving  # noqa: SLF001
+
+    def spy(self: Pipeline) -> None:
+        seen.append(self.config.model_ids["student"])
+        real(self)
+
+    monkeypatch.setattr(Pipeline, "_resolve_serving", spy)
+    _direct(finished, confirmed_file(finished / "h.json"))
+    trained_base = json.dumps(report_of(finished))  # the artifact's base is recorded in the run
+    assert seen and all(m in trained_base for m in seen)
+
+
 def test_serving_servers_are_closed(finished: Path) -> None:
     dr, result = _direct(finished, confirmed_file(finished / "h.json"))
     assert result is not None

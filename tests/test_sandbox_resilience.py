@@ -64,6 +64,21 @@ def test_branch_is_never_resubmitted() -> None:
     assert len(calls) == 1
 
 
+def test_branch_that_uploads_files_is_retried_on_a_transport_error() -> None:
+    calls: list[int] = []
+    sb = _sb(_sdk(2, ContreeTransportError(), calls))
+    uuid = run(sb.branch("img", "true", files={"/work/a": b"x"}))
+    assert uuid == "u-1" and len(calls) == 3
+
+
+def test_branch_upload_gives_up_after_bounded_attempts() -> None:
+    calls: list[int] = []
+    sb = _sb(_sdk(10**6, ApiTimeoutError(timeout_type="read"), calls))
+    with pytest.raises(SandboxError, match="ApiTimeoutError"):
+        run(asyncio.wait_for(sb.branch("img", "true", files={"/work/a": b"x"}), timeout=5))
+    assert len(calls) == 4  # 1 + UPLOAD_RETRIES
+
+
 def _poll_sdk(fail_times: int, calls: list[int]) -> Any:
     """A stub whose image.run polls an operation through ``_api.get_operation_status`` like the
     real SDK does, and fails if a poll error ever escapes."""
