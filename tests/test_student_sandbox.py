@@ -87,9 +87,11 @@ PROMPTS = []
 class Row(list):
     def float(self):
         return self
-class Out:
-    def __init__(self, sequences, scores):
-        self.sequences, self.scores = sequences, scores
+    def __sub__(self, x):
+        return Row(v - x for v in self)
+class LogitsProcessor:
+    pass
+LogitsProcessorList = list
 class AutoTokenizer:
     eos_token_id = 999
     pad_token_id = 998
@@ -116,9 +118,8 @@ class Model:
     generation_config = GenConfig()
     def eval(self):
         pass
-    def generate(self, input_ids, attention_mask, max_new_tokens, do_sample, output_scores,
-                 return_dict_in_generate):
-        assert do_sample is False and output_scores is True and return_dict_in_generate is True
+    def generate(self, input_ids, attention_mask, max_new_tokens, do_sample, logits_processor):
+        assert do_sample is False and isinstance(logits_processor, list)
         idx = input_ids[0][0]
         text = PROMPTS[idx]
         if "boom" in text:
@@ -126,7 +127,12 @@ class Model:
         n_new = 2 if "long" in text else 1  # "long" runs to a cap of 2 new tokens
         row = Row([0.0] * 64)
         row[idx] = 2.0  # the chosen token (id = prompt index) has logit 2 among 64 vocab entries
-        return Out(T([[idx] * (1 + n_new)]), tuple([row] for _ in range(n_new)))
+        seq = [idx]
+        for _ in range(n_new):  # like HF: every processor sees each step's scores, in order
+            for proc in logits_processor:
+                proc(T([list(seq)]), [row])
+            seq.append(idx)
+        return T([seq])
 class AutoModelForCausalLM:
     @classmethod
     def from_pretrained(cls, base, torch_dtype):

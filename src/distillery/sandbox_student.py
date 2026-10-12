@@ -70,7 +70,7 @@ batch = json.load(sys.stdin)["messages_batch"]
 
 import torch
 import transformers
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers import AutoModelForCausalLM, AutoTokenizer, LogitsProcessor, LogitsProcessorList
 
 torch.set_num_threads(os.cpu_count() or 4)
 t0 = time.time()
@@ -124,6 +124,28 @@ load_s = time.time() - t0
 """
 
 _GEN_LOOP = """\
+class _StepLogp(LogitsProcessor):
+    # Streams the chosen token's log-probability: holds ONE [vocab] row of log-softmax at a time.
+    # Step t sees the token picked at step t-1 as input_ids[0][-1] and scores it against the row
+    # kept from step t-1; finish() scores the last token. (Asking generate() for scores would keep
+    # every step's [vocab] row until it returns: ~100 MB per sample on a box already ~93% full.)
+    def __init__(self):
+        self.prev = None
+        self.logps = []
+
+    def __call__(self, input_ids, scores):
+        if self.prev is not None:
+            self.logps.append(float(self.prev[int(input_ids[0][-1])]))
+        row = scores[0].float()
+        self.prev = row - torch.logsumexp(row, dim=-1)
+        return scores
+
+    def finish(self, last_id):
+        if self.prev is not None:
+            self.logps.append(float(self.prev[int(last_id)]))
+            self.prev = None
+
+
 results = []
 t1 = time.time()
 stop_ids = set()
@@ -144,22 +166,17 @@ for messages in batch:
             messages, tokenize=False, add_generation_prompt=True, enable_thinking=False
         )
         ids = tok(text, return_tensors="pt")
+        step_logp = _StepLogp()
         with torch.no_grad():
-            out = model.generate(
+            seqs = model.generate(
                 **ids, max_new_tokens=args.max_new_tokens, do_sample=False,
-                output_scores=True, return_dict_in_generate=True,
+                logits_processor=LogitsProcessorList([step_logp]),
             )
-        new = out.sequences[0][ids["input_ids"].shape[1]:]
+        new = seqs[0][ids["input_ids"].shape[1]:]
         new_ids = [int(x) for x in new]
-        # Log-probability of each chosen token, one step (one [vocab] row) at a time: no
-        # [steps x vocab] tensor is ever built here. batch size is 1, so row 0 is the sample.
-        logps = []
-        for step, sc in enumerate(out.scores):
-            if step >= len(new_ids):
-                break
-            row = sc[0].float()
-            logps.append(float(row[new_ids[step]] - torch.logsumexp(row, dim=-1)))
-        del out
+        if new_ids:
+            step_logp.finish(new_ids[-1])
+        logps = step_logp.logps[: len(new_ids)]
         pieces = [tok.decode([i], skip_special_tokens=False) for i in new_ids[: len(logps)]]
         stats = answer_logprob_stats(new_ids[: len(logps)], logps, pieces, stop_ids)
         text_out = tok.decode(new, skip_special_tokens=True)

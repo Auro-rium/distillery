@@ -111,9 +111,10 @@ def test_gen_script_embeds_the_tested_helper_and_is_valid_python() -> None:
     assert GEN_SCRIPT.startswith("from __future__ import annotations")  # annotations never run
 
 
-def test_gen_script_requests_scores_greedily_and_does_not_stack_them() -> None:
-    assert "do_sample=False" in GEN_SCRIPT and "output_scores=True" in GEN_SCRIPT
-    assert "return_dict_in_generate=True" in GEN_SCRIPT
+def test_gen_script_streams_logprobs_greedily_and_keeps_no_scores() -> None:
+    # One [vocab] row at a time through a logits processor; generate() keeps no per-step scores.
+    assert "do_sample=False" in GEN_SCRIPT and "LogitsProcessorList([step_logp])" in GEN_SCRIPT
+    assert "output_scores" not in GEN_SCRIPT and "return_dict_in_generate" not in GEN_SCRIPT
     assert "torch.stack" not in GEN_SCRIPT and "torch.cat" not in GEN_SCRIPT
     assert "merge_and_unload()" in GEN_SCRIPT and "--max-new-tokens" in GEN_SCRIPT
 
