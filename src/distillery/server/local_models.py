@@ -17,7 +17,13 @@ from pathlib import Path
 from typing import Any
 
 from distillery.config import Config
-from distillery.student import ChatMessages, StudentServer, StudentServingError
+from distillery.student import (
+    ChatMessages,
+    StudentOutput,
+    StudentServer,
+    StudentServingError,
+    generate_detailed,
+)
 from distillery.taskpacks.sql.executor import Executor
 
 ENV_ENABLE = "DISTILLERY_PLAYGROUND_SANDBOX_MODELS"
@@ -66,6 +72,15 @@ class _Lazy:
                 self._inner = self._build()
             inner = self._inner
         return inner.generate(messages_batch)
+
+    def generate_detailed(self, messages_batch: Sequence[ChatMessages]) -> list[StudentOutput]:
+        with self._lock:
+            if self._closed:
+                raise StudentServingError("closed")
+            if self._inner is None:
+                self._inner = self._build()
+            inner = self._inner
+        return generate_detailed(inner, messages_batch)
 
     def close(self) -> None:
         with self._lock:

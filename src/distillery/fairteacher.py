@@ -48,8 +48,10 @@ from distillery.prompts import (
     build_messages,
     select_fewshot_examples,
 )
+from distillery.sandbox_student import student_output_from_item
 from distillery.stats import paired_bootstrap_ratio_ci
 from distillery.store import Store, atomic_write_bytes, canonical_json, sha256_hex
+from distillery.student import StudentOutput, generate_detailed
 from distillery.taskpacks.sql import schema as sql_schema
 
 S0, S1, S2 = "S0", "S1", "S2"
@@ -466,20 +468,63 @@ class CachedGenerator:
     def __init__(self, inner: Generator, cache_dir: Path, name: str) -> None:
         self._inner, self._dir, self._name = inner, cache_dir, name
 
-    def generate(self, messages_batch: Sequence[Sequence[Mapping[str, Any]]]) -> list[str]:
+    def _key(self, messages_batch: Sequence[Sequence[Mapping[str, Any]]]) -> tuple[str, Path]:
         digest = sha256_hex(canonical_json([list(b) for b in messages_batch]).encode("utf-8"))
-        path = self._dir / f"{self._name}-{digest[:16]}.json"
-        if path.is_file():
-            cached = json.loads(path.read_text(encoding="utf-8"))
-            if cached.get("batch_sha256") == digest and len(cached["outputs"]) == len(
-                messages_batch
-            ):
-                return [str(o) for o in cached["outputs"]]
+        return digest, self._dir / f"{self._name}-{digest[:16]}.json"
+
+    def _hit(
+        self, digest: str, path: Path, messages_batch: Sequence[Sequence[Mapping[str, Any]]]
+    ) -> dict[str, Any] | None:
+        if not path.is_file():
+            return None
+        cached = json.loads(path.read_text(encoding="utf-8"))
+        if cached.get("batch_sha256") == digest and len(cached["outputs"]) == len(messages_batch):
+            return dict(cached)
+        return None
+
+    def generate(self, messages_batch: Sequence[Sequence[Mapping[str, Any]]]) -> list[str]:
+        digest, path = self._key(messages_batch)
+        cached = self._hit(digest, path, messages_batch)
+        if cached is not None:
+            return [str(o) for o in cached["outputs"]]
         outs = self._inner.generate(messages_batch)  # type: ignore[arg-type]
         atomic_write_bytes(
             path, json.dumps({"batch_sha256": digest, "outputs": list(outs)}).encode("utf-8")
         )
         return list(outs)
+
+    def generate_detailed(
+        self, messages_batch: Sequence[Sequence[Mapping[str, Any]]]
+    ) -> list[StudentOutput]:
+        """``generate`` that keeps the inner generator's confidence signals (mean answer
+        log-probability) in the cache file too. A cache file written without them (an older run,
+        or by ``generate``) is still a hit, with ``None`` signals: no model is re-run for it."""
+        digest, path = self._key(messages_batch)
+        cached = self._hit(digest, path, messages_batch)
+        if cached is not None:
+            details = cached.get("details")
+            if isinstance(details, list) and len(details) == len(cached["outputs"]):
+                return [
+                    student_output_from_item({**d, "text": str(o), "error": None})
+                    for o, d in zip(cached["outputs"], details, strict=True)
+                ]
+            return [StudentOutput(text=str(o)) for o in cached["outputs"]]
+        outs = generate_detailed(self._inner, messages_batch)  # type: ignore[arg-type]
+        details = [
+            {
+                "mean_logprob": o.mean_logprob, "min_logprob": o.min_logprob,
+                "n_answer_tokens": o.n_answer_tokens, "output_sha256": o.output_sha256,
+                "seconds": o.seconds,
+            }
+            for o in outs
+        ]  # fmt: skip
+        atomic_write_bytes(
+            path,
+            json.dumps(
+                {"batch_sha256": digest, "outputs": [o.text for o in outs], "details": details}
+            ).encode("utf-8"),
+        )
+        return outs
 
 
 # ---------------------------------------------------------------- the run

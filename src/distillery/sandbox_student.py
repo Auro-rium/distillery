@@ -25,10 +25,12 @@ run as disposable jobs with bounded concurrency; the batch travels on stdin.
 from __future__ import annotations
 
 import hashlib
+import inspect
 import json
+import math
 import shlex
 import threading
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
@@ -37,7 +39,7 @@ from distillery import heartbeat
 from distillery.finetune import TrainedArtifact
 from distillery.sandbox import Job, RunResult, Sandbox
 from distillery.sandbox_executor import AsyncBridge
-from distillery.student import ChatMessages, StudentServingError
+from distillery.student import ChatMessages, StudentOutput, StudentServingError
 
 OUT_MARKER = "DISTILLERY_OUT:"
 BASE_DIR = "/models/base"
@@ -48,8 +50,11 @@ GENERATION_JOB_RETRIES = 2  # re-submissions of a generation job that hit a sand
 ADAPTER_CONFIG = "adapter_config.json"
 ADAPTER_WEIGHTS = ("adapter_model.safetensors", "adapter_model.bin")  # the names peft loads
 
-GEN_SCRIPT = """\
+_GEN_HEAD = """\
+from __future__ import annotations
+
 import argparse
+import hashlib
 import json
 import os
 import resource
@@ -116,9 +121,22 @@ if args.adapter:
     versions["peft"] = getattr(peft, "__version__", None)
 model.eval()
 load_s = time.time() - t0
+"""
 
+_GEN_LOOP = """\
 results = []
 t1 = time.time()
+stop_ids = set()
+for v in (
+    getattr(model.generation_config, "eos_token_id", None),
+    getattr(model.generation_config, "pad_token_id", None),
+    tok.eos_token_id,
+    tok.pad_token_id,
+):
+    if isinstance(v, (list, tuple)):
+        stop_ids.update(int(x) for x in v)
+    elif v is not None:
+        stop_ids.add(int(v))
 for messages in batch:
     t = time.time()
     try:
@@ -127,11 +145,30 @@ for messages in batch:
         )
         ids = tok(text, return_tensors="pt")
         with torch.no_grad():
-            out = model.generate(**ids, max_new_tokens=args.max_new_tokens, do_sample=False)
-        new = out[0][ids["input_ids"].shape[1]:]
+            out = model.generate(
+                **ids, max_new_tokens=args.max_new_tokens, do_sample=False,
+                output_scores=True, return_dict_in_generate=True,
+            )
+        new = out.sequences[0][ids["input_ids"].shape[1]:]
+        new_ids = [int(x) for x in new]
+        # Log-probability of each chosen token, one step (one [vocab] row) at a time: no
+        # [steps x vocab] tensor is ever built here. batch size is 1, so row 0 is the sample.
+        logps = []
+        for step, sc in enumerate(out.scores):
+            if step >= len(new_ids):
+                break
+            row = sc[0].float()
+            logps.append(float(row[new_ids[step]] - torch.logsumexp(row, dim=-1)))
+        del out
+        pieces = [tok.decode([i], skip_special_tokens=False) for i in new_ids[: len(logps)]]
+        stats = answer_logprob_stats(new_ids[: len(logps)], logps, pieces, stop_ids)
+        text_out = tok.decode(new, skip_special_tokens=True)
         results.append({
-            "text": tok.decode(new, skip_special_tokens=True), "error": None,
+            "text": text_out, "error": None,
             "prompt_tokens": int(ids["input_ids"].shape[1]), "new_tokens": int(len(new)),
+            "mean_logprob": stats["mean_logprob"], "min_logprob": stats["min_logprob"],
+            "n_answer_tokens": stats["n_answer_tokens"],
+            "output_sha256": hashlib.sha256(text_out.encode("utf-8")).hexdigest(),
             "seconds": round(time.time() - t, 2),
         })
     except Exception as exc:
@@ -145,6 +182,68 @@ res = {"results": results, "load_s": round(load_s, 2), "gen_s": round(time.time(
        "adapter_tensors": adapter_info["tensors"] if adapter_info else None}
 print("DISTILLERY_OUT:" + json.dumps(res))
 """
+
+
+def answer_logprob_stats(
+    token_ids: Sequence[int],
+    logprobs: Sequence[float],
+    pieces: Sequence[str],
+    stop_ids: Collection[int],
+) -> dict[str, Any]:
+    """Mean/min log-probability of the ANSWER tokens of one greedy generation (pure python).
+
+    ``token_ids[i]`` is the i-th generated token, ``logprobs[i]`` its log-probability under the
+    step's scores, ``pieces[i]`` its own decoded text (special tokens kept). Rule:
+
+    1. generation ended at the first token in ``stop_ids`` (EOS/pad): it and everything after it
+       are dropped;
+    2. the last ``</think>`` (case-insensitive) in the concatenated pieces closes the think block:
+       every token ending at or before the end of that tag plus the whitespace that follows it
+       is excluded (so is an unclosed ``<think>`` block: the text from the tag on);
+    3. with no ``</think>`` nothing is excluded this way (the chat template already supplied the
+       empty think block in the prompt, so it normally is not generated at all);
+    4. a token straddling the boundary counts as answer.
+
+    ``mean_logprob`` / ``min_logprob`` are ``None`` when no answer token remains.
+    This function is embedded verbatim in ``GEN_SCRIPT`` (``inspect.getsource``).
+    """
+    import re
+
+    stop = set(stop_ids)
+    cut = len(token_ids)
+    for i, tid in enumerate(token_ids):
+        if tid in stop:
+            cut = i
+            break
+    n = min(cut, len(logprobs), len(pieces))
+    text = "".join(pieces[:n])
+    start = 0
+    closes = list(re.finditer(r"</think>", text, re.IGNORECASE))
+    if closes:
+        start = closes[-1].end()
+        while start < len(text) and text[start].isspace():
+            start += 1
+    end = len(text)
+    opened = re.compile(r"<think>", re.IGNORECASE).search(text, start)
+    if opened is not None:
+        end = opened.start()
+    kept: list[float] = []
+    pos = 0
+    for i in range(n):
+        tok_start, pos = pos, pos + len(pieces[i])
+        if pos > start and tok_start < end:
+            kept.append(float(logprobs[i]))
+    return {
+        "mean_logprob": sum(kept) / len(kept) if kept else None,
+        "min_logprob": min(kept) if kept else None,
+        "n_answer_tokens": len(kept),
+        "n_total_tokens": n,
+    }
+
+
+# The helper above is shipped inside the script (the sandbox has no ``distillery``), so it is
+# spliced in from its own source and the two can never drift apart.
+GEN_SCRIPT = "\n\n".join((_GEN_HEAD, inspect.getsource(answer_logprob_stats), _GEN_LOOP))
 
 
 DUMMY_ADAPTER_SCRIPT_PATH = "/work/make_dummy_adapter.py"
@@ -243,6 +342,33 @@ def parse_output(stdout: str) -> dict[str, Any]:
             if isinstance(parsed, dict):
                 return parsed
     raise StudentServingError(f"no {OUT_MARKER} line in generation output")
+
+
+def _opt_float(value: object) -> float | None:
+    if isinstance(value, bool) or not isinstance(value, int | float):
+        return None
+    f = float(value)
+    return f if math.isfinite(f) else None
+
+
+def student_output_from_item(item: Mapping[str, Any]) -> StudentOutput:
+    """One per-sample result of the generation script as a ``StudentOutput``. Output of an older
+    script (no log-prob fields) yields ``None`` signals; ``output_sha256`` is recomputed from the
+    text when absent. A failed sample (``error`` set) has empty text."""
+    if item.get("error"):
+        return StudentOutput(
+            text="", error=str(item["error"])[:300], seconds=_opt_float(item.get("seconds"))
+        )
+    text = str(item.get("text", ""))
+    n_answer = item.get("n_answer_tokens")
+    return StudentOutput(
+        text=text,
+        mean_logprob=_opt_float(item.get("mean_logprob")),
+        min_logprob=_opt_float(item.get("min_logprob")),
+        n_answer_tokens=n_answer if isinstance(n_answer, int) and n_answer >= 0 else None,
+        output_sha256=str(item.get("output_sha256") or ""),
+        seconds=_opt_float(item.get("seconds")),
+    )
 
 
 # ---------------------------------------------------------------- adapter files
@@ -511,6 +637,10 @@ class SandboxCpuStudent:
         return min(self._timeout_s, self._job_base_s + self._job_per_sample_s * n)
 
     def generate(self, messages_batch: Sequence[ChatMessages]) -> list[str]:
+        return [o.text for o in self.generate_detailed(messages_batch)]
+
+    def generate_detailed(self, messages_batch: Sequence[ChatMessages]) -> list[StudentOutput]:
+        """Like ``generate`` but each sample keeps its answer log-probability signals."""
         if self._closed:
             raise RuntimeError("SandboxCpuStudent is closed")
         image = self._ensure_image()
@@ -553,7 +683,7 @@ class SandboxCpuStudent:
                 results[i] = r
             heartbeat.bump("student_retry")
         heartbeat.bump("student_batch")  # the whole generate call came back
-        outputs: list[str] = []
+        outputs: list[StudentOutput] = []
         failed = 0
         for chunk, res in zip(chunks, results, strict=True):
             if not res.ok:
@@ -570,12 +700,11 @@ class SandboxCpuStudent:
             for item in items:
                 if not isinstance(item, dict):
                     raise StudentServingError("generation batch returned a malformed result")
+                outputs.append(student_output_from_item(item))
                 if item.get("error"):
                     n_failed += 1
                     self.error_samples.append(str(item["error"])[:300])
-                    outputs.append("")
                 else:
-                    outputs.append(str(item.get("text", "")))
                     n_new = item.get("new_tokens")
                     n_cap += isinstance(n_new, int) and n_new >= self._max_new_tokens
             failed += n_failed

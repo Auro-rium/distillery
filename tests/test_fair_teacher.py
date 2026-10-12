@@ -251,3 +251,21 @@ def test_cached_generator_reuses_by_prompt_digest(tmp_path: Path) -> None:
     b1 = [[{"role": "user", "content": "a"}]]
     assert g.generate(b1) == ["out1"] and g.generate(b1) == ["out1"] and Counting.n == 1
     assert g.generate([[{"role": "user", "content": "b"}]]) == ["out1"] and Counting.n == 2
+
+
+def test_cached_generator_keeps_logprobs_and_reads_legacy_cache_files(tmp_path: Path) -> None:
+    from distillery.student import FakeStudent
+
+    inner = FakeStudent(lambda m: "SELECT 1", lambda m, t: -0.25)
+    g = ft.CachedGenerator(inner, tmp_path, "student")
+    batch = [[{"role": "user", "content": "a"}], [{"role": "user", "content": "b"}]]
+    first = g.generate_detailed(batch)
+    assert [o.mean_logprob for o in first] == [-0.25, -0.25] and inner.calls == 1
+    again = ft.CachedGenerator(FakeStudent(lambda m: "NEVER"), tmp_path, "student")
+    assert again.generate_detailed(batch) == first  # a hit: served from the file, signals intact
+    assert again.generate(batch) == ["SELECT 1", "SELECT 1"]
+    # a file written by plain ``generate`` (older runs) is still a hit, with no signals
+    legacy = ft.CachedGenerator(FakeStudent(lambda m: "SELECT 2"), tmp_path, "legacy")
+    assert legacy.generate(batch) == ["SELECT 2", "SELECT 2"]
+    out = legacy.generate_detailed(batch)
+    assert [o.text for o in out] == ["SELECT 2", "SELECT 2"] and out[0].mean_logprob is None

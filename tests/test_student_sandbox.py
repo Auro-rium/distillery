@@ -30,9 +30,12 @@ MODEL = "Qwen/Qwen3-0.6B"
 STUBS = {
     "torch.py": """
 import contextlib
+import math
 bfloat16 = "bf16"
 def set_num_threads(n):
     pass
+def logsumexp(row, dim):
+    return math.log(sum(math.exp(v) for v in row))
 @contextlib.contextmanager
 def no_grad():
     yield
@@ -81,7 +84,15 @@ class T(list):
     def shape(self):
         return (len(self), len(self[0]))
 PROMPTS = []
+class Row(list):
+    def float(self):
+        return self
+class Out:
+    def __init__(self, sequences, scores):
+        self.sequences, self.scores = sequences, scores
 class AutoTokenizer:
+    eos_token_id = 999
+    pad_token_id = 998
     @classmethod
     def from_pretrained(cls, base):
         return cls()
@@ -93,20 +104,29 @@ class AutoTokenizer:
         PROMPTS.append(text)
         return {"input_ids": T([[len(PROMPTS) - 1]]), "attention_mask": T([[1]])}
     def decode(self, ids, skip_special_tokens):
-        assert skip_special_tokens is True
+        if not skip_special_tokens:  # one token's own piece (for the answer log-prob rule)
+            return "tok"
         return MODEL.tag + "|" + PROMPTS[ids[0]]
 MODEL = None
+class GenConfig:
+    eos_token_id = [999, 997]
+    pad_token_id = None
 class Model:
     tag = "base"
+    generation_config = GenConfig()
     def eval(self):
         pass
-    def generate(self, input_ids, attention_mask, max_new_tokens, do_sample):
-        assert do_sample is False
-        text = PROMPTS[input_ids[0][0]]
+    def generate(self, input_ids, attention_mask, max_new_tokens, do_sample, output_scores,
+                 return_dict_in_generate):
+        assert do_sample is False and output_scores is True and return_dict_in_generate is True
+        idx = input_ids[0][0]
+        text = PROMPTS[idx]
         if "boom" in text:
             raise RuntimeError("boom in " + text)
         n_new = 2 if "long" in text else 1  # "long" runs to a cap of 2 new tokens
-        return T([[input_ids[0][0]] * (1 + n_new)])
+        row = Row([0.0] * 64)
+        row[idx] = 2.0  # the chosen token (id = prompt index) has logit 2 among 64 vocab entries
+        return Out(T([[idx] * (1 + n_new)]), tuple([row] for _ in range(n_new)))
 class AutoModelForCausalLM:
     @classmethod
     def from_pretrained(cls, base, torch_dtype):
@@ -526,3 +546,36 @@ def test_a_timed_out_job_is_retried_with_a_doubled_timeout(
     s = SandboxCpuStudent(flaky, "img", bridge, base_model=MODEL, batch_size=2, timeout_s=500)
     assert s.generate(msgs(2)) == ["base|q0", "base|q1"]
     assert [j.timeout for j in log.jobs] == [300.0, 500.0]  # 120 + 90 * 2, then 2x capped
+
+
+def test_generate_detailed_reports_answer_logprobs_from_the_real_script(
+    stubs: Path, tmp_path: Path, bridge: AsyncBridge
+) -> None:
+    import hashlib
+    import math
+
+    s = SandboxCpuStudent(
+        make_sandbox(stubs, tmp_path, Log()), "img", bridge, base_model=MODEL, batch_size=2
+    )
+    batch = [[{"role": "user", "content": "q"}], [{"role": "user", "content": "q long"}]]
+    outs = s.generate_detailed(batch)
+    lp = 2.0 - math.log(63 + math.exp(2.0))  # stub: logit 2 for the chosen token among 64
+    assert [o.text for o in outs] == ["base|q", "base|q long"]
+    assert [o.n_answer_tokens for o in outs] == [1, 2]  # stub pieces carry no think block
+    assert all(o.mean_logprob == pytest.approx(lp) for o in outs)
+    assert all(o.min_logprob == pytest.approx(lp) for o in outs)
+    assert outs[0].output_sha256 == hashlib.sha256(b"base|q").hexdigest()
+    assert outs[1].seconds is not None and outs[1].error is None
+    assert s.generate(batch) == [o.text for o in outs]  # text-only callers are unchanged
+
+
+def test_generate_detailed_failed_sample_has_no_signals(
+    stubs: Path, tmp_path: Path, bridge: AsyncBridge
+) -> None:
+    s = SandboxCpuStudent(
+        make_sandbox(stubs, tmp_path, Log()), "img", bridge, base_model=MODEL, batch_size=4
+    )
+    batch = [[{"role": "user", "content": c}] for c in ("a", "boom", "b", "c")]
+    outs = s.generate_detailed(batch)
+    assert outs[1].text == "" and outs[1].error and "boom" in outs[1].error
+    assert outs[1].mean_logprob is None and outs[0].mean_logprob is not None

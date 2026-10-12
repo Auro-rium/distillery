@@ -751,7 +751,9 @@ def _gen_handler(counts: dict[str, int]) -> Callable[[Job, dict[str, bytes]], Fa
             return FakeExecution()
         if "gen.py" in shell:
             n = len(json.loads(str(job.stdin))["messages_batch"])
-            res = {"results": [{"text": "SELECT 1", "error": None} for _ in range(n)], "n": n}
+            item = {"text": "SELECT 1", "error": None, "mean_logprob": -0.5, "min_logprob": -1.5,
+                    "n_answer_tokens": 4}  # fmt: skip
+            res = {"results": [dict(item) for _ in range(n)], "n": n}
             return FakeExecution("DISTILLERY_OUT:" + json.dumps(res) + "\n")
         counts["layer"] = counts.get("layer", 0) + 1
         return FakeExecution()
@@ -796,6 +798,22 @@ def test_sandbox_cpu_serving_builds_the_heavy_image_once_for_base_and_student(
     assert counts == {"pip": 1, "layer": 1}  # one pip+weights build, one adapter layer
     built = [d for n, d in store.list_experiments(pipe.run_id) if n == "serving_image"]
     assert [b["kind"] for b in built] == ["deps", "adapter"] and all(b["image"] for b in built)
+
+
+def test_sandbox_cpu_servers_keep_their_logprobs_through_the_billing_wrapper(
+    tmp_path: Path, bridge: AsyncBridge
+) -> None:
+    from distillery.evaluator import generate_outputs
+
+    counts: dict[str, int] = {}
+    pipe, store = _sandbox_cpu_pipe(tmp_path, bridge, counts)
+    pipe._resolve_serving()
+    store.create_run(pipe.run_id)
+    assert pipe.deps.base_factory is not None
+    base = pipe.deps.base_factory()  # what _stage_final_eval hands to the evaluator
+    outs = generate_outputs(base, [[{"role": "user", "content": "q"}]])
+    assert [(o.text, o.mean_logprob, o.n_answer_tokens) for o in outs] == [("SELECT 1", -0.5, 4)]
+    base.close()
 
 
 def test_sandbox_cpu_defaults_are_the_measured_recipe() -> None:
@@ -964,3 +982,35 @@ def test_dry_run_at_gated_stand_in_scale_and_teacher_cost_denominator(
     assert t["items_scored"] == 18
     assert t["usd_per_1k_tasks"] == pytest.approx(t["usd"] / 18 * 1000)
     assert "18 items" in t["usd_per_1k_tasks_basis"]
+
+
+def test_eval_vectors_not_persisted_by_default(reference: dict[str, Any]) -> None:
+    pipe = reference["pipe"]
+    assert not (pipe.run_dir / "final_eval_vectors.json").exists()
+    assert "vectors_file" not in pipe._results["final_eval"]
+
+
+def test_persist_eval_vectors_writes_full_per_item_vectors(
+    tmp_path: Path, bridge: AsyncBridge
+) -> None:
+    pipe, _dr, store = make(tmp_path, bridge, persist_eval_vectors=True)
+    pipe.run()
+    store.close()
+    path = pipe.run_dir / "final_eval_vectors.json"
+    vec = json.loads(path.read_text(encoding="utf-8"))
+    assert vec["format"] == "distillery-final-eval-vectors-v1" and vec["n"] > 0
+    assert len(vec["task_ids"]) == vec["n"] and set(vec["setups"]) == {"base", "student", "teacher"}
+    for blk in vec["setups"].values():
+        assert len(blk["correct"]) == len(blk["output_sha256"]) == vec["n"]
+    # the fake student reports (hash-derived) log-probabilities; the teacher API does not
+    lps = vec["setups"]["student"]["mean_logprob"]
+    assert all(isinstance(x, float) and x < 0 for x in lps)
+    assert vec["setups"]["teacher"]["mean_logprob"] == [None] * vec["n"]
+    # fakes are less confident when wrong, so the signal separates right from wrong
+    ok = [lp for lp, c in zip(lps, vec["setups"]["student"]["correct"], strict=True) if c]
+    bad = [lp for lp, c in zip(lps, vec["setups"]["student"]["correct"], strict=True) if not c]
+    if ok and bad:
+        assert sum(ok) / len(ok) > sum(bad) / len(bad)
+    # the capped report is untouched: no vectors inside it
+    assert "mean_logprob" not in json.dumps(pipe._results["final_eval"]["report"])
+    assert pipe._results["final_eval"]["vectors_file"] == "final_eval_vectors.json"

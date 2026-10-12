@@ -126,6 +126,7 @@ def _with_serving(artifact: Mapping[str, str], trained: TrainedArtifact) -> dict
 
 
 PIPELINE_VERSION = "1"
+FINAL_VECTORS_FILE = "final_eval_vectors.json"  # H3: opt-in full per-item gate-set vectors
 DRY_RUN_LABEL = "DRY RUN — fake models, numbers are NOT results"
 STUDENT_COST_UNAVAILABLE = (
     "unavailable: the student is served in Nebius Sandboxes (CPU) and the sandbox price is unknown"
@@ -254,6 +255,11 @@ class PipelineConfig(BaseModel):
     # sandbox_cpu: parallel generation jobs (the beta limit is 50 operations in flight in total)
     student_concurrency: int = Field(default=10, ge=1, le=20)
     student_max_new_tokens: int = Field(default=160, ge=16)  # sandbox_cpu: per sample (S4 recipe)
+    # H3: also write the FULL per-item gate-set vectors of base/student/teacher (task ids,
+    # correctness, extracted answers, output hashes, mean answer log-probability) to
+    # <run_dir>/final_eval_vectors.json, beside (never inside) the capped report. Off by default:
+    # with it off no stage key, result or report byte changes.
+    persist_eval_vectors: bool = Field(default=False, exclude=True)
     # Confirmed human held-out file (humanset.py). Only the PATH lives here: the evaluator alone
     # reads it. Excluded from model_dump so a report never carries a machine-local path.
     human_set_path: Path | None = Field(default=None, exclude=True)
@@ -2302,9 +2308,18 @@ class Pipeline:
                 _close_all(opened, raise_first=False)
                 raise
             _close_all(opened)
+            vectors: dict[str, Any] = {}
+            if pipeline.cfg.persist_eval_vectors:
+                blob = _pretty(rep.vectors_json()).encode("utf-8")
+                atomic_write_bytes(pipeline.run_dir / FINAL_VECTORS_FILE, blob)
+                vectors = {
+                    "vectors_file": FINAL_VECTORS_FILE,
+                    "vectors_sha256": sha256_hex(blob),
+                }
             return {
                 "report": rep.to_json(),
                 "candidate_round": r,
+                **vectors,
                 "counters": {"heldout_n": rep.n,
                              **{f"unparseable_{m}": s.unparseable for m, s in rep.scores.items()},
                              **_generation_error_counter("student", server),
@@ -2313,7 +2328,11 @@ class Pipeline:
 
         return self._stage(
             "final_eval",
-            {"round": r, "gate": self.config.gate.model_dump()},
+            {
+                "round": r,
+                "gate": self.config.gate.model_dump(),
+                **({"persist_vectors": True} if self.cfg.persist_eval_vectors else {}),
+            },
             [f"finetune_r{r}", "split"],
             fn,
         )

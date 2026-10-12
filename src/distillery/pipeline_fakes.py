@@ -79,6 +79,16 @@ def _unit(*parts: object) -> float:
     return int(h[:8], 16) / 2**32
 
 
+def _fake_mean_logprob(
+    pack: Pack, salt: str, messages: Sequence[dict[str, Any]], text: str
+) -> float:
+    """FAKE mean answer log-probability: deterministic per (salt, question) and, like a real model
+    that knows when it is guessing, lower on a wrong answer than on a right one."""
+    wrong = text == _fenced(pack, pack.dry_wrong_answer) or not text.startswith("```")
+    u = _unit(salt, "logprob", question_of(messages) or text)
+    return -(0.9 + 0.8 * u) if wrong else -(0.05 + 0.5 * u)
+
+
 class GoldOracle:
     def __init__(self) -> None:
         self._gold: dict[str, str] = {}
@@ -414,7 +424,12 @@ class FakeStudentFactory:
             bad = _unit(self.salt, trained.adapter_sha256, q) < rate
             return _fenced(self.pack, self.pack.dry_wrong_answer if bad else self.oracle.gold(q))
 
-        server = FakeStudent(respond)
+        server = FakeStudent(
+            respond,
+            lambda m, text: _fake_mean_logprob(
+                self.pack, f"{self.salt}:{trained.adapter_sha256}", m, text
+            ),
+        )
         self.servers.append(server)
         return server
 
@@ -439,7 +454,9 @@ class FakeBaseFactory:
             bad = _unit(self.salt, q) < self.error_rate
             return _fenced(self.pack, self.pack.dry_wrong_answer if bad else self.oracle.gold(q))
 
-        server = FakeStudent(respond)
+        server = FakeStudent(
+            respond, lambda m, text: _fake_mean_logprob(self.pack, self.salt, m, text)
+        )
         self.servers.append(server)
         return server
 

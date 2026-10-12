@@ -21,6 +21,7 @@ from distillery.misses import classify_miss
 from distillery.naturaltrain import read_question_texts
 from distillery.prompts import extract_sql
 from distillery.store import Store, canonical_json, sha256_hex
+from distillery.student import StudentOutput, generate_detailed, text_sha256
 from distillery.taskpacks.base import Pack, get_pack
 from distillery.taskpacks.sql.executor import Executor
 from distillery.taskpacks.sql.human import normalise_question
@@ -29,6 +30,7 @@ from distillery.taskpacks.sql.verifier import compare_outcomes
 
 ChatMessages = list[dict[str, str]]
 MODEL_ROLES = ("base", "student", "teacher")
+FINAL_VECTORS_FORMAT = "distillery-final-eval-vectors-v1"
 
 
 def _pack(pack: Pack | None) -> Pack:
@@ -40,6 +42,13 @@ def _pack(pack: Pack | None) -> Pack:
 
 class Generator(Protocol):
     def generate(self, messages_batch: Sequence[ChatMessages]) -> list[str]: ...
+
+
+def generate_outputs(generator: Generator, batch: Sequence[ChatMessages]) -> list[StudentOutput]:
+    """Outputs of a generator with their confidence signals when it has ``generate_detailed``
+    (the student servers); every other generator (e.g. the teacher API) yields text only, with
+    ``mean_logprob`` ``None``."""
+    return generate_detailed(generator, batch)
 
 
 class ArtifactMismatchError(RuntimeError):
@@ -62,6 +71,10 @@ class ModelScores:
     unparseable: int  # outputs with no extractable SQL (counted, never skipped)
     outputs: list[str] = field(default_factory=list)  # raw model output per item
     sqls: list[str | None] = field(default_factory=list)  # extracted SQL per item
+    # per item: sha256 of the raw output, and the mean token log-probability of its answer
+    # (None for a generator that does not report it, e.g. the teacher API)
+    output_sha256: list[str] = field(default_factory=list)
+    mean_logprob: list[float | None] = field(default_factory=list)
 
     @property
     def accuracy(self) -> float:
@@ -85,6 +98,31 @@ class EvalReport:
     # Human held-out set (Gate B): scored with the SAME thresholds as the gate, reported beside it,
     # never an input of Gate A. None = no human set was sealed for this run.
     human: dict[str, Any] | None = None
+    # Held-out task ids in item order (parallel to every per-item list of ``scores``). Not part of
+    # ``to_json``; used by ``vectors_json``.
+    task_ids: list[str] = field(default_factory=list)
+
+    def vectors_json(self) -> dict[str, Any]:
+        """The FULL per-item vectors of the gate set for base/student/teacher (the report's
+        ``examples`` are capped at 60): task ids, correctness, extracted answers, output hashes and
+        mean answer log-probabilities. Same per-setup keys as ``distillery-setup-vectors-v1``."""
+        return {
+            "format": FINAL_VECTORS_FORMAT,
+            "heldout_sha256": self.heldout_sha256,
+            "n": self.n,
+            "task_ids": list(self.task_ids),
+            "setups": {
+                m: {
+                    "correct": list(sc.correct),
+                    "sqls": list(sc.sqls),
+                    "output_sha256": list(sc.output_sha256),
+                    "mean_logprob": list(sc.mean_logprob),
+                    "unparseable": sc.unparseable,
+                    "accuracy": sc.accuracy,
+                }
+                for m, sc in self.scores.items()
+            },
+        }
 
     def to_json(self) -> dict[str, Any]:
         return {
@@ -142,9 +180,10 @@ def score_model(
         pk.build_messages(str(it["question"]), schema_ddl, role=f"eval_{role}")  # type: ignore[arg-type]
         for it in items
     ]
-    outputs = generator.generate(batch)
-    if len(outputs) != len(items):
-        raise RuntimeError(f"{role}: got {len(outputs)} outputs for {len(items)} items")
+    detailed = generate_outputs(generator, batch)
+    if len(detailed) != len(items):
+        raise RuntimeError(f"{role}: got {len(detailed)} outputs for {len(items)} items")
+    outputs = [d.text for d in detailed]
     sqls = [pk.extract_answer(o) for o in outputs]
     runnable = [i for i, s in enumerate(sqls) if s is not None]
     outcomes = executor.run_batch(db_ref, [sqls[i] or "" for i in runnable])
@@ -165,6 +204,8 @@ def score_model(
         unparseable=sum(1 for s in sqls if s is None),
         outputs=list(outputs),
         sqls=sqls,
+        output_sha256=[d.output_sha256 for d in detailed],
+        mean_logprob=[d.mean_logprob for d in detailed],
     )
 
 
@@ -278,6 +319,7 @@ def evaluate(
         class_counts=class_counts,
         artifact=artifact,
         examples=build_examples(items, scores, pk),
+        task_ids=[str(it.get("task_id")) for it in items],
         stress=_score_stress(
             store, run_id, generators, executor, db_ref=db_ref, schema_ddl=schema_ddl, pack=pk
         ),
@@ -573,9 +615,14 @@ def _judge(
     *,
     set_name: str,
     setup: str,
+    mean_logprobs: Sequence[float | None] | None = None,
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     """Execute and verify one setup's raw outputs. Returns the per-item block (vectors) and the
-    pre-classified misses (``misses.classify_miss``: ids, class and result shapes only)."""
+    pre-classified misses (``misses.classify_miss``: ids, class and result shapes only).
+    ``mean_logprobs`` = the per-item mean answer log-probability when the generator reported it
+    (``None`` entries / no list: not measured); ``output_sha256`` is always recomputed."""
+    if mean_logprobs is not None and len(mean_logprobs) != len(outputs):
+        raise ValueError("mean_logprobs and outputs differ in length")
     sqls = [extract_sql(o) for o in outputs]
     runnable = [i for i, q in enumerate(sqls) if q is not None]
     outcomes = executor.run_batch(db_ref, [sqls[i] or "" for i in runnable]) if runnable else []
@@ -605,6 +652,8 @@ def _judge(
         "reasons": reasons,
         "sqls": sqls,
         "outputs": list(outputs),
+        "output_sha256": [text_sha256(o) for o in outputs],
+        "mean_logprob": list(mean_logprobs) if mean_logprobs is not None else [None] * len(outputs),
         "unparseable": sum(1 for q in sqls if q is None),
         "accuracy": sum(correct) / len(correct) if correct else 0.0,
     }
@@ -630,33 +679,43 @@ def _score_set(
             raise RuntimeError(f"gold SQL failed for {label} item {it.get('task_id')}: {g.error}")
     task_ids = [str(it.get("task_id")) for it in items]
     outputs: dict[str, list[str]] = {}
+    logprobs: dict[str, list[float | None]] = {}
     if cached is not None:
         if cached.get("task_ids") != task_ids:
             raise ValueError(f"{label}: cached task ids do not match the current item set")
         for st in setups:
-            outputs[st.name] = [str(o) for o in cached["setups"][st.name]["outputs"]]
+            old = cached["setups"][st.name]
+            outputs[st.name] = [str(o) for o in old["outputs"]]
+            # carried over from a v1 payload when present (older payloads have none)
+            lps = old.get("mean_logprob")
+            if isinstance(lps, list) and len(lps) == len(outputs[st.name]):
+                logprobs[st.name] = [None if v is None else float(v) for v in lps]
     else:
 
-        def gen(st: Setup) -> list[str]:
+        def gen(st: Setup) -> list[StudentOutput]:
             if st.generator is None:
                 raise ValueError(f"setup {st.name!r} has no generator")
-            outs = st.generator.generate([st.prompt(it) for it in items])
+            outs = generate_outputs(st.generator, [st.prompt(it) for it in items])
             if len(outs) != len(items):
                 raise RuntimeError(f"{st.name}: got {len(outs)} outputs for {len(items)} items")
-            return list(outs)
+            return outs
 
         with ThreadPoolExecutor(
             max_workers=max(1, len(setups)), thread_name_prefix="setup"
         ) as pool:
             futures = {pool.submit(gen, st): st.name for st in setups}
             for fut in as_completed(futures):
-                outputs[futures[fut]] = fut.result()  # any failure aborts the whole pass
+                name = futures[fut]
+                res = fut.result()  # any failure aborts the whole pass
+                outputs[name] = [r.text for r in res]
+                logprobs[name] = [r.mean_logprob for r in res]
     blocks: dict[str, Any] = {}
     misses: list[dict[str, Any]] = []
     for st in setups:  # stable order
         blocks[st.name], m = _judge(
-            items, gold, outputs[st.name], executor, db_ref, set_name=set_name, setup=st.name
-        )
+            items, gold, outputs[st.name], executor, db_ref, set_name=set_name, setup=st.name,
+            mean_logprobs=logprobs.get(st.name),
+        )  # fmt: skip
         misses.extend(m)
     return {
         "status": "scored",
