@@ -216,12 +216,93 @@ def p5(commit: str) -> dict[str, Any]:
     )  # fmt: skip
 
 
+def a5(commit: str) -> dict[str, Any]:
+    d = _load("a5_chaos")
+    checks = d["checks"]
+    met = sum(1 for v in checks.values() if v)
+    return _proof(
+        commit, "A5", "Chaos run: injected faults, no human action",
+        "PASS" if d["pass"] else "FAIL",
+        {"label": "chaos criteria met", "value": _frac(met, len(checks))},
+        [
+            {"label": "verdict reached", "value": d["decision"]},
+            {"label": "faults injected", "value": sum(d["injections"].values())},
+            {"label": "supervisor restarts", "value": d["supervisor_restarts"]},
+            {"label": "fine-tune jobs billed", "value": len(d["finetune_jobs"])},
+            {"label": "run cost (estimate)", "value": round(d["spend_total_usd"], 2)},
+        ],
+        "a5_chaos",
+    )  # fmt: skip
+
+
+def b2(commit: str) -> dict[str, Any]:
+    d = _load("b2_fair_teacher_s0_s1")
+    claims = d["analysis"]["claims"]["heldout"]
+    v = claims["vs_strongest_teacher"]
+    # PASS only when the pre-registered claim is made; an interval that includes 1.0 is inconclusive
+    return _proof(
+        commit, "B2", "Fair teacher: 8-shot Super vs the student",
+        "PASS" if v["claim"] else "PARTIAL",
+        {"label": "student/teacher ratio, lower bound", "value": round(v["ratio_lo"], 3)},
+        [
+            {"label": "student held-out accuracy", "value": _pct(claims["accuracy"]["student"])},
+            {"label": f"strongest teacher ({v['teacher']}) accuracy",
+             "value": _pct(claims["accuracy"][v["teacher"]])},
+            {"label": "beat-the-teacher claim", "value": "made" if v["claim"] else "not made"},
+            {"label": "P4 reproduced exactly",
+             "value": "yes" if d["analysis"]["p4_reproduction"]["reproduced"] else "no"},
+            {"label": "teacher setups deferred", "value": ", ".join(d["teacher_setups_deferred"])},
+        ],
+        "b2_fair_teacher_s0_s1",
+    )  # fmt: skip
+
+
+def gate_b(commit: str) -> dict[str, Any]:
+    d = _load("gateb_agent_authored")
+    g = d["gate"]
+    return _proof(
+        commit, "Gate B", "Natural phrasing: agent-authored questions",
+        "PASS" if d["decision"] == "PROMOTE" else "FAIL",
+        {"label": "decision", "value": d["decision"]},
+        [
+            {"label": "student accuracy", "value": _pct(g["student_acc"])},
+            {"label": "base accuracy", "value": _pct(g["base_acc"])},
+            {"label": "teacher accuracy (inflated)", "value": _pct(g["teacher_acc"])},
+            {"label": "student/teacher ratio lower bound", "value": round(g["ratio_lo"], 3)},
+            {"label": "McNemar p", "value": round(g["mcnemar_p"], 2)},
+            {"label": "questions", "value": g["n"]},
+        ],
+        "gateb_agent_authored",
+    )  # fmt: skip
+
+
+def n1(commit: str) -> dict[str, Any]:
+    d = _load("n1_natural_round")
+    p = d["primary"]
+    return _proof(
+        commit, "N1", "Natural-phrasing training: fresh agent-authored set",
+        "PASS" if p["decision"] == "PROMOTE" else "FAIL",
+        {"label": "decision", "value": p["decision"]},
+        [
+            {"label": "student accuracy", "value": _pct(p["accuracy"]["student"])},
+            {"label": "base accuracy", "value": _pct(p["accuracy"]["base"])},
+            {"label": "teacher accuracy (inflated)", "value": _pct(p["accuracy"]["teacher"])},
+            {"label": "student/teacher ratio lower bound", "value": round(p["ratio"]["lo"], 3)},
+            {"label": "McNemar p", "value": f"{p['mcnemar']['p']:.1e}"},
+            {"label": "questions", "value": p["n"]},
+            {"label": "Gate B re-score of this adapter",
+             "value": d["secondary"]["gate_b_rescore"]["status"]},
+        ],
+        "n1_natural_round",
+    )  # fmt: skip
+
+
 def build(commit: str, generated_at: str) -> dict[str, Any]:
     return {
         "generated_at": generated_at,
         "commit": commit,
         "repo_url": REPO_URL,
-        "proofs": [f(commit) for f in (p1_11, p1_12, p2, p3, p4, p5)],
+        "proofs": [f(commit) for f in (p1_11, p1_12, p2, p3, p4, p5, a5, b2, gate_b, n1)],
     }
 
 

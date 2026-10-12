@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-05T05:50:20+05:30",
-  "commit": "67c9dec4f32d78293a9720fb73708a1bb8a85f1a",
+  "generated_at": "2026-10-12T15:42:22+05:30",
+  "commit": "292d2b275093741be81f01982da81d4534e392f2",
   "repo_url": "https://github.com/Auro-rium/distillery",
   "proofs": [
     {
@@ -86,7 +86,7 @@
         }
       ],
       "evidence_path": "docs/proofs/evidence/p1_11_overfit.json",
-      "evidence_url": "https://github.com/Auro-rium/distillery/blob/67c9dec4f32d78293a9720fb73708a1bb8a85f1a/docs/proofs/evidence/p1_11_overfit.json"
+      "evidence_url": "https://github.com/Auro-rium/distillery/blob/292d2b275093741be81f01982da81d4534e392f2/docs/proofs/evidence/p1_11_overfit.json"
     },
     {
       "id": "W1-P1.12",
@@ -119,7 +119,7 @@
         }
       ],
       "evidence_path": "docs/proofs/evidence/p1_12_decision.json",
-      "evidence_url": "https://github.com/Auro-rium/distillery/blob/67c9dec4f32d78293a9720fb73708a1bb8a85f1a/docs/proofs/evidence/p1_12_decision.json"
+      "evidence_url": "https://github.com/Auro-rium/distillery/blob/292d2b275093741be81f01982da81d4534e392f2/docs/proofs/evidence/p1_12_decision.json"
     },
     {
       "id": "W2",
@@ -144,7 +144,7 @@
         }
       ],
       "evidence_path": "docs/proofs/evidence/p2_data.json",
-      "evidence_url": "https://github.com/Auro-rium/distillery/blob/67c9dec4f32d78293a9720fb73708a1bb8a85f1a/docs/proofs/evidence/p2_data.json"
+      "evidence_url": "https://github.com/Auro-rium/distillery/blob/292d2b275093741be81f01982da81d4534e392f2/docs/proofs/evidence/p2_data.json"
     },
     {
       "id": "W3",
@@ -173,7 +173,7 @@
         }
       ],
       "evidence_path": "docs/proofs/evidence/p3_calibrate.json",
-      "evidence_url": "https://github.com/Auro-rium/distillery/blob/67c9dec4f32d78293a9720fb73708a1bb8a85f1a/docs/proofs/evidence/p3_calibrate.json"
+      "evidence_url": "https://github.com/Auro-rium/distillery/blob/292d2b275093741be81f01982da81d4534e392f2/docs/proofs/evidence/p3_calibrate.json"
     },
     {
       "id": "W4",
@@ -210,7 +210,7 @@
         }
       ],
       "evidence_path": "docs/proofs/evidence/p4_run_summary.json",
-      "evidence_url": "https://github.com/Auro-rium/distillery/blob/67c9dec4f32d78293a9720fb73708a1bb8a85f1a/docs/proofs/evidence/p4_run_summary.json"
+      "evidence_url": "https://github.com/Auro-rium/distillery/blob/292d2b275093741be81f01982da81d4534e392f2/docs/proofs/evidence/p4_run_summary.json"
     },
     {
       "id": "W5",
@@ -243,7 +243,151 @@
         }
       ],
       "evidence_path": "docs/proofs/evidence/p5_live.json",
-      "evidence_url": "https://github.com/Auro-rium/distillery/blob/67c9dec4f32d78293a9720fb73708a1bb8a85f1a/docs/proofs/evidence/p5_live.json"
+      "evidence_url": "https://github.com/Auro-rium/distillery/blob/292d2b275093741be81f01982da81d4534e392f2/docs/proofs/evidence/p5_live.json"
+    },
+    {
+      "id": "A5",
+      "title": "Chaos run: injected faults, no human action",
+      "verdict": "PASS",
+      "headline": {
+        "label": "chaos criteria met",
+        "value": "5/5"
+      },
+      "metrics": [
+        {
+          "label": "verdict reached",
+          "value": "PROMOTE"
+        },
+        {
+          "label": "faults injected",
+          "value": 8
+        },
+        {
+          "label": "supervisor restarts",
+          "value": 4
+        },
+        {
+          "label": "fine-tune jobs billed",
+          "value": 1
+        },
+        {
+          "label": "run cost (estimate)",
+          "value": 4.19
+        }
+      ],
+      "evidence_path": "docs/proofs/evidence/a5_chaos.json",
+      "evidence_url": "https://github.com/Auro-rium/distillery/blob/292d2b275093741be81f01982da81d4534e392f2/docs/proofs/evidence/a5_chaos.json"
+    },
+    {
+      "id": "B2",
+      "title": "Fair teacher: 8-shot Super vs the student",
+      "verdict": "PARTIAL",
+      "headline": {
+        "label": "student/teacher ratio, lower bound",
+        "value": 0.957
+      },
+      "metrics": [
+        {
+          "label": "student held-out accuracy",
+          "value": "92.3%"
+        },
+        {
+          "label": "strongest teacher (S1) accuracy",
+          "value": "93.3%"
+        },
+        {
+          "label": "beat-the-teacher claim",
+          "value": "not made"
+        },
+        {
+          "label": "P4 reproduced exactly",
+          "value": "yes"
+        },
+        {
+          "label": "teacher setups deferred",
+          "value": "S2"
+        }
+      ],
+      "evidence_path": "docs/proofs/evidence/b2_fair_teacher_s0_s1.json",
+      "evidence_url": "https://github.com/Auro-rium/distillery/blob/292d2b275093741be81f01982da81d4534e392f2/docs/proofs/evidence/b2_fair_teacher_s0_s1.json"
+    },
+    {
+      "id": "Gate B",
+      "title": "Natural phrasing: agent-authored questions",
+      "verdict": "FAIL",
+      "headline": {
+        "label": "decision",
+        "value": "REJECT"
+      },
+      "metrics": [
+        {
+          "label": "student accuracy",
+          "value": "40.7%"
+        },
+        {
+          "label": "base accuracy",
+          "value": "38.4%"
+        },
+        {
+          "label": "teacher accuracy (inflated)",
+          "value": "98.8%"
+        },
+        {
+          "label": "student/teacher ratio lower bound",
+          "value": 0.306
+        },
+        {
+          "label": "McNemar p",
+          "value": 0.84
+        },
+        {
+          "label": "questions",
+          "value": 86
+        }
+      ],
+      "evidence_path": "docs/proofs/evidence/gateb_agent_authored.json",
+      "evidence_url": "https://github.com/Auro-rium/distillery/blob/292d2b275093741be81f01982da81d4534e392f2/docs/proofs/evidence/gateb_agent_authored.json"
+    },
+    {
+      "id": "N1",
+      "title": "Natural-phrasing training: fresh agent-authored set",
+      "verdict": "FAIL",
+      "headline": {
+        "label": "decision",
+        "value": "REJECT"
+      },
+      "metrics": [
+        {
+          "label": "student accuracy",
+          "value": "57.1%"
+        },
+        {
+          "label": "base accuracy",
+          "value": "29.6%"
+        },
+        {
+          "label": "teacher accuracy (inflated)",
+          "value": "95.9%"
+        },
+        {
+          "label": "student/teacher ratio lower bound",
+          "value": 0.495
+        },
+        {
+          "label": "McNemar p",
+          "value": "4.6e-07"
+        },
+        {
+          "label": "questions",
+          "value": 98
+        },
+        {
+          "label": "Gate B re-score of this adapter",
+          "value": "pending"
+        }
+      ],
+      "evidence_path": "docs/proofs/evidence/n1_natural_round.json",
+      "evidence_url": "https://github.com/Auro-rium/distillery/blob/292d2b275093741be81f01982da81d4534e392f2/docs/proofs/evidence/n1_natural_round.json"
     }
   ]
 }

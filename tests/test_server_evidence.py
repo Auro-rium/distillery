@@ -33,7 +33,9 @@ def test_build_is_deterministic_and_pinned() -> None:
     b = build_evidence.build(COMMIT, "2026-01-01T00:00:00+00:00")
     assert json.dumps(a) == json.dumps(b)
     assert a["repo_url"] == "https://github.com/Auro-rium/distillery"
-    assert [p["id"] for p in a["proofs"]] == ["W1-P1.11", "W1-P1.12", "W2", "W3", "W4", "W5"]
+    assert [p["id"] for p in a["proofs"]] == [
+        "W1-P1.11", "W1-P1.12", "W2", "W3", "W4", "W5", "A5", "B2", "Gate B", "N1"
+    ]  # fmt: skip
     for p in a["proofs"]:
         assert p["verdict"] in {"PASS", "FAIL", "PARTIAL"}
         assert p["evidence_url"] == f"{a['repo_url']}/blob/{COMMIT}/{p['evidence_path']}"
@@ -49,6 +51,16 @@ def test_build_values_come_from_the_evidence_files() -> None:
     assert by["W3"]["headline"]["value"] == "1321/1321"
     assert by["W4"]["headline"]["value"] == "PROMOTE"
     assert by["W5"]["headline"]["value"] == "PASS" and by["W5"]["verdict"] == "PARTIAL"
+    assert by["A5"]["headline"]["value"] == "5/5" and by["A5"]["verdict"] == "PASS"
+    # B2: the interval includes 1.0, so no claim is made and the rung is inconclusive, not failed
+    assert by["B2"]["verdict"] == "PARTIAL" and by["B2"]["headline"]["value"] == 0.957
+    assert {"label": "beat-the-teacher claim", "value": "not made"} in by["B2"]["metrics"]
+    assert by["Gate B"]["headline"]["value"] == "REJECT" and by["Gate B"]["verdict"] == "FAIL"
+    assert by["N1"]["headline"]["value"] == "REJECT" and by["N1"]["verdict"] == "FAIL"
+    n1_metrics = {m["label"]: m["value"] for m in by["N1"]["metrics"]}
+    assert n1_metrics["student accuracy"] == "57.1%" and n1_metrics["base accuracy"] == "29.6%"
+    assert n1_metrics["student/teacher ratio lower bound"] == 0.495
+    assert n1_metrics["Gate B re-score of this adapter"] == "pending"
 
 
 def test_no_sealed_fields() -> None:
@@ -81,7 +93,7 @@ def test_evidence_endpoint_default_file(tmp_path: Path, monkeypatch: pytest.Monk
     monkeypatch.delenv("DISTILLERY_EVIDENCE_FILE", raising=False)
     with _client(tmp_path) as c:
         r = c.get("/api/evidence")
-        assert r.status_code == 200 and len(r.json()["proofs"]) == 6
+        assert r.status_code == 200 and len(r.json()["proofs"]) == 10
 
 
 def test_evidence_endpoint_404_json(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
