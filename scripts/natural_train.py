@@ -116,7 +116,7 @@ def _cmd_draft(  # noqa: C901, PLR0911
     root = Path(a.root or env.get("DISTILLERY_HOME") or ".distillery")
     store = Store(root)
     try:
-        ledger = Ledger.from_config(run_id, config, store)
+        ledger = Ledger.from_config(run_id, config, store, env=env)
         try:
             est = nt.estimate_usd(
                 [q.question for q in qf.questions], ddl,

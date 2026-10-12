@@ -250,6 +250,22 @@ def test_draft_writes_the_natural_file_and_records_spend(
     assert ns.questions == ("keep?",) and ns.db_sha256 == DB_SHA
 
 
+def test_draft_spend_lands_in_the_global_ledger(tmp_path: Path, live_env: dict[str, str]) -> None:
+    from distillery.global_ledger import GlobalLedger
+
+    path = tmp_path / "global.sqlite"
+    code, out = _run_script(
+        tmp_path, *_draft_args(tmp_path, "1.0", "--i-approve-spend"),
+        env={**live_env, "DISTILLERY_GLOBAL_LEDGER": str(path)},
+        deps_factory=factory_for(ScriptedTransport(DRAFT_SCRIPT)),
+    )  # fmt: skip
+    assert code == EXIT_OK, out
+    doc = json.loads((tmp_path / "natural_train.json").read_text())
+    gl = GlobalLedger(path)
+    assert gl.total_committed() == pytest.approx(doc["spend"]["usd"])
+    assert [r["run_id"] for r in gl.summary()["by_run"]] == [doc["spend"]["run_id"]]
+
+
 def test_draft_refusals_happen_before_any_call(tmp_path: Path, live_env: dict[str, str]) -> None:
     transport = ScriptedTransport(DRAFT_SCRIPT)
     fac = factory_for(transport)
