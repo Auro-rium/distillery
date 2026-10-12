@@ -1,10 +1,10 @@
 {
-  "commit": "292d2b275093741be81f01982da81d4534e392f2",
-  "generated_at": "2026-10-12T15:42:22+05:30",
+  "commit": "691e24394e745237b012b7530926f8f47e3f8009",
+  "generated_at": "2026-10-12T18:54:57+05:30",
   "proofs": [
     {
       "evidence_path": "docs/proofs/evidence/p1_11_overfit.json",
-      "evidence_url": "https://github.com/Auro-rium/distillery/blob/292d2b275093741be81f01982da81d4534e392f2/docs/proofs/evidence/p1_11_overfit.json",
+      "evidence_url": "https://github.com/Auro-rium/distillery/blob/691e24394e745237b012b7530926f8f47e3f8009/docs/proofs/evidence/p1_11_overfit.json",
       "headline": {
         "label": "adapter on train set",
         "value": "64/64"
@@ -89,7 +89,7 @@
     },
     {
       "evidence_path": "docs/proofs/evidence/p1_12_decision.json",
-      "evidence_url": "https://github.com/Auro-rium/distillery/blob/292d2b275093741be81f01982da81d4534e392f2/docs/proofs/evidence/p1_12_decision.json",
+      "evidence_url": "https://github.com/Auro-rium/distillery/blob/691e24394e745237b012b7530926f8f47e3f8009/docs/proofs/evidence/p1_12_decision.json",
       "headline": {
         "label": "arm A dev accuracy",
         "value": "142/150"
@@ -122,7 +122,7 @@
     },
     {
       "evidence_path": "docs/proofs/evidence/p2_data.json",
-      "evidence_url": "https://github.com/Auro-rium/distillery/blob/292d2b275093741be81f01982da81d4534e392f2/docs/proofs/evidence/p2_data.json",
+      "evidence_url": "https://github.com/Auro-rium/distillery/blob/691e24394e745237b012b7530926f8f47e3f8009/docs/proofs/evidence/p2_data.json",
       "headline": {
         "label": "labels verified correct",
         "value": "276/276"
@@ -147,7 +147,7 @@
     },
     {
       "evidence_path": "docs/proofs/evidence/p3_calibrate.json",
-      "evidence_url": "https://github.com/Auro-rium/distillery/blob/292d2b275093741be81f01982da81d4534e392f2/docs/proofs/evidence/p3_calibrate.json",
+      "evidence_url": "https://github.com/Auro-rium/distillery/blob/691e24394e745237b012b7530926f8f47e3f8009/docs/proofs/evidence/p3_calibrate.json",
       "headline": {
         "label": "verifier gold vs gold",
         "value": "1321/1321"
@@ -176,7 +176,7 @@
     },
     {
       "evidence_path": "docs/proofs/evidence/p4_run_summary.json",
-      "evidence_url": "https://github.com/Auro-rium/distillery/blob/292d2b275093741be81f01982da81d4534e392f2/docs/proofs/evidence/p4_run_summary.json",
+      "evidence_url": "https://github.com/Auro-rium/distillery/blob/691e24394e745237b012b7530926f8f47e3f8009/docs/proofs/evidence/p4_run_summary.json",
       "headline": {
         "label": "decision",
         "value": "PROMOTE"
@@ -213,7 +213,7 @@
     },
     {
       "evidence_path": "docs/proofs/evidence/p5_live.json",
-      "evidence_url": "https://github.com/Auro-rium/distillery/blob/292d2b275093741be81f01982da81d4534e392f2/docs/proofs/evidence/p5_live.json",
+      "evidence_url": "https://github.com/Auro-rium/distillery/blob/691e24394e745237b012b7530926f8f47e3f8009/docs/proofs/evidence/p5_live.json",
       "headline": {
         "label": "B3 job adopted, not recreated",
         "value": "PASS"
@@ -246,7 +246,7 @@
     },
     {
       "evidence_path": "docs/proofs/evidence/a5_chaos.json",
-      "evidence_url": "https://github.com/Auro-rium/distillery/blob/292d2b275093741be81f01982da81d4534e392f2/docs/proofs/evidence/a5_chaos.json",
+      "evidence_url": "https://github.com/Auro-rium/distillery/blob/691e24394e745237b012b7530926f8f47e3f8009/docs/proofs/evidence/a5_chaos.json",
       "headline": {
         "label": "chaos criteria met",
         "value": "5/5"
@@ -279,7 +279,7 @@
     },
     {
       "evidence_path": "docs/proofs/evidence/b2_fair_teacher_s0_s1.json",
-      "evidence_url": "https://github.com/Auro-rium/distillery/blob/292d2b275093741be81f01982da81d4534e392f2/docs/proofs/evidence/b2_fair_teacher_s0_s1.json",
+      "evidence_url": "https://github.com/Auro-rium/distillery/blob/691e24394e745237b012b7530926f8f47e3f8009/docs/proofs/evidence/b2_fair_teacher_s0_s1.json",
       "headline": {
         "label": "student/teacher ratio, lower bound",
         "value": 0.957
@@ -312,7 +312,7 @@
     },
     {
       "evidence_path": "docs/proofs/evidence/gateb_agent_authored.json",
-      "evidence_url": "https://github.com/Auro-rium/distillery/blob/292d2b275093741be81f01982da81d4534e392f2/docs/proofs/evidence/gateb_agent_authored.json",
+      "evidence_url": "https://github.com/Auro-rium/distillery/blob/691e24394e745237b012b7530926f8f47e3f8009/docs/proofs/evidence/gateb_agent_authored.json",
       "headline": {
         "label": "decision",
         "value": "REJECT"
@@ -349,7 +349,7 @@
     },
     {
       "evidence_path": "docs/proofs/evidence/n1_natural_round.json",
-      "evidence_url": "https://github.com/Auro-rium/distillery/blob/292d2b275093741be81f01982da81d4534e392f2/docs/proofs/evidence/n1_natural_round.json",
+      "evidence_url": "https://github.com/Auro-rium/distillery/blob/691e24394e745237b012b7530926f8f47e3f8009/docs/proofs/evidence/n1_natural_round.json",
       "headline": {
         "label": "decision",
         "value": "REJECT"
