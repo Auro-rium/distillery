@@ -11,7 +11,7 @@ import threading
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 _RUN_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
 _ROUTER_SPLIT_RE = re.compile(r"^[a-z][a-z0-9]{0,15}$")
@@ -39,7 +39,21 @@ CREATE TABLE IF NOT EXISTS spend (
 CREATE TABLE IF NOT EXISTS audit (
     id INTEGER PRIMARY KEY AUTOINCREMENT, at TEXT NOT NULL, actor TEXT NOT NULL,
     action TEXT NOT NULL, run_id TEXT, detail_json TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS gateway_calls (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, created_at TEXT NOT NULL, day TEXT NOT NULL,
+    request_id TEXT NOT NULL, ip_hash TEXT NOT NULL, model TEXT NOT NULL, skill INTEGER NOT NULL,
+    prompt_sha256 TEXT NOT NULL, served_by TEXT NOT NULL, score REAL, lambda REAL, reason TEXT,
+    input_tokens INTEGER NOT NULL DEFAULT 0, output_tokens INTEGER NOT NULL DEFAULT 0,
+    cost_usd REAL NOT NULL DEFAULT 0, teacher_cost_usd_counterfactual REAL,
+    counterfactual_basis TEXT, student_called INTEGER NOT NULL DEFAULT 0,
+    latency_ms REAL NOT NULL DEFAULT 0, status TEXT NOT NULL, error TEXT);
+CREATE INDEX IF NOT EXISTS gateway_calls_day ON gateway_calls(day);
 """
+
+
+def _quoted(cols: tuple[str, ...]) -> str:
+    return ",".join(f'"{c}"' for c in cols)
+
 
 AUDIT_ACTORS = frozenset({"admin", "supervisor", "controller", "chaos", "watchdog"})
 
@@ -445,6 +459,106 @@ class Store:
                 _now(),
             ),
         )
+
+    # ---- gateway (OpenAI-compatible endpoint) call log ----------------------------
+    _GATEWAY_COLS = (
+        "created_at", "day", "request_id", "ip_hash", "model", "skill", "prompt_sha256",
+        "served_by", "score", "lambda", "reason", "input_tokens", "output_tokens", "cost_usd",
+        "teacher_cost_usd_counterfactual", "counterfactual_basis", "student_called",
+        "latency_ms", "status", "error",
+    )  # fmt: skip
+
+    def add_gateway_call(self, row: dict[str, Any]) -> None:
+        cols = self._GATEWAY_COLS
+        self._exec(
+            f"INSERT INTO gateway_calls({_quoted(cols)}) "  # noqa: S608 - fixed column names
+            f"VALUES ({','.join('?' * len(cols))})",
+            tuple(row.get(c) for c in cols),
+        )
+
+    def gateway_calls(self, day: str | None = None) -> list[dict[str, Any]]:
+        cols = ("id", *self._GATEWAY_COLS)
+        sql = f"SELECT {_quoted(cols)} FROM gateway_calls"  # noqa: S608 - fixed column names
+        params: tuple[Any, ...] = ()
+        if day is not None:
+            sql, params = sql + " WHERE day=?", (day,)
+        return [dict(zip(cols, r, strict=True)) for r in self._query(sql + " ORDER BY id", params)]
+
+    def gateway_count(self, day: str, what: Literal["student_called", "not_ok"]) -> int:
+        """Rows of ``day`` where the student was invoked / that were refused or failed."""
+        cond = "student_called=1" if what == "student_called" else "status<>'ok'"
+        sql = "SELECT COUNT(*) FROM gateway_calls WHERE day=? AND " + cond  # noqa: S608 - fixed
+        return int(self._query(sql, (day,))[0][0])
+
+    def gateway_served_by(self, day: str | None = None) -> dict[str, int]:
+        sql = "SELECT served_by, COUNT(*) FROM gateway_calls WHERE status='ok'"
+        params: tuple[Any, ...] = ()
+        if day is not None:
+            sql, params = sql + " AND day=?", (day,)
+        return {str(r[0]): int(r[1]) for r in self._query(sql + " GROUP BY served_by", params)}
+
+    def gateway_totals(self) -> dict[str, Any]:
+        """Aggregates for the savings view over skill requests that were served (``status='ok'``):
+        everything, and the "comparable" subset whose teacher counterfactual could be computed
+        (NULL = unavailable, excluded). Also every student invocation (served or deferred, any
+        status), refusals/errors, and the passthrough spend."""
+        by = {
+            str(r[0]): int(r[1])
+            for r in self._query(
+                "SELECT served_by, COUNT(*) FROM gateway_calls "
+                "WHERE status='ok' AND skill=1 GROUP BY served_by"
+            )
+        }
+        a = self._query(
+            "SELECT COUNT(*), COALESCE(SUM(cost_usd),0), COALESCE(SUM(student_called),0) "
+            "FROM gateway_calls WHERE status='ok' AND skill=1"
+        )[0]
+        c = self._query(
+            "SELECT COUNT(*), COALESCE(SUM(cost_usd),0), COALESCE(SUM(student_called),0), "
+            "COALESCE(SUM(teacher_cost_usd_counterfactual),0) FROM gateway_calls "
+            "WHERE status='ok' AND skill=1 AND teacher_cost_usd_counterfactual IS NOT NULL"
+        )[0]
+        pt = self._query(
+            "SELECT COUNT(*), COALESCE(SUM(cost_usd),0) FROM gateway_calls "
+            "WHERE status='ok' AND skill=0"
+        )[0]
+        student_calls = self._query("SELECT COUNT(*) FROM gateway_calls WHERE student_called=1")[0][
+            0
+        ]
+        refused = self._query("SELECT COUNT(*) FROM gateway_calls WHERE status<>'ok'")[0][0]
+        return {
+            "requests": int(a[0]),
+            "student": by.get("student", 0),
+            "teacher": by.get("teacher", 0),
+            "spent_usd": float(a[1]),
+            "skill_student_calls": int(a[2]),
+            "comparable_requests": int(c[0]),
+            "comparable_cost_usd": float(c[1]),
+            "comparable_student_calls": int(c[2]),
+            "counterfactual_usd": float(c[3]),
+            "student_calls": int(student_calls),
+            "refused": int(refused),
+            "passthrough_requests": int(pt[0]),
+            "passthrough_usd": float(pt[1]),
+        }
+
+    def llm_output_mean(self, model: str) -> tuple[float, int] | None:
+        """(mean output tokens, n) of the measured calls to ``model`` in pipeline runs (rows the
+        gateway/playground wrote under run ``playground`` are excluded)."""
+        r = self._query(
+            "SELECT AVG(output_tokens), COUNT(*) FROM llm_calls "
+            "WHERE model=? AND output_tokens>0 AND run_id<>?",
+            (model, "playground"),
+        )[0]
+        return (float(r[0]), int(r[1])) if r[1] else None
+
+    def gateway_teacher_output_mean(self) -> tuple[float, int] | None:
+        """(mean output tokens, n) over skill calls the teacher answered."""
+        r = self._query(
+            "SELECT AVG(output_tokens), COUNT(*) FROM gateway_calls "
+            "WHERE status='ok' AND skill=1 AND served_by='teacher' AND output_tokens>0"
+        )[0]
+        return (float(r[0]), int(r[1])) if r[1] else None
 
     def total_spend(self, run_id: str | None = None, exclude_kind: str | None = None) -> float:
         sql = "SELECT COALESCE(SUM(usd),0) FROM spend WHERE 1=1"

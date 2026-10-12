@@ -12,6 +12,7 @@ from urllib.parse import urlsplit
 
 from distillery.config import Config, load_config
 from distillery.llm import LLMClient, make_openai_client
+from distillery.server.gateway_config import GatewaySettings, gateway_from_env
 from distillery.server.local_models import LocalModels
 from distillery.server.local_models import from_env as local_models_from_env
 from distillery.server.watchdog import WatchdogConfig
@@ -61,6 +62,8 @@ class ServerSettings:
     heartbeat_s: float = 15.0
     poll_s: float = 1.0
     demo_db_seed: int = 0
+    # ---- OpenAI-compatible gateway (server/gateway.py) ----
+    gateway: GatewaySettings = field(default_factory=GatewaySettings)
     clock: Callable[[], float] = time.monotonic
     now: Callable[[], datetime] = field(default=_utcnow)
 
@@ -162,6 +165,7 @@ def settings_from_env(
             else e.get("DISTILLERY_DEV_ORIGIN")
         ),
         playground_llm=default_playground_llm(config),
+        gateway=gateway_from_env(e),
         playground_local=local_models_from_env(
             config, e, demo_db=lambda: sql_schema.build_database(0)
         ),

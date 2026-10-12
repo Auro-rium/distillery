@@ -22,7 +22,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from distillery import chaos, heartbeat, humanset
 from distillery.evaluator import EXAMPLES_PER_KIND
 from distillery.orchestrator import DRY_PREFIX, SCALES
-from distillery.server import autonomy, sse, telemetry
+from distillery.server import autonomy, gateway, sse, telemetry
 from distillery.server.evidence import (
     bundle_experiments,
     evidence_path,
@@ -633,6 +633,10 @@ def create_app(settings: ServerSettings) -> FastAPI:
             tele.incr("playground_budget_exhausted")
             raise ApiError(503, "demo_budget_exhausted",
                            "demo budget exhausted, see replay") from None  # fmt: skip
+
+    # OpenAI-compatible gateway: /v1/chat/completions + /api/gateway/*. Registered before the
+    # /api catch-all and the SPA fallback below, which would otherwise swallow them.
+    gateway.install(app, playground, _ip)
 
     # ---- human held-out set (admin only; never part of a replay bundle) ---
     def humanset_pick(requested: str | None) -> str:

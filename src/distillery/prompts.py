@@ -50,6 +50,27 @@ def _user_content(question: str, schema_ddl: str) -> str:
     )
 
 
+def parse_user_content(content: str) -> tuple[str, str] | None:
+    """Invert ``_user_content``: ``(question, schema_ddl)``, or ``None`` if ``content`` is not
+    exactly what ``_user_content`` produces. Both parts come back stripped (as they were built).
+
+    The split is at the FIRST blank line followed by ``Question: `` (a schema does not contain
+    it; the question is the free-text part), and the result is accepted only if rebuilding it
+    gives back ``content`` byte for byte, so a lookalike is never misread as a skill request.
+    """
+    head, tail = "Database schema:\n", f"\n\n{NO_THINK_MARKER}"
+    if not (content.startswith(head) and content.endswith(tail)):
+        return None
+    body = content[len(head) : len(content) - len(tail)]
+    ddl, sep, question = body.partition("\n\nQuestion: ")
+    if not sep or not ddl.strip() or not question.strip():
+        return None
+    ddl, question = ddl.strip(), question.strip()
+    if _user_content(question, ddl) != content:
+        return None
+    return question, ddl
+
+
 def build_messages(task_question: str, schema_ddl: str, *, role: Role) -> list[dict[str, str]]:
     """Return the ``[system, user]`` prefix. Identical for every role by construction.
 
