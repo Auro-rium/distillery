@@ -32,7 +32,9 @@ from distillery.stats import (
     risk_coverage_curve,
 )
 
-DEFAULT_LEVELS = tuple(round(0.05 * k, 2) for k in range(1, 20))  # 0.05 .. 0.95
+# Fit-split coverage 0.20, 0.22, ..., 0.90 (the plan's grid). A top-5% first step selects ~25 CAL
+# items, and with alpha 0.08 zero errors needs >= 36 to reject, so certification could never start.
+DEFAULT_LEVELS = tuple(round(0.20 + 0.02 * k, 2) for k in range(36))
 MIN_COVERAGE = 0.30  # W-C1: pre-registered
 SYSTEM_TOLERANCE = 0.01  # W-C1: system accuracy >= teacher-only - 0.01
 DEFERRED_SHARE_MIN = 0.80  # W-C2
