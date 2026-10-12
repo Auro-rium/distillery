@@ -1,0 +1,727 @@
+{
+ "what": "Round N1: training on naturally phrased, teacher-verified questions, scored once on a fresh agent-authored set (DECISIONS.md 2026-10-07 pre-registration; result entry 2026-10-09)",
+ "label": "AGENT-AUTHORED set (Claude subagents), NOT human-written",
+ "run_id": "sql-gated-20261004T155134Z-66ff347c",
+ "run_id_note": "N1 reused P4's run id on a copy of P4's store; the replay bundle is exported under its own bundle id",
+ "sources": {
+  "report": {
+   "path": ".distillery/n1live/runs/sql-gated-20261004T155134Z-66ff347c/report.json",
+   "sha256": "1611d0cf2ddc2826bbe6233a4241d814e1a7b41855f62684c167b00e6ced1196"
+  },
+  "report_human": {
+   "path": ".distillery/n1live/runs/sql-gated-20261004T155134Z-66ff347c/report_human.json",
+   "sha256": "8339af3ab24ac58526dc2473892b7dbbbd4967b1d5ae8df630453dd346a36b22"
+  },
+  "p4_report": {
+   "path": ".distillery/p5live/runs/sql-gated-20261004T155134Z-66ff347c/report.json",
+   "sha256": "270d42eca418559975351ed0537e2482dc0ba793193ba190720c817bb32e27c2"
+  },
+  "ledgers": {
+   "a5live": {
+    "path": ".distillery/a5live/index.sqlite",
+    "sha256": "238e430e58c4b2e37217a118430bd7295201c1f3c97494b8ee46168a1bd0d833"
+   },
+   "b2/store": {
+    "path": ".distillery/b2/store/index.sqlite",
+    "sha256": "7695422d57e6d49237cf4c269102ba5eb9ca5823edfb118da1df1ff9fb529807"
+   },
+   "gateb": {
+    "path": ".distillery/gateb/index.sqlite",
+    "sha256": "6816c5f2943aaceda1be9c6a644c21bd982e625909e032f814aba898cd05b46b"
+   },
+   "gateb_store": {
+    "path": ".distillery/gateb_store/index.sqlite",
+    "sha256": "a38728135784dad0fd3ed98ac65f8e27e13ac22d87560ef5b4615d2ee01b5bb8"
+   },
+   "n1eval": {
+    "path": ".distillery/n1eval/index.sqlite",
+    "sha256": "ceaa462eeeed073dd3a22088c2633c311c27386e47950a1a3c0c0ac51e831126"
+   },
+   "n1live": {
+    "path": ".distillery/n1live/index.sqlite",
+    "sha256": "3fb8a7707d527eb114cc0d61d8afd0cac19c84014025c1a94a8f9be35f106a36"
+   },
+   "n1train_root": {
+    "path": ".distillery/n1train_root/index.sqlite",
+    "sha256": "5707927f8e4fa6270bbe9c86d6361619a4f0d7262248e6255abe9cc9cc1a9c31"
+   },
+   "p5live": {
+    "path": ".distillery/p5live/index.sqlite",
+    "sha256": "b1a93316c43b4755de6c1a811f8a656018954d02d26d4919c8d5f168c3cca807"
+   }
+  },
+  "decisions": "DECISIONS.md",
+  "note": "paths are relative to the repository checkout that holds the gitignored .distillery/ directory; no sealed text is copied into this file"
+ },
+ "decision": {
+  "primary": "REJECT",
+  "gate_a_pipeline_decision_unchanged": "PROMOTE",
+  "no_threshold_changed": true
+ },
+ "primary": {
+  "claim": "PROMOTE on N1-eval only if the paired-bootstrap lower bound of student/teacher accuracy is >= 0.85 AND the student beats base by exact McNemar p < 0.05 (the existing gate, unchanged; DECISIONS.md 2026-10-07)",
+  "set": {
+   "name": "N1-eval",
+   "label": "agent-authored (Claude subagent, blind to templates and to N1-train by instruction); NOT human-written",
+   "confirmation": "mechanical: a teacher draft is confirmed iff its result equals the result of the author's blind reference SQL (DECISIONS.md 2026-10-07, N1-eval confirmed set); no confirmer discretion",
+   "n": 98,
+   "questions_drafted": 110,
+   "kept_after_drafting": 98,
+   "confirmed": 98,
+   "rejected_at_confirmation": 0,
+   "discarded_at_drafting": 12,
+   "discarded_by_reason": {
+    "disagree": 8,
+    "empty": 0,
+    "exec_error": 4,
+    "llm_error": 0,
+    "no_sql": 0
+   },
+   "confirmed_file_sha256": "3ab039710037195134128743f82b1434c939d1e24efb6ff5ece484f0dc875beb",
+   "question_file_sha256": "375e07ae97c6ec048a6e63c5b2727b5200b5020ba1b9778cd642691f23421ad7",
+   "sealed_set_sha256": "ca474439e13a90622c5253f83d5046cc44195cf1956a172def8dba9fdc7d6725",
+   "db_sha256": "03864579a97c4336039620d125c6811ee513dce2b9ceb3796d282354cc96d02c",
+   "dropped_exact_overlap": {
+    "dev": 0,
+    "gate": 0,
+    "total": 0,
+    "train": 0
+   },
+   "skeleton_in_train": 0,
+   "sealed_before_training": true,
+   "generation_errors": {
+    "base": 0,
+    "student": 0
+   },
+   "unparseable": {
+    "base": 0,
+    "student": 0,
+    "teacher": 0
+   }
+  },
+  "scored_at": "2026-10-09T04:55:13.654161+00:00",
+  "scored_at_utc": "2026-10-09T04:55:13.654161+00:00",
+  "teacher_model": "nvidia/nemotron-3-super-120b-a12b",
+  "n": 98,
+  "accuracy": {
+   "base": 0.29591836734693877,
+   "student": 0.5714285714285714,
+   "teacher": 0.9591836734693877
+  },
+  "student_ci_95": [
+   0.47258436300370676,
+   0.664884209836053
+  ],
+  "ratio": {
+   "point": 0.5957446808510638,
+   "lo": 0.4946236559139785,
+   "hi": 0.6989247311827957
+  },
+  "mcnemar": {
+   "p": 4.628673195838928e-07,
+   "student_only_vs_base": 29,
+   "base_only_vs_student": 2
+  },
+  "thresholds": {
+   "bootstrap_resamples": 10000,
+   "mcnemar_alpha": 0.05,
+   "ratio_lower_bound_min": 0.85,
+   "seed": 1234
+  },
+  "bootstrap_resamples_used": 10000,
+  "decision": "REJECT",
+  "reasons": [
+   "ratio lower bound 0.495 < 0.85 (point 0.596)",
+   "McNemar exact p=0.0000 < 0.05 (student-only 29, base-only 2)"
+  ],
+  "checks": {
+   "ratio_lower_bound_ok": false,
+   "mcnemar_ok": true
+  },
+  "decision_human": "REJECT",
+  "spend_usd_scoring_command": 0.06103259999999633
+ },
+ "secondary": {
+  "heldout": {
+   "role": "secondary, reported only: the original templated held-out must not regress (ratio lower bound >= the gate minimum)",
+   "label": "in-distribution gate set (every family also in train)",
+   "sealed_sha256": "cf92bf60e3c734f63035273395e629f3dafe0afab8397c4b01e2976f683dd878",
+   "same_set_as_p4": true,
+   "skeleton_overlap_with_train": 0.9467,
+   "n": 300,
+   "accuracy": {
+    "base": 0.25666666666666665,
+    "student": 0.92,
+    "teacher": 0.9
+   },
+   "student_ci_95": [
+    0.8837267595665261,
+    0.9456531446048553
+   ],
+   "ratio": {
+    "point": 1.0222222222222221,
+    "lo": 0.989010989010989,
+    "hi": 1.0576923076923077
+   },
+   "mcnemar": {
+    "p": 3.2214994339667665e-57,
+    "student_only_vs_base": 201,
+    "base_only_vs_student": 2
+   },
+   "thresholds": {
+    "bootstrap_resamples": 10000,
+    "mcnemar_alpha": 0.05,
+    "ratio_lower_bound_min": 0.85,
+    "seed": 1234
+   },
+   "bootstrap_resamples_used": 10000,
+   "decision": "PROMOTE",
+   "reasons": [
+    "ratio lower bound 0.989 >= 0.85 (point 1.022)",
+    "McNemar exact p=0.0000 < 0.05 (student-only 201, base-only 2)"
+   ],
+   "checks": {
+    "ratio_lower_bound_ok": true,
+    "mcnemar_ok": true
+   },
+   "pipeline_gate_decision": "PROMOTE",
+   "no_regression": {
+    "ratio_lower_bound": 0.989010989010989,
+    "minimum": 0.85,
+    "passed": true
+   },
+   "p4_same_set": {
+    "student_accuracy": 0.9233333333333333,
+    "teacher_accuracy": 0.9,
+    "base_accuracy": 0.25666666666666665,
+    "ratio_lo": 0.9927536231884058,
+    "source": ".distillery/p5live/runs/sql-gated-20261004T155134Z-66ff347c/report.json"
+   }
+  },
+  "stress": {
+   "role": "reported only, never a gate input",
+   "n": 100,
+   "families": [
+    "date_math",
+    "set_ops"
+   ],
+   "sealed_sha256": "1ba7bcde6e2db4f29da897ab88c4a7f200eb6c96d3d3610da9ad3c1d2a172896",
+   "same_set_as_p4": true,
+   "accuracy": {
+    "base": 0.09,
+    "student": 0.66,
+    "teacher": 0.98
+   },
+   "accuracy_by_family": {
+    "date_math": {
+     "base": 0.03225806451612903,
+     "student": 0.6451612903225806,
+     "teacher": 0.9838709677419355
+    },
+    "set_ops": {
+     "base": 0.18421052631578946,
+     "student": 0.6842105263157895,
+     "teacher": 0.9736842105263158
+    }
+   },
+   "unparseable": {
+    "base": 0,
+    "student": 0,
+    "teacher": 0
+   },
+   "p4_adapter_same_set": {
+    "accuracy": {
+     "base": 0.09,
+     "student": 0.16,
+     "teacher": 0.99
+    },
+    "accuracy_by_family": {
+     "date_math": {
+      "base": 0.03225806451612903,
+      "student": 0.20967741935483872,
+      "teacher": 0.9838709677419355
+     },
+     "set_ops": {
+      "base": 0.18421052631578946,
+      "student": 0.07894736842105263,
+      "teacher": 1.0
+     }
+    },
+    "source": ".distillery/p5live/runs/sql-gated-20261004T155134Z-66ff347c/report.json"
+   },
+   "student_change_vs_p4": {
+    "overall": 0.5,
+    "date_math": 0.435484,
+    "set_ops": 0.605263
+   },
+   "exact_question_overlap": {
+    "natural_rows_dropped_for_equalling_a_stress_question": 0,
+    "natural_rows_dropped_for_equalling_any_sealed_question": 0,
+    "concept_overlap_checked": false
+   },
+   "reading_caveat": "the natural training questions can teach date and set concepts, so these families are no longer unseen concepts for N1; exact question overlap was checked, concept overlap was not"
+  },
+  "gate_b_rescore": {
+   "status": "pending",
+   "what": "re-score the N1 adapter on the Gate B set as a post-hoc transfer number (pre-registered as secondary, not a gate)",
+   "reason": "needs a small paid run (teacher + sandbox) that has not been run or approved; no number exists",
+   "reference_p4_adapter_on_gate_b": {
+    "adapter_sha256": "4bebc793ba4158532adc33ca5085f37003aad46b679db9085cc89864fa8f553f",
+    "set": "Gate B agent-authored set (docs/proofs/evidence/gateb_agent_authored.json)",
+    "n": 86,
+    "accuracy": {
+     "base": 0.38372093023255816,
+     "student": 0.4069767441860465,
+     "teacher": 0.9883720930232558
+    },
+    "ratio_lo": 0.3058823529411765,
+    "mcnemar_p": 0.8388197422027588,
+    "decision": "REJECT",
+    "question_file_sha256": "f791e32967f0e59aad7da28f8e53c4e183f5b99134662fc738b888d80c24da0a",
+    "single_ledger_pass_usd": 0.04602209999999651
+   },
+   "n1_adapter_sha256": "7d6ce813882bf3a211c84bfab7f8109b3bcdd6ca4617349a03bff58076b85193",
+   "expected_cost_basis": "one earlier Gate B scoring pass (single_ledger_pass_usd above), teacher calls only"
+  }
+ },
+ "artifact": {
+  "adapter_sha256": "7d6ce813882bf3a211c84bfab7f8109b3bcdd6ca4617349a03bff58076b85193",
+  "job_id": "ftjob-6cfd065bb4564bbcb5ff1e43ed0478d1",
+  "checkpoint_id": "ftckpt_4a9eba83-171b-4d95-bfdc-b90ec77f3deb",
+  "trained_base_model": "Qwen/Qwen3-1.7B",
+  "trained_checkpoint_name": "ft:Qwen/Qwen3-1.7B-2026-10-07:org_placeholder:distillery-sql-gated-20261004T155134Z-66ff347c-r1:IDPlaceholder:ckpt-step-1674",
+  "differs_from_p4_adapter": true,
+  "p4_adapter_sha256": "4bebc793ba4158532adc33ca5085f37003aad46b679db9085cc89864fa8f553f",
+  "finetune": {
+   "trained_tokens": 6571854,
+   "trained_steps": 1674,
+   "total_steps": 1674,
+   "hyperparameters": {
+    "batch_size": 4,
+    "context_length": 8192,
+    "learning_rate": 0.0001,
+    "learning_rate_multiplier": null,
+    "lora": true,
+    "lora_alpha": 32,
+    "lora_dropout": 0.0,
+    "lora_r": 16,
+    "max_grad_norm": 1.0,
+    "n_epochs": 3,
+    "packing": false,
+    "warmup_ratio": 0.0,
+    "weight_decay": 0.0
+   },
+   "hyperparameters_equal_p4": true,
+   "loss_curve": [
+    {
+     "step": 558,
+     "train_loss": 0.13495463132858276,
+     "valid_loss": 0.3802565336227417
+    },
+    {
+     "step": 1116,
+     "train_loss": 0.07288997620344162,
+     "valid_loss": 0.33836013078689575
+    },
+    {
+     "step": 1674,
+     "train_loss": 0.05254080891609192,
+     "valid_loss": 0.5310171246528625
+    }
+   ],
+   "usd": 2.628742,
+   "usd_basis": "trained tokens x console price (billed basis)",
+   "started_at_utc": "2026-10-07T10:28:06.789593+00:00"
+  },
+  "dev": {
+   "base_accuracy": 0.22,
+   "student_accuracy": 0.8933333333333333,
+   "n": 150,
+   "failures": 16
+  },
+  "candidate_round": 1,
+  "rounds_stop_reason": "reached max_rounds=1"
+ },
+ "training_data": {
+  "train_rows_total": 2230,
+  "p4_rows_template_originals_plus_verified_paraphrases": 1981,
+  "natural_rows_appended": 249,
+  "rows_add_up": true,
+  "p4_rows_originals": 583,
+  "p4_rows_paraphrases_kept": 1398,
+  "row_cap_reapplied_to_natural": false,
+  "natural": {
+   "label": "agent-authored",
+   "questions_drafted": 320,
+   "teacher_drafts_per_question": 3,
+   "teacher_temperature": 0.8,
+   "teacher_model": "nvidia/nemotron-3-super-120b-a12b",
+   "kept": 249,
+   "discarded": 71,
+   "discarded_by_reason": {
+    "disagree": 48,
+    "empty": 2,
+    "exec_error": 12,
+    "llm_error": 0,
+    "no_sql": 0,
+    "ref_empty": 0,
+    "ref_error": 0,
+    "ref_mismatch": 9
+   },
+   "file_sha256": "bd327eec4ce554eeb9806ce3e11e1646e3461df22f25bed5460b62073291996b",
+   "questions_sha256": "4ccc1b198bd095ff9905da8373a96d6555feb9f6f8ac91610a7e998325fff504",
+   "reference_sha256": "772a477dc75426320fb976822a1f194af00e568a856f4de9aa7eb55f02b122eb",
+   "db_sha256": "03864579a97c4336039620d125c6811ee513dce2b9ceb3796d282354cc96d02c",
+   "rule": "a row is kept only if all k teacher drafts execute to the same non-empty result AND that result equals the author's blind reference SQL result",
+   "dropped_by_overlap_with_sealed_sets": {
+    "dev": 0,
+    "exclude_files": 0,
+    "heldout": 0,
+    "human": 0,
+    "stress": 0,
+    "total": 0
+   },
+   "heldout_skeleton_in_natural": 0,
+   "exclude_files_question_count": 210
+  },
+  "identity_files": {
+   "natural_train.json": {
+    "path": ".distillery/natural_train.json",
+    "sha256": "bd327eec4ce554eeb9806ce3e11e1646e3461df22f25bed5460b62073291996b",
+    "matches_report": true
+   },
+   "natural/train_questions.txt": {
+    "path": ".distillery/natural/train_questions.txt",
+    "sha256": "4ccc1b198bd095ff9905da8373a96d6555feb9f6f8ac91610a7e998325fff504",
+    "matches_report": true
+   },
+   "natural_eval/questions.txt": {
+    "path": ".distillery/natural_eval/questions.txt",
+    "sha256": "375e07ae97c6ec048a6e63c5b2727b5200b5020ba1b9778cd642691f23421ad7",
+    "matches_report": true
+   }
+  }
+ },
+ "spend": {
+  "efforts": {
+   "P4": {
+    "usd": 4.258206,
+    "usd_nano": 4258206120,
+    "by_kind": {
+     "finetune": {
+      "rows": 1,
+      "usd": 2.337012
+     },
+     "llm": {
+      "rows": 3322,
+      "usd": 1.921194
+     },
+     "sandbox": {
+      "rows": 5,
+      "usd": 0.0
+     }
+    },
+    "components": [
+     {
+      "ledger": ".distillery/p5live/index.sqlite",
+      "counted": "all rows",
+      "rows": 3328,
+      "usd": 4.258206,
+      "by_kind": {
+       "finetune": {
+        "rows": 1,
+        "usd": 2.337012
+       },
+       "llm": {
+        "rows": 3322,
+        "usd": 1.921194
+       },
+       "sandbox": {
+        "rows": 5,
+        "usd": 0.0
+       }
+      }
+     }
+    ]
+   },
+   "B2": {
+    "usd": 1.649512,
+    "usd_nano": 1649512500,
+    "by_kind": {
+     "llm": {
+      "rows": 900,
+      "usd": 1.649512
+     },
+     "sandbox": {
+      "rows": 4,
+      "usd": 0.0
+     }
+    },
+    "components": [
+     {
+      "ledger": ".distillery/b2/store/index.sqlite",
+      "counted": "rows beyond the p5live ledger (copied from it)",
+      "rows": 904,
+      "usd": 1.649512,
+      "by_kind": {
+       "llm": {
+        "rows": 900,
+        "usd": 1.649512
+       },
+       "sandbox": {
+        "rows": 4,
+        "usd": 0.0
+       }
+      }
+     }
+    ]
+   },
+   "Gate B": {
+    "usd": 0.266778,
+    "usd_nano": 266778300,
+    "by_kind": {
+     "llm": {
+      "rows": 472,
+      "usd": 0.266778
+     },
+     "sandbox": {
+      "rows": 4,
+      "usd": 0.0
+     }
+    },
+    "components": [
+     {
+      "ledger": ".distillery/gateb/index.sqlite",
+      "counted": "all rows",
+      "rows": 300,
+      "usd": 0.174308,
+      "by_kind": {
+       "llm": {
+        "rows": 300,
+        "usd": 0.174308
+       }
+      }
+     },
+     {
+      "ledger": ".distillery/gateb_store/index.sqlite",
+      "counted": "rows beyond the p5live ledger (copied from it)",
+      "rows": 176,
+      "usd": 0.09247,
+      "by_kind": {
+       "llm": {
+        "rows": 172,
+        "usd": 0.09247
+       },
+       "sandbox": {
+        "rows": 4,
+        "usd": 0.0
+       }
+      }
+     }
+    ]
+   },
+   "A5": {
+    "usd": 4.191885,
+    "usd_nano": 4191885000,
+    "by_kind": {
+     "finetune": {
+      "rows": 1,
+      "usd": 2.301641
+     },
+     "llm": {
+      "rows": 3278,
+      "usd": 1.890244
+     },
+     "sandbox": {
+      "rows": 5,
+      "usd": 0.0
+     }
+    },
+    "components": [
+     {
+      "ledger": ".distillery/a5live/index.sqlite",
+      "counted": "all rows",
+      "rows": 3284,
+      "usd": 4.191885,
+      "by_kind": {
+       "finetune": {
+        "rows": 1,
+        "usd": 2.301641
+       },
+       "llm": {
+        "rows": 3278,
+        "usd": 1.890244
+       },
+       "sandbox": {
+        "rows": 5,
+        "usd": 0.0
+       }
+      }
+     }
+    ]
+   },
+   "N1": {
+    "usd": 3.828866,
+    "usd_nano": 3828865800,
+    "by_kind": {
+     "finetune": {
+      "rows": 1,
+      "usd": 2.628742
+     },
+     "llm": {
+      "rows": 1788,
+      "usd": 1.200124
+     },
+     "sandbox": {
+      "rows": 5,
+      "usd": 0.0
+     }
+    },
+    "components": [
+     {
+      "ledger": ".distillery/n1eval/index.sqlite",
+      "counted": "all rows",
+      "rows": 330,
+      "usd": 0.206545,
+      "by_kind": {
+       "llm": {
+        "rows": 330,
+        "usd": 0.206545
+       }
+      }
+     },
+     {
+      "ledger": ".distillery/n1train_root/index.sqlite",
+      "counted": "all rows",
+      "rows": 960,
+      "usd": 0.682566,
+      "by_kind": {
+       "llm": {
+        "rows": 960,
+        "usd": 0.682566
+       }
+      }
+     },
+     {
+      "ledger": ".distillery/n1live/index.sqlite",
+      "counted": "rows beyond the p5live ledger (copied from it)",
+      "rows": 504,
+      "usd": 2.939754,
+      "by_kind": {
+       "finetune": {
+        "rows": 1,
+        "usd": 2.628742
+       },
+       "llm": {
+        "rows": 498,
+        "usd": 0.311012
+       },
+       "sandbox": {
+        "rows": 5,
+        "usd": 0.0
+       }
+      }
+     }
+    ]
+   }
+  },
+  "project_total_usd": 14.195248,
+  "n1_checks": {
+   "n1live_new_llm_rows": 498,
+   "expected_final_eval_teacher_calls_plus_human_scoring_calls": 498,
+   "scored_once": true,
+   "n1live_new_finetune_rows": 1,
+   "n1_finetune_units_equal_trained_tokens": true,
+   "n1_finetune_usd_equals_report_line": true
+  },
+  "n1_ceiling_usd": 5.0,
+  "n1_ceiling_source": "DECISIONS.md 2026-10-07 pre-registration ('Hard ceiling ... of new spend')",
+  "n1_within_ceiling": true,
+  "project_cap_usd": 19.5,
+  "project_cap_source": "DECISIONS.md 2026-10-07 pre-registration ('of $19.50')",
+  "project_headroom_usd": 5.304752,
+  "spend_recorded_in_prereg_before_n1_usd": 10.32,
+  "basis": "LLM rows: measured tokens x the API price table (estimates); fine-tune rows: trained tokens x the console price (billed basis); sandbox rows are recorded at $0 (no console line seen, price unconfirmed), so every total here is a lower bound.",
+  "sandbox_price_record": {
+   "usd_per_second": 0.0,
+   "as_of": "2026-10-04",
+   "source": "Nebius console Organisation > Usage, Table view (screenshot from the user): cost / usage over 2026-09-04..10-04: no Sandboxes line at all although sandboxes ran on 09-30 and 10-04 (beta, unbilled); revisit if a line appears"
+  },
+  "cumulative_fields_warning": "report.json cost.run_total_usd (7.1369) and run-level spend in the replay bundle are P4 + N1 (N1 reused P4's run id and store copy); N1's own spend is efforts.N1.usd.",
+  "report_cost_p4_plus_n1_usd": 7.136927519999995
+ },
+ "preregistration": {
+  "source": "DECISIONS.md 2026-10-07: pre-registration of round N1, then three amendments (question files, N1-eval confirmed set, N1-train rows)",
+  "commits": [
+   {
+    "sha": "bcd5f2df9388a9c31be5972530a3d5d20744ee5d",
+    "committed_at": "2026-10-07T15:06:42+05:30",
+    "committed_at_utc": "2026-10-07T09:36:42+00:00",
+    "subject": "N1: pre-register natural-phrasing training round before any question exists",
+    "what": "pre-registration: rule, claim, budget, before any N1 question exists"
+   },
+   {
+    "sha": "14f03c36548fb4d91a3d2cba3e607ddfc731003c",
+    "committed_at": "2026-10-07T15:24:02+05:30",
+    "committed_at_utc": "2026-10-07T09:54:02+00:00",
+    "subject": "N1: fix the train and eval question files (sha256) before drafting",
+    "what": "N1-train and N1-eval question files fixed (sha256) before drafting"
+   },
+   {
+    "sha": "dfcf7adf4a51d175ac0203924d3c8c48b05c6a7f",
+    "committed_at": "2026-10-07T15:49:29+05:30",
+    "committed_at_utc": "2026-10-07T10:19:29+00:00",
+    "subject": "N1: record confirmed N1-eval set (N=98, sha256) before training",
+    "what": "N1-eval confirmed set (N, sha256) recorded before training"
+   },
+   {
+    "sha": "dbaa917d4b680b4cebd29aec8b3c8c24794970a9",
+    "committed_at": "2026-10-07T15:56:40+05:30",
+    "committed_at_utc": "2026-10-07T10:26:40+00:00",
+    "subject": "N1: record N1-train rows (249 kept, sha256) before the fine-tune",
+    "what": "N1-train rows (kept count, sha256) recorded before the fine-tune"
+   }
+  ],
+  "finetune_job_started_at_utc": "2026-10-07T10:28:06.789593+00:00",
+  "n1_eval_scored_at_utc": "2026-10-09T04:55:13.654161+00:00",
+  "first_ledger_row_utc": {
+   "n1eval_ledger (drafting of N1-eval)": "2026-10-07T10:17:25.632474+00:00",
+   "n1train_root_ledger (drafting of N1-train)": "2026-10-07T10:19:38.484166+00:00"
+  },
+  "order_checks": {
+   "pre_registration_commit_before_first_n1_ledger_row": true,
+   "all_commits_before_finetune_job_started": true,
+   "all_commits_before_n1_eval_scored": true,
+   "n1_eval_confirmed_set_commit_before_finetune_job_started": true
+  },
+  "claim_rule_unchanged": {
+   "thresholds_in_report": {
+    "bootstrap_resamples": 10000,
+    "mcnemar_alpha": 0.05,
+    "ratio_lower_bound_min": 0.85,
+    "seed": 1234
+   },
+   "pre_registered_ratio_lower_bound_min": 0.85,
+   "pre_registered_mcnemar_alpha": 0.05,
+   "report_matches_pre_registration": true,
+   "gate_a_decision_unchanged": "PROMOTE"
+  }
+ },
+ "pending": [
+  {
+   "item": "Gate B re-score of the N1 adapter (post-hoc transfer number)",
+   "status": "pending",
+   "see": "secondary.gate_b_rescore"
+  }
+ ],
+ "disclosures": [
+  "N1-eval and N1-train are agent-authored (Claude subagents), never human-written; the two authors share a model family, so a gap against a human-written set may remain.",
+  "Gold SQL on N1-eval was drafted by the teacher and kept only where every draft executed, was non-empty and agreed with the author's reference: teacher accuracy on this set is inflated by construction, so the base and student numbers are the informative ones, and the same teacher is both the gold drafter and the compared model.",
+  "The primary result is on a different set from Gate B (different questions, different author, different confirmation rule). N1's improvement over the P4 adapter is therefore not a measured improvement; only the Gate B re-score (pending) would put both adapters on one set.",
+  "The held-out and stress sets are the same sealed sets P4 used, already seen by the P4 decision and by B2; they are regression checks here, not fresh evidence.",
+  "Stress families: natural training rows dropped for exactly matching a stress question: 0; concept overlap was not checked, and the natural questions can teach date and set concepts. The stress change versus P4 must not be read as unseen-concept generalization.",
+  "One run, one seed, one fine-tune; the intervals are bootstrap intervals over the 98 N1-eval items, not run-to-run variance.",
+  "Spend is a lower bound: the sandbox is recorded at $0 (price unconfirmed) and LLM lines are token-count estimates at API prices. N1's run-level fields in report.json (and in the replay bundle's run.json) are P4 + N1 cumulative because N1 reused P4's run id and store copy.",
+  "The report's generic note on the human-set block ('confirmed by a human') does not apply here: confirmation of N1-eval was mechanical."
+ ]
+}
