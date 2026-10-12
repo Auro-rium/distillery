@@ -29,6 +29,7 @@ from distillery.humanset import HumanSetError, read_confirmed
 from distillery.naturaltrain import overlap_counts
 from distillery.prompts import NO_THINK_MARKER
 from distillery.store import Store, atomic_write_bytes, canonical_json, sha256_hex
+from distillery.student import generate_detailed
 from distillery.taskpacks.base import Pack, get_pack
 from distillery.taskpacks.sql.executor import Executor
 from distillery.taskpacks.sql.human import normalise_question
@@ -367,26 +368,8 @@ class _TextGenerator(Protocol):
     def generate(self, messages_batch: Sequence[Any]) -> Sequence[Any]: ...
 
 
-def unpack_student_output(out: Any) -> tuple[str, float | None]:
-    """A student output is a plain string (no confidence) or an object / dict with ``text`` and
-    ``mean_logprob`` (the sandbox student's protocol)."""
-    if isinstance(out, str):
-        return out, None
-    if isinstance(out, Mapping):
-        text, lp = out.get("text"), out.get("mean_logprob")
-    else:
-        text, lp = getattr(out, "text", None), getattr(out, "mean_logprob", None)
-    if not isinstance(text, str):
-        raise RouterDataError("a student output is neither a string nor has a .text")
-    if lp is not None:
-        lp = float(lp)
-        if not math.isfinite(lp):
-            lp = None
-    return text, lp
-
-
-def _attr(obj: Any, name: str) -> Any:
-    return obj.get(name) if isinstance(obj, Mapping) else getattr(obj, name, None)
+def _finite(x: float | None) -> float | None:
+    return x if x is not None and math.isfinite(float(x)) else None
 
 
 def _verdict(
@@ -420,9 +403,9 @@ def compute_signals(
     ``output_sha256`` (of the raw student output), ``kind``/``family``, and ``teacher_correct``
     (None unless a ``teacher`` generator is given). Rows hold no question or gold text.
 
-    The student is asked through ``generate_detailed`` when it has one (``student.StudentOutput``
-    with ``mean_logprob``), else ``generate`` (strings, or objects/dicts with ``text`` and
-    ``mean_logprob``). ``require_mean_logprob`` raises right after the student answered (before
+    The student is asked through ``student.generate_detailed`` (``StudentOutput`` with
+    ``mean_logprob``; a server without it yields text only, so no confidence).
+    ``require_mean_logprob`` raises right after the student answered (before
     any embedding or teacher spend) if some output has no mean_logprob, unless ``missing_logprob``
     is given: then that value is used for those items and the row says ``logprob_imputed``."""
     pk = pack or get_pack("sql")
@@ -438,12 +421,11 @@ def compute_signals(
     ):  # free check first: nothing is generated on a bad item
         if not g.ok:
             raise RuntimeError(f"gold answer failed for item {it.get('task_id')}: {g.error}")
-    detailed = getattr(student, "generate_detailed", None)
-    raw = list(detailed(prompts) if callable(detailed) else student.generate(prompts))
+    raw = generate_detailed(student, prompts)  # StudentOutput: text, mean_logprob, error, ...
     if len(raw) != n:
         raise RuntimeError(f"student returned {len(raw)} outputs for {n} items")
-    unpacked = [unpack_student_output(o) for o in raw]
-    student_errors = [bool(_attr(o, "error")) for o in raw]
+    unpacked = [(o.text, _finite(o.mean_logprob)) for o in raw]
+    student_errors = [bool(o.error) for o in raw]
     imputed = [lp is None for _, lp in unpacked]
     if require_mean_logprob and any(imputed):
         if missing_logprob is None:
@@ -462,7 +444,7 @@ def compute_signals(
         t_prompts = [
             pk.build_messages(str(it["question"]), schema_ddl, role="eval_teacher") for it in items
         ]
-        t_raw = [unpack_student_output(o)[0] for o in teacher.generate(t_prompts)]
+        t_raw = [str(o) for o in teacher.generate(t_prompts)]
         if len(t_raw) != n:
             raise RuntimeError(f"teacher returned {len(t_raw)} outputs for {n} items")
         t_out = _verdict(pk, [pk.extract_answer(t) for t in t_raw], executor, db_ref)

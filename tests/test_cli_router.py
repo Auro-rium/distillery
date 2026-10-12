@@ -15,15 +15,11 @@ from router_helpers import DDL, RUN, SynthRun, confirmed_file, make_run
 from distillery.cli import EXIT_OK, EXIT_REFUSED, main
 from distillery.pipeline_fakes import FAKE_MODELS, question_of
 from distillery.router_cmd import RouterRuntime, RuntimeContext
+from distillery.student import StudentOutput
 from distillery.taskpacks.sql.executor import LocalExecutor
 
 TOKEN = "s3cret-admin-token"
 EMBED = "Qwen/Qwen3-Embedding-8B"
-
-
-class Out:
-    def __init__(self, text: str, lp: float) -> None:
-        self.text, self.mean_logprob = text, lp
 
 
 def _h(s: str) -> int:
@@ -37,14 +33,18 @@ class FakeStudent:
         self.gold = gold
         self.closed = False
 
-    def generate(self, batch: Any) -> list[Out]:
+    def generate_detailed(self, batch: Any) -> list[StudentOutput]:
         outs = []
         for msgs in batch:
             q = question_of(msgs) or ""
             good = _h(q) % 5 != 0
             sql = self.gold[q] if good else "SELECT 1 WHERE 1 = 0"
-            outs.append(Out(f"```sql\n{sql}\n```", -0.1 - 0.05 * (_h(q) % 3) if good else -1.5))
+            lp = -0.1 - 0.05 * (_h(q) % 3) if good else -1.5
+            outs.append(StudentOutput(text=f"```sql\n{sql}\n```", mean_logprob=lp))
         return outs
+
+    def generate(self, batch: Any) -> list[str]:
+        return [o.text for o in self.generate_detailed(batch)]
 
     def close(self) -> None:
         self.closed = True
@@ -374,9 +374,15 @@ def test_student_without_logprobs_is_refused_before_embedding_or_teacher_spend(
 ) -> None:
     h.build()
 
-    class Plain(FakeStudent):
-        def generate(self, batch: Any) -> list[Any]:  # strings: no confidence at all
-            return [o.text for o in super().generate(batch)]
+    class Plain:  # text only: no generate_detailed, so no confidence at all
+        def __init__(self, gold: dict[str, str]) -> None:
+            self.inner = FakeStudent(gold)
+
+        def generate(self, batch: Any) -> list[str]:
+            return self.inner.generate(batch)
+
+        def close(self) -> None:
+            pass
 
     def factory(ctx: RuntimeContext) -> RouterRuntime:
         rt = h.runtime(ctx)

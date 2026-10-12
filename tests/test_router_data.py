@@ -21,9 +21,9 @@ from distillery.router_data import (
     question_of_training_row,
     read_signal_rows,
     training_questions,
-    unpack_student_output,
     write_signal_rows,
 )
+from distillery.student import StudentOutput
 from distillery.taskpacks.sql.executor import LocalExecutor
 from distillery.taskpacks.sql.human import normalise_question
 
@@ -215,26 +215,32 @@ class Sim:
         return [self.v + 0.01 * i for i, _ in enumerate(questions)]
 
 
-class Out:
-    def __init__(self, text: str, lp: float | None) -> None:
-        self.text, self.mean_logprob = text, lp
-
-
 class Student:
-    """Right for items whose index is even; wrong (valid SQL) for odd; broken for index 4."""
+    """Right for items whose index is even; wrong (valid SQL) for odd; broken for index 4.
+    With ``with_logprob`` it offers ``generate_detailed`` (StudentOutput), else only ``generate``."""
 
     def __init__(self, gold: list[str], with_logprob: bool = True) -> None:
-        self.gold, self.with_lp, self.calls = gold, with_logprob, 0
+        self.gold, self.calls = gold, 0
+        if not with_logprob:
+            self.generate_detailed = None  # type: ignore[assignment]
 
-    def generate(self, batch: Any) -> list[Any]:
-        self.calls += 1
-        outs: list[Any] = []
+    def _texts(self, batch: Any) -> list[str]:
+        outs = []
         for i, _ in enumerate(batch):
             text = self.gold[i] if i % 2 == 0 else "SELECT 1 WHERE 1 = 0"
-            if i == 4:
-                text = "no sql here"
-            outs.append(Out(text, -0.1 * (i + 1)) if self.with_lp else text)
+            outs.append("no sql here" if i == 4 else text)
         return outs
+
+    def generate(self, batch: Any) -> list[str]:
+        self.calls += 1
+        return self._texts(batch)
+
+    def generate_detailed(self, batch: Any) -> list[StudentOutput]:
+        self.calls += 1
+        return [
+            StudentOutput(text=t, mean_logprob=-0.1 * (i + 1))
+            for i, t in enumerate(self._texts(batch))
+        ]
 
 
 class Teacher:
@@ -243,14 +249,6 @@ class Teacher:
 
     def generate(self, batch: Any) -> list[str]:
         return [f"```sql\n{g}\n```" for g in self.gold[: len(batch)]]
-
-
-def test_unpack_student_output_variants() -> None:
-    assert unpack_student_output("x") == ("x", None)
-    assert unpack_student_output(Out("t", -0.5)) == ("t", -0.5)
-    assert unpack_student_output({"text": "t", "mean_logprob": float("nan")}) == ("t", None)
-    with pytest.raises(RouterDataError):
-        unpack_student_output(3)
 
 
 def test_compute_signals_rows() -> None:
