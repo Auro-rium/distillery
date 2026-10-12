@@ -293,6 +293,7 @@ def test_serving_servers_are_closed_when_scoring_fails(finished: Path) -> None:
         def bad_base() -> Any:
             srv = real_factory()
             srv.generate = boom  # type: ignore[method-assign]
+            srv.generate_detailed = boom  # type: ignore[method-assign,attr-defined]
             return srv
 
         deps = type(dr.deps)(**{**dr.deps.__dict__, "base_factory": bad_base})
