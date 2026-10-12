@@ -139,7 +139,7 @@ class Config(BaseModel):
     nebius_project_id: SecretStr | None = None  # Sandboxes need it (the `Project` header)
     admin_token: SecretStr | None = None
     run_cap_usd: float = 10.0
-    project_cap_usd: float = 40.0
+    project_cap_usd: float = 19.5
     playground_daily_cap_usd: float = 1.0
     model_ids: dict[str, str] = Field(default_factory=dict)
     prices: dict[str, Price] = Field(default_factory=dict)
@@ -230,7 +230,7 @@ def load_config(env: Mapping[str, str] | None = None) -> Config:
         nebius_project_id=SecretStr(project) if project else None,
         admin_token=SecretStr(token) if token else None,
         run_cap_usd=_float_env(e, "DISTILLERY_RUN_CAP_USD", 10.0),
-        project_cap_usd=_float_env(e, "DISTILLERY_PROJECT_CAP_USD", 40.0),
+        project_cap_usd=_float_env(e, "DISTILLERY_PROJECT_CAP_USD", 19.5),
         playground_daily_cap_usd=_float_env(e, "DISTILLERY_PLAYGROUND_DAILY_CAP_USD", 1.0),
         model_ids=models,
         prices=dict(price_file.llm),

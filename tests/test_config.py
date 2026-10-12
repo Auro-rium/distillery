@@ -10,7 +10,7 @@ from distillery.config import Config, ConfigError, load_config, verify_admin_tok
 
 def test_defaults() -> None:
     c = load_config({})
-    assert c.run_cap_usd == 10 and c.project_cap_usd == 40 and c.playground_daily_cap_usd == 1
+    assert c.run_cap_usd == 10 and c.project_cap_usd == 19.5 and c.playground_daily_cap_usd == 1
     assert c.model_ids == {} and c.prices == {}
     assert c.gate.ratio_lower_bound_min == 0.85
     assert c.gate.mcnemar_alpha == 0.05
