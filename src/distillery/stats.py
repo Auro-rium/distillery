@@ -183,6 +183,31 @@ def clopper_pearson_upper(errors: int, n: int, conf: float = 0.95) -> float:
     return hi
 
 
+def clopper_pearson_lower(successes: int, n: int, conf: float = 0.95) -> float:
+    """One-sided Clopper-Pearson LOWER bound on a binomial rate.
+
+    The largest p with P(Binomial(n, p) >= successes) <= 1 - conf, i.e. with
+    P(Binomial(n, p) <= successes - 1) >= conf; found by bisection on ``binom_cdf`` (decreasing in
+    p). With no successes (or n = 0) there is no information above zero: 0.0.
+    """
+    if not 0.0 < conf < 1.0:
+        raise ValueError("conf must be in (0, 1)")
+    if n < 0 or not 0 <= successes <= n:
+        raise ValueError("need 0 <= successes <= n")
+    if n == 0 or successes == 0:
+        return 0.0
+    lo, hi = 0.0, 1.0  # invariant: cdf(lo) >= conf > cdf(hi)
+    for _ in range(200):
+        mid = (lo + hi) / 2
+        if mid == lo or mid == hi:
+            break
+        if binom_cdf(successes - 1, n, mid) >= conf:
+            lo = mid
+        else:
+            hi = mid
+    return lo
+
+
 @dataclass(frozen=True)
 class CertStep:
     threshold: float

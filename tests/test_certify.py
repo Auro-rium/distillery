@@ -12,6 +12,7 @@ from distillery.stats import (
     CertResult,
     binom_cdf,
     certify,
+    clopper_pearson_lower,
     clopper_pearson_upper,
     coverage_grid,
     risk_coverage_curve,
@@ -415,3 +416,21 @@ def test_grid_trap_two_percent_start_never_certifies() -> None:
     assert ok_high >= 57
     scores, correct = _draw_profile(random.Random(500), 500)  # the pinned scenario
     assert certify(scores, correct, alpha=ALPHA, delta=DELTA, grid=high_start).coverage > 0.2
+
+
+def test_clopper_pearson_lower_known_values_and_duality() -> None:
+    # all successes: p^n = 1 - conf
+    assert clopper_pearson_lower(10, 10, 0.95) == pytest.approx(0.05 ** (1 / 10), abs=1e-9)
+    assert clopper_pearson_lower(0, 10) == 0.0 and clopper_pearson_lower(0, 0) == 0.0
+    # one-sided 95% lower bound for 8/10 (= two-sided 90% CP limit)
+    assert clopper_pearson_lower(8, 10, 0.95) == pytest.approx(0.4931, abs=1e-4)
+    for k, n in [(1, 5), (7, 20), (80, 100), (99, 100)]:
+        lo = clopper_pearson_lower(k, n, 0.95)
+        # defining property: P(X >= k | lo) = 0.05
+        assert 1 - binom_cdf(k - 1, n, lo) == pytest.approx(0.05, abs=1e-9)
+        # duality with the upper bound on the failure count
+        assert lo == pytest.approx(1 - clopper_pearson_upper(n - k, n, 0.95), abs=1e-9)
+    with pytest.raises(ValueError):
+        clopper_pearson_lower(3, 2)
+    with pytest.raises(ValueError):
+        clopper_pearson_lower(1, 2, 1.0)

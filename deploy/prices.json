@@ -23,6 +23,12 @@
     "source": "ASSUMED UPPER BOUND for budget guard, NOT the console price",
     "date": "2026-09-30"
   },
+  "Qwen/Qwen3-Embedding-8B": {
+    "input_per_mtok": 0.01,
+    "output_per_mtok": 0.0,
+    "source": "Token Factory GET /v1/models?verbose=true pricing field (prompt 0.00000001 per token), read 2026-10-12",
+    "date": "2026-10-12"
+  },
   "finetune": {
     "Qwen/Qwen3-0.6B": {
       "usd_per_mtok_trained_tokens": 0.4,

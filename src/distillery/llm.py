@@ -28,6 +28,7 @@ ChatMessage = dict[str, Any]
 ModelT = TypeVar("ModelT", bound=BaseModel)
 
 MAX_SCHEMA_RETRIES = 2
+EMBED_BATCH = 64  # inputs per embeddings request
 _THINK_RE = re.compile(r"<think>(.*?)</think>", re.DOTALL)
 
 
@@ -313,6 +314,38 @@ class LLMClient:
             f"no schema-valid output after {schema_retries + 1} attempts: {last_error}"
         )
 
+    async def _with_retry(
+        self,
+        send: Callable[[], Awaitable[Any]],
+        log_failure: Callable[[float, str], None],
+    ) -> tuple[Any, float]:
+        """Shared transport retry loop for chat and embeddings: ``send()`` until it returns or the
+        policy gives up. Each failed attempt is reported through ``log_failure(latency, error)``.
+        Returns ``(response, latency_s)`` of the successful attempt."""
+        last_exc: BaseException | None = None
+        for attempt in range(1, self._retry.max_attempts + 1):
+            start = self._clock()
+            try:
+                response = await send()
+            except (openai.APIStatusError, openai.APIConnectionError) as exc:
+                latency = self._clock() - start
+                retryable = is_retryable(exc)
+                log_failure(latency, f"{type(exc).__name__}: {getattr(exc, 'status_code', '')}")
+                if not retryable:
+                    raise TerminalLLMError(f"{type(exc).__name__}: {exc}") from exc
+                last_exc = exc
+                if attempt == self._retry.max_attempts:
+                    break
+                delay = retry_after_seconds(exc)
+                if delay is None:
+                    delay = backoff_delay(attempt, self._retry, self._jitter())
+                await self._sleep(min(delay, self._retry.max_delay_s))
+                continue
+            return response, self._clock() - start
+        raise RetriesExhaustedError(
+            f"gave up after {self._retry.max_attempts} attempts: {type(last_exc).__name__}"
+        ) from last_exc
+
     async def _call(
         self,
         role: str,
@@ -330,59 +363,77 @@ class LLMClient:
         if json_schema is not None:
             kwargs["response_format"] = response_format_for(json_schema)
         digest = prompt_hash(convo)
-        last_exc: BaseException | None = None
-        for attempt in range(1, self._retry.max_attempts + 1):
-            start = self._clock()
-            try:
-                completion = await self._transport.chat.completions.create(**kwargs)
-            except (openai.APIStatusError, openai.APIConnectionError) as exc:
-                latency = self._clock() - start
-                retryable = is_retryable(exc)
-                self._log(
-                    role,
-                    model,
-                    purpose,
-                    stage,
-                    digest,
-                    0,
-                    0,
-                    latency,
-                    schema_attempt,
-                    False,
-                    f"{type(exc).__name__}: {getattr(exc, 'status_code', '')}",
-                )
-                if not retryable:
-                    raise TerminalLLMError(f"{type(exc).__name__}: {exc}") from exc
-                last_exc = exc
-                if attempt == self._retry.max_attempts:
-                    break
-                delay = retry_after_seconds(exc)
-                if delay is None:
-                    delay = backoff_delay(attempt, self._retry, self._jitter())
-                await self._sleep(min(delay, self._retry.max_delay_s))
-                continue
-            latency = self._clock() - start
-            usage = getattr(completion, "usage", None)
-            in_tok = int(getattr(usage, "prompt_tokens", 0) or 0)
-            out_tok = int(getattr(usage, "completion_tokens", 0) or 0)
+
+        def failed(latency: float, error: str) -> None:
             self._log(
-                role,
-                model,
-                purpose,
-                stage,
-                digest,
-                in_tok,
-                out_tok,
-                latency,
-                schema_attempt,
-                True,
-                None,
+                role, model, purpose, stage, digest, 0, 0, latency, schema_attempt, False, error
             )
-            choice = completion.choices[0]
-            return choice.message, in_tok, out_tok, getattr(choice, "finish_reason", None)
-        raise RetriesExhaustedError(
-            f"gave up after {self._retry.max_attempts} attempts: {type(last_exc).__name__}"
-        ) from last_exc
+
+        completion, latency = await self._with_retry(
+            lambda: self._transport.chat.completions.create(**kwargs), failed
+        )
+        usage = getattr(completion, "usage", None)
+        in_tok = int(getattr(usage, "prompt_tokens", 0) or 0)
+        out_tok = int(getattr(usage, "completion_tokens", 0) or 0)
+        self._log(
+            role,
+            model,
+            purpose,
+            stage,
+            digest,
+            in_tok,
+            out_tok,
+            latency,
+            schema_attempt,
+            True,
+            None,
+        )
+        choice = completion.choices[0]
+        return choice.message, in_tok, out_tok, getattr(choice, "finish_reason", None)
+
+    async def embed(
+        self,
+        texts: Sequence[str],
+        *,
+        model: str,
+        purpose: str,
+        batch_size: int = EMBED_BATCH,
+        stage: str = "",
+    ) -> list[list[float]]:
+        """Embed ``texts`` through the OpenAI-compatible ``/v1/embeddings`` (``client.embeddings
+        .create``), ``batch_size`` inputs per request, order preserved. Same retry policy and usage
+        path as chat: one CallRecord per request (role ``embedding``, prompt tokens only, so the
+        output price never applies), priced through the configured pricing (an unpriced model
+        raises ``UnknownPriceError`` from the sink path, exactly like chat). The caller passes the
+        model id explicitly: embeddings are not a chat role."""
+        if batch_size < 1:
+            raise ValueError("batch_size must be >= 1")
+        out: list[list[float]] = []
+        for lo in range(0, len(texts), batch_size):
+            batch = [str(t) for t in texts[lo : lo + batch_size]]
+            digest = prompt_hash([{"role": "embed", "content": t} for t in batch])
+
+            def failed(latency: float, error: str, digest: str = digest) -> None:
+                self._log(
+                    "embedding", model, purpose, stage, digest, 0, 0, latency, 1, False, error
+                )
+
+            def send(batch: list[str] = batch) -> Awaitable[Any]:
+                return self._transport.embeddings.create(model=model, input=batch)  # type: ignore[no-any-return]
+
+            resp, latency = await self._with_retry(send, failed)
+            rows = sorted(resp.data, key=lambda d: int(getattr(d, "index", 0) or 0))
+            if len(rows) != len(batch):
+                raise TerminalLLMError(
+                    f"embeddings: got {len(rows)} vectors for {len(batch)} inputs"
+                )
+            usage = getattr(resp, "usage", None)
+            in_tok = int(
+                getattr(usage, "prompt_tokens", 0) or getattr(usage, "total_tokens", 0) or 0
+            )
+            self._log("embedding", model, purpose, stage, digest, in_tok, 0, latency, 1, True, None)
+            out.extend([float(x) for x in d.embedding] for d in rows)
+        return out
 
     def _log(
         self,
