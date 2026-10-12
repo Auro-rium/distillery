@@ -27,6 +27,15 @@ from distillery import chaos, errors, heartbeat, humanset
 from distillery.budget import BudgetExceeded, Ledger, spend_lines
 from distillery.config import Config, ConfigError, load_config
 from distillery.driver import driving
+from distillery.global_ledger import (
+    ENV_VAR as GLOBAL_LEDGER_ENV,
+)
+from distillery.global_ledger import (
+    GlobalLedger,
+    GlobalLedgerError,
+    load_seed_file,
+    resolve_path,
+)
 from distillery.llm import LLMClient
 from distillery.orchestrator import (
     DRY_PREFIX,
@@ -126,6 +135,13 @@ def _parser() -> argparse.ArgumentParser:
     sh.add_argument("--human-set", required=True, metavar="FILE", help="human_confirmed.json")
     sh.add_argument("--budget-usd", type=float, default=None, help="per-run spend cap")
     sh.add_argument("--i-approve-spend", action="store_true")
+    lg = sub.add_parser(
+        "ledger", help="the cross-process global spend ledger ($DISTILLERY_GLOBAL_LEDGER)"
+    )
+    lsub = lg.add_subparsers(dest="ledger_cmd", required=True)
+    lsub.add_parser("status", help="committed total, cap, remaining, rows by kind, reservations")
+    ls = lsub.add_parser("seed", help="insert seed spend rows and reservations from a JSON file")
+    ls.add_argument("--file", required=True, metavar="JSON", help="e.g. deploy/ledger_seed.json")
     ex = sub.add_parser("export-replay", help="bundle a finished run into replay/")
     ex.add_argument("run")
     ex.add_argument("--replay-dir", default=None, help="default: $DISTILLERY_REPLAY_DIR or replay")
@@ -553,7 +569,7 @@ def _cmd_draft_heldout(
                 if deps_factory is not None
                 else make_live_deps(config, pcfg, bridge, env=env)
             )
-            ledger = Ledger.from_config(run_id, config, store)
+            ledger = Ledger.from_config(run_id, config, store, env=env)
             llm_kwargs: dict[str, Any] = {}
             if deps.llm_sleep is not None:
                 llm_kwargs["sleep"] = deps.llm_sleep
@@ -734,6 +750,66 @@ def _cmd_export_replay(
     return EXIT_OK
 
 
+def _ledger_disabled(env: Mapping[str, str], out: Callable[[str], None]) -> None:
+    raw = env.get(GLOBAL_LEDGER_ENV, os.environ.get(GLOBAL_LEDGER_ENV, ""))
+    out(f"global ledger is disabled ({GLOBAL_LEDGER_ENV}={raw!r}); nothing to show")
+
+
+def _cmd_ledger(
+    args: argparse.Namespace, env: Mapping[str, str], out: Callable[[str], None]
+) -> int:
+    path = resolve_path(env)
+    if path is None:
+        _ledger_disabled(env, out)
+        return EXIT_OK if args.ledger_cmd == "status" else EXIT_FAIL
+    try:
+        if args.ledger_cmd == "seed":
+            spend, reservations = load_seed_file(args.file)
+            gl = GlobalLedger(path)
+            res = gl.seed(spend, reservations)
+            out(f"global ledger {path}")
+            out(f"spend rows inserted {len(res.spend_inserted)}, skipped {len(res.spend_skipped)}")
+            for note in res.spend_skipped:
+                out(f"  skipped (already seeded): {note}")
+            out(
+                f"reservations inserted {len(res.reservations_inserted)}, "
+                f"skipped {len(res.reservations_skipped)}"
+            )
+            for rid in res.reservations_skipped:
+                out(f"  skipped (already present): {rid}")
+            out(f"committed usd: {gl.total_committed():.4f}")
+            return EXIT_OK
+        if not path.exists():
+            out(f"global ledger {path}: not created yet (committed usd 0.0000)")
+            return EXIT_OK
+        cap = load_config(env).project_cap_usd
+        s = GlobalLedger(path).summary()
+    except (ValueError, ConfigError) as exc:
+        out(f"refused: {exc}")
+        return EXIT_REFUSED
+    except GlobalLedgerError as exc:
+        out(f"failed: {exc}")
+        return EXIT_FAIL
+    out(f"global ledger {s['path']}")
+    out(
+        f"committed usd: {s['committed_usd']:.4f} "
+        f"(spend {s['spend_usd']:.4f} + reservations {s['reserved_usd']:.4f})"
+    )
+    out(f"project cap usd: {cap:.4f}")
+    out(f"remaining usd: {cap - s['committed_usd']:.4f}")
+    out("spend by kind:")
+    for k in s["by_kind"]:
+        out(f"  {k['kind']}: n={k['n']} usd={k['usd']:.4f}")
+    out("spend by run:")
+    for r in s["by_run"]:
+        out(f"  {r['run_id']}: n={r['n']} usd={r['usd']:.4f}")
+    out("active reservations:")
+    for r in s["reservations"]:
+        until = r["expires_at"] or "permanent"
+        out(f"  {r['id']} holder={r['holder']} usd={r['usd']:.4f} until={until} {r['note']}")
+    return EXIT_OK
+
+
 def main(
     argv: Sequence[str] | None = None,
     *,
@@ -757,6 +833,8 @@ def main(
         return _cmd_serve(args, e)
     if args.cmd == "export-replay":
         return _cmd_export_replay(args, e, out)
+    if args.cmd == "ledger":
+        return _cmd_ledger(args, e, out)
     if args.cmd == "reprice":
         return _cmd_reprice(args, e, out)
     if args.cmd == "status":

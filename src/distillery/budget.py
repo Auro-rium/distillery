@@ -4,13 +4,17 @@ from __future__ import annotations
 
 import sqlite3
 import threading
+from collections.abc import Mapping
 from datetime import UTC, datetime
 from typing import Any
 
 from distillery.config import Config, FinetunePrice, Price, SandboxPrice
+from distillery.global_ledger import BudgetExceeded as BudgetExceeded
+from distillery.global_ledger import GlobalLedger, GlobalLedgerError
 from distillery.store import Store
 
 PLAYGROUND = "playground"
+DRY_RUN_ID_PREFIX = "dry-"  # == orchestrator.DRY_PREFIX (which imports this module)
 
 # What a cost line rests on. Reports and the CLI must print one of these next to every figure.
 BASIS_BILLED = "billed-basis (measured tokens x console price)"
@@ -34,10 +38,6 @@ _KIND_BASIS = {
 }
 
 
-class BudgetExceeded(RuntimeError):
-    pass
-
-
 class UnknownPriceError(RuntimeError):
     pass
 
@@ -48,7 +48,11 @@ def _today() -> str:
 
 class Ledger:
     """Thread-safe. Playground spend counts toward its daily cap and the project cap,
-    but not the per-run cap. Everything else counts toward run and project caps."""
+    but not the per-run cap. Everything else counts toward run and project caps.
+
+    With a ``global_ledger`` the project cap is checked against that shared file's committed
+    total, read fresh on every check (spend by other stores and processes counts). Without one,
+    the project total is the store's total at construction plus this ledger's own records."""
 
     def __init__(
         self,
@@ -60,6 +64,7 @@ class Ledger:
         store: Store | None = None,
         finetune_prices: dict[str, FinetunePrice] | None = None,
         sandbox_price: SandboxPrice | None = None,
+        global_ledger: GlobalLedger | None = None,
     ) -> None:
         self.run_id = run_id
         self.run_cap = run_cap_usd
@@ -69,6 +74,7 @@ class Ledger:
         self.finetune_prices = finetune_prices or {}
         self.sandbox_price = sandbox_price
         self.store = store
+        self.global_ledger = global_ledger
         self._lock = threading.Lock()
         self._run = 0.0
         self._project = 0.0
@@ -78,7 +84,19 @@ class Ledger:
             self._project = store.total_spend()
 
     @classmethod
-    def from_config(cls, run_id: str, cfg: Config, store: Store | None = None) -> Ledger:
+    def from_config(
+        cls,
+        run_id: str,
+        cfg: Config,
+        store: Store | None = None,
+        *,
+        env: Mapping[str, str] | None = None,
+        dry_run: bool = False,
+    ) -> Ledger:
+        """The global ledger (``DISTILLERY_GLOBAL_LEDGER``, see ``global_ledger``) is attached only
+        for a real run backed by a store: dry runs (fake models, ``dry-`` run ids) never touch it,
+        and a store-less ledger is an estimator."""
+        use_global = store is not None and not dry_run and not run_id.startswith(DRY_RUN_ID_PREFIX)
         return cls(
             run_id,
             cfg.run_cap_usd,
@@ -88,6 +106,7 @@ class Ledger:
             store,
             finetune_prices=cfg.finetune_prices,
             sandbox_price=cfg.sandbox_price,
+            global_ledger=GlobalLedger.from_env(env) if use_global else None,
         )
 
     def estimate_llm_cost(self, model: str, in_tokens: int, out_tokens: int) -> float:
@@ -168,10 +187,23 @@ class Ledger:
                 return self._daily[d]
         return self.store.spend_on_day(d, PLAYGROUND) if self.store else 0.0
 
+    def _project_now(self, *, refresh_store: bool = False) -> float:
+        """Project-wide total for a cap check. Call with ``_lock`` held.
+
+        Global ledger enabled: its committed total (spend + reservations), read fresh now.
+        Disabled: this ledger's running total; ``refresh_store`` re-reads the store first so spend
+        by other processes sharing it is counted (the long-lived playground needs that)."""
+        if self.global_ledger is not None:
+            return self.global_ledger.total_committed()
+        if refresh_store and self.store is not None:
+            self._project = max(self._project, self.store.total_spend())
+        return self._project
+
     def remaining(self) -> float:
         """Headroom under the tighter of the run and project caps (>= 0)."""
         with self._lock:
-            return max(0.0, min(self.run_cap - self._run, self.project_cap - self._project))
+            project = self._project_now()
+            return max(0.0, min(self.run_cap - self._run, self.project_cap - project))
 
     def preflight(self, estimated_usd: float) -> None:
         if estimated_usd < 0:
@@ -182,9 +214,10 @@ class Ledger:
                     f"run cap ${self.run_cap:.2f}: spent ${self._run:.4f} "
                     f"+ est ${estimated_usd:.4f}"
                 )
-            if self._project + estimated_usd > self.project_cap:
+            project = self._project_now()
+            if project + estimated_usd > self.project_cap:
                 raise BudgetExceeded(
-                    f"project cap ${self.project_cap:.2f}: spent ${self._project:.4f} "
+                    f"project cap ${self.project_cap:.2f}: spent ${project:.4f} "
                     f"+ est ${estimated_usd:.4f}"
                 )
 
@@ -197,7 +230,7 @@ class Ledger:
                     f"playground daily cap ${self.playground_cap:.2f}: spent ${today:.4f} "
                     f"+ est ${estimated_usd:.4f}"
                 )
-            if self._project + estimated_usd > self.project_cap:
+            if self._project_now(refresh_store=True) + estimated_usd > self.project_cap:
                 raise BudgetExceeded(f"project cap ${self.project_cap:.2f} would be exceeded")
 
     def record(
@@ -221,6 +254,22 @@ class Ledger:
             else:
                 self._run += usd
             self._project += usd
+            # The shared ledger first: it is what every other process's cap check reads. A failure
+            # is raised (money is spent; fail loudly) but only after the local store has the row.
+            global_error: GlobalLedgerError | None = None
+            if self.global_ledger is not None:
+                try:
+                    self.global_ledger.record(
+                        str(self.store.root) if self.store is not None else "",
+                        self.run_id,
+                        kind,
+                        model,
+                        usd,
+                        input_tokens,
+                        output_tokens,
+                    )
+                except GlobalLedgerError as exc:
+                    global_error = exc
             if self.store is not None:
                 self.store.record_spend(
                     self.run_id, kind, model, usd, input_tokens, output_tokens, d
@@ -229,6 +278,8 @@ class Ledger:
                     self.store.record_llm_call(
                         self.run_id, model, input_tokens, output_tokens, usd, latency_s
                     )
+            if global_error is not None:
+                raise global_error
 
 
 def spend_lines(store: Store, run_id: str) -> list[dict[str, Any]]:

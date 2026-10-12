@@ -304,7 +304,9 @@ class Playground:
     def _reserve(self, estimate: float) -> None:
         """Atomically check (store spend + in-flight reservations + this estimate) against the
         daily cap and reserve the estimate. Spend is re-read from the store every time, so other
-        processes' spend and our own settled calls are both counted."""
+        processes' spend and our own settled calls are both counted. The project-wide cap is
+        checked against a fresh total too: the global ledger's committed total when enabled
+        (every store copy and process), else a re-read of the local store."""
         with self._reserve_lock:
             spent = self.reader.real.spend_on_day(_today(), PLAYGROUND)
             spent = max(spent, self.ledger.playground_spent())
@@ -315,7 +317,7 @@ class Playground:
                     f"playground daily cap ${cap:.2f}: spent ${spent:.4f} "
                     f"+ in-flight/est ${pending:.4f}"
                 )
-            self.ledger.preflight_playground(pending)  # project-wide cap too
+            self.ledger.preflight_playground(pending)  # project-wide cap too, from a fresh total
             self._reserved += estimate
 
     def _release(self, estimate: float) -> None:

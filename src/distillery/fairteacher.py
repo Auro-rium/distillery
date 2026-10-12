@@ -325,7 +325,7 @@ def estimate_table(
     zero = [_tokens(build_messages(d["question"], ddl, role="eval_teacher"), cpt) for d in dev]
     few = [_tokens(build_fewshot_messages(d["question"], ddl, shots), cpt) for d in dev]
     mean_zero, mean_few = sum(zero) / len(zero), sum(few) / len(few)
-    ledger = Ledger.from_config(run_id, config)
+    ledger = Ledger.from_config(run_id, config)  # estimate only (no store): never global
     super_id, ultra_id = config.require_model("teacher"), config.require_model("planner")
 
     def usd(model: str, n: int, mean_in: float, out_per: int) -> float | None:

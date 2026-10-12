@@ -788,7 +788,7 @@ class Pipeline:
             say(line)
 
         self.say = _say
-        self.ledger = Ledger.from_config(run_id, config, store)
+        self.ledger = Ledger.from_config(run_id, config, store, dry_run=cfg.dry_run)
         self.sink = LedgerSink(self.ledger)
         llm_kwargs: dict[str, Any] = {}
         if deps.llm_sleep is not None:

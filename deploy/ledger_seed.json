@@ -1,0 +1,55 @@
+{
+  "as_of": "2026-10-12",
+  "comment": "Verified spend from the store ledgers on 2026-10-12 (sandbox recorded at $0). Applied ONCE with: distillery ledger seed --file deploy/ledger_seed.json (idempotent: a row whose note is already present is skipped). Total committed after seeding: 15.6952.",
+  "spend": [
+    {
+      "source_root": ".distillery/p5live",
+      "run_id": "sql-gated-20261004T155134Z-66ff347c",
+      "kind": "seed",
+      "usd": 4.2582,
+      "note": "seed 2026-10-12 P4 gated live run (store .distillery/p5live)",
+      "evidence": "docs/proofs/evidence/p4_run_summary.json"
+    },
+    {
+      "source_root": ".distillery/b2/store (minus P4 base)",
+      "run_id": "b2-fair-teacher",
+      "kind": "seed",
+      "usd": 1.6495,
+      "note": "seed 2026-10-12 B2 fair-teacher S0/S1 (store .distillery/b2/store minus the P4 base)",
+      "evidence": "docs/proofs/evidence/b2_fair_teacher_s0_s1.json"
+    },
+    {
+      "source_root": ".distillery/gateb + .distillery/gateb_store (delta)",
+      "run_id": "gateb-agent-authored",
+      "kind": "seed",
+      "usd": 0.2668,
+      "note": "seed 2026-10-12 Gate B = gateb drafting 0.1743 + gateb_store scoring delta 0.0925",
+      "evidence": "docs/proofs/evidence/gateb_agent_authored.json"
+    },
+    {
+      "source_root": ".distillery/a5live",
+      "run_id": "chaos-sql-gated-20261007b",
+      "kind": "seed",
+      "usd": 4.1918,
+      "note": "seed 2026-10-12 A5 chaos run (store .distillery/a5live)",
+      "evidence": "docs/proofs/evidence/a5_chaos.json"
+    },
+    {
+      "source_root": ".distillery/n1eval + .distillery/n1train_root + .distillery/n1live (delta)",
+      "run_id": "n1-natural-round",
+      "kind": "seed",
+      "usd": 3.8289,
+      "note": "seed 2026-10-12 N1 = n1eval 0.2065 + n1train_root 0.6826 + n1live delta 2.9398",
+      "evidence": "docs/proofs/evidence/n1_natural_round.json"
+    }
+  ],
+  "reservations": [
+    {
+      "id": "hosted-demo",
+      "holder": "hosted-demo",
+      "usd": 1.5,
+      "expires_at": null,
+      "note": "hosted demo allocation Oct 30 - Dec 15 2026 (Render playground)"
+    }
+  ]
+}

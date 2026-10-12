@@ -35,3 +35,7 @@ services:
       # Public playground: a small daily ceiling on teacher calls (ephemeral disk, so it resets on restart).
       - key: DISTILLERY_PLAYGROUND_DAILY_CAP_USD
         value: "0.5"
+      # The hosted service cannot see the laptop's global spend ledger (and has an ephemeral disk), so
+      # it relies on the playground caps above; the laptop ledger holds a $1.50 hosted-demo reservation.
+      - key: DISTILLERY_GLOBAL_LEDGER
+        value: none
