@@ -1,97 +1,41 @@
 # STATUS
 
-**Date:** 2026-10-07 · **Phase:** proof mode (feature freeze; grounding prompt of 2026-10-03). The baseline is in `GROUND_TRUTH.md` · **Result claims:** P4 PROMOTE (in-distribution only); Gate B REJECT; A5 PASS (details below).
+**Date:** 2026-10-12 · **Phase:** final build (WIN PLAN H1-H6) toward the Nebius x NVIDIA Global AI Hackathon; **Devpost deadline 2026-10-30 10:00 PT** (our internal submit date is 2026-10-27; judging runs 2026-12-01 to 12-15 and the site must stay up). Baseline of proven and broken claims: `GROUND_TRUTH.md` (25 claims). Pre-registrations and results: `DECISIONS.md`. Older status detail is in git history.
 
-## Results of 2026-10-07 (all evidence in `docs/proofs/evidence/`)
-- **A5 live chaos run: PASS** (`a5_chaos.json`). Run `chaos-sql-gated-20261007b` on Token Factory, 8 injected faults (2 kill, 3 llm_503, 1 net_window, 2 sandbox_exit), 4 restarts, 1 admin action, fine-tune job adopted not re-bought; verdict PROMOTE (ratio lower bound 1.022, McNemar 204 vs 1). Spend $4.19. The first attempt (`...a`) exhausted its restarts on a laptop-suspend DNS outage and was cancelled at $0, which led to A7.
-- **B2 fair teacher, S0 + S1 (S2 deferred on budget): no claim** (`b2_fair_teacher_s0_s1.json`). P4 reproduced exactly. Dev: S0 84.7%, S1 93.3% (strongest). Held-out: student 92.3% vs S1 93.3%, ratio 0.989, CI [0.957, 1.022]. Spend $1.65.
-- **Gate B on the agent-authored set (n=86): REJECT** (`gateb_agent_authored.json`). Base 38.4%, student 40.7%, teacher 98.8% (inflated, it drafted the gold), ratio lower bound 0.306, McNemar p 0.84. Spend $0.22. The set is agent-authored (blind to templates by instruction), never called human-written.
-- **A6 watchdog and A7 outage-aware restarts: merged** (`02ff4e4`), 817 tests pass. A5 follow-ups: adapter uploads retry in-process with a 600 s transport timeout; `score-human` takes the student base from the trained artifact.
-- **Reading:** the system is autonomous and the in-distribution win is real, but it does not transfer to naturally phrased questions or unseen concepts. Next: train on naturally phrased, teacher-verified data and score on a fresh agent-authored set (~$4 to $5, needs a console balance check; recorded spend so far $10.32 of the $19.5 cap (P4 4.26 + B2 1.65 + Gate B 0.22 + A5 4.19), so about $9 remains).
+## Results (all evidence in `docs/proofs/evidence/`)
+| Round | Decision | Key numbers | Evidence |
+|---|---|---|---|
+| P4 (templated held-out) | **PROMOTE** (in-distribution only) | n=300: base 0.257, student 0.923, teacher 0.900; ratio lower bound 0.993; McNemar 202 vs 2. Stress (n=100): student 0.16 | `p4_run_summary.json` |
+| B2 fair teacher (S0, S1; S2 Ultra deferred) | **no claim** | P4 reproduced exactly. Student 0.9233 vs 8-shot Super 0.9333: ratio 0.989, lower bound 0.957 (needs > 1.0) | `b2_fair_teacher_s0_s1.json` |
+| Gate B (agent-authored, n=86) | **REJECT** | base 0.384, student 0.407, teacher 0.988 (inflated); ratio lower bound 0.306; McNemar p 0.84 | `gateb_agent_authored.json` |
+| A5 live chaos run | **PASS** | 8 injected faults, 4 restarts, 1 admin action, 1 fine-tune job billed, verdict PROMOTE (lower bound 1.022) | `a5_chaos.json` |
+| N1 natural-phrasing round (N1-eval, agent-authored, n=98) | **REJECT** | base 0.296, student 0.571, teacher 0.959; ratio lower bound **0.495 < 0.85**; McNemar p 4.6e-07 (29 vs 2). Held-out: no regression (lower bound 0.989). Stress: student 0.66, no longer unseen concepts. Gate B re-score of N1: **pending** | `n1_natural_round.json` |
 
-## Proof phase (2026-10-03)
-- **Phase 0, GROUND_TRUTH.md: done** (21 claims, each with path, command and output).
-- **P1.1-P1.10 (free): done except P1.3.** Root cause of the smoke REJECTs, proven from the provider's job objects: 3/6/9 optimizer steps at defaults (lr 1e-5, batch 8, packing on, r8/α8). Token-ID parity train vs eval 200/200, no truncation (train max 1,074 of 8,192 tokens; gold SQL max 111 of 160), extraction clean, final checkpoint evaluated. P1.3: loss is on the completion only (base completion loss 0.80/0.76 vs full 1.86; job step-1 0.771).
-- **P3 (free): PASS.** Verifier 1321/1321 gold, 1193/1193 equivalent wraps, 8/8 pairs. Teacher-as-student PROMOTE, base-as-student REJECT on recorded vectors. Power at true ratio 0.95 is 1.00 (n=300) and 0.95 (n=100).
-- **Fixes before P1.11 (SDD Task 1):** pick the max-step checkpoint (P1.8), report cap hits (P1.5), planned-steps floor 50 → 300 (P1.7).
-- **P2 (automated part): done** (`p2_data.json`). Labels 276/276; 3/276 drift on a perturbed DB (all null_handling); own-mutation filter recall 88.9%/93.8% (below the 95% bar; equivalent mutants not yet classified); no exact leakage, gated held-out skeleton overlap 98% (disclosed). Open: your 30-row spot-check (`.distillery/proofs/p2_spotcheck.md`).
-- **P1.11 overfit: PASS** (2026-10-04, `p1_11_overfit.json`). Qwen3-1.7B, 64 rows, 320 steps, 615,460 trained tokens: adapter 64/64 vs base 17/64 in the sandbox (merged serving). First scoring attempt crashed: the per-job timeout (210 s for a batch of 2, sized for 0.6B) was too tight for 1.7B; fixed in `441b361` (90 s/sample, timed-out jobs retry with 2x timeout). Base scores rebuilt from recovered sandbox stdout (no re-run).
-- **P5 harness (dry): PASS** for stage latency (max 1.43 s), tree, report, kill/resume; per-stage spend, live job adoption and forced failure still need the live run.
-- **P1.12: PASS** (lr 1e-4, dev 142/150 vs base 33/150); config pinned (`0228b94`).
-- **P4: PROMOTE** (run `sql-gated-20261004T155134Z-66ff347c`, started from the UI): held-out 300 base 25.7% / student 92.3% / teacher 90.0%, ratio CI [0.993, 1.061], McNemar p 1.6e-57; stress 9% / 16% / 99%. Cost $4.26. Kill mid fine-tune → job adopted (one job). Two provider network errors were survived by resume; fixes `5e32640`, `9a2a2d1`.
-- **Next:** P5 hosted (needs Render settings + push approval), P2.5 spot-check (you), console after-balance, final review.
+**Reading.** The agent is autonomous and the in-distribution win is real. Training on naturally phrased, teacher-verified questions moved the student from indistinguishable-from-base to clearly better than base, but not to the 0.85 bound. The two agent-authored sets differ, so that is not a measured improvement; teacher accuracy on them is inflated by construction. The plan turns this limit into the feature: a certified router (H3) serves the student only where it can guarantee the error rate and defers the rest. Certified adapter: N1 (`7d6ce813…`).
 
-### Console readings (you, screenshot of Organisation > Usage)
-- 2026-10-04 13:57 UTC: **balance $29.21**. Usage 2026-09-04..10-04 (last updated 11:39 UTC): subtotal $2.07, VAT $0.37, total $2.43; daily ~$1.82 on 09-30 (smoke runs), ~$0.25 on 10-04.
-- The 10-04 figure (as of 11:39 UTC) covers only P1.11's fine-tune (615,460 tokens, done 08:29) and its first scoring attempt (38 sandbox ops, ~8,737 consumed_cpu). So **P1.11 cost ~ $0.25 before VAT**; fine-tune price **<= ~$0.41 per 1M trained tokens** (upper bound, if all of it were fine-tuning). Per-service split pending (Table view).
-- P1.12 (2 x 1.16M tokens, started 13:50 UTC) is NOT in these numbers; read again after the usage refresh.
+## Spend (store ledgers, from P4 onward; sandbox is recorded at $0, so every figure is a lower bound)
+| Step | USD |
+|---|---|
+| P4 | 4.2582 |
+| B2 | 1.6495 |
+| Gate B (drafting 0.1743 + two scoring passes 0.0925) | 0.2668 |
+| A5 | 4.1918 |
+| N1 (ceiling was 5.00) | 3.8289 |
+| **Total** (exact 14.195248) | **14.1952** of the 19.50 cap |
+| Hosted-demo reservation (through Dec 15) | 1.50 |
+| **Available to build with** | **about 3.80** (19.50 - 14.1952 - 1.50), plus sandbox seconds, which are unpriced |
 
-### Spend ladder (dollar amounts need your console balance; the fine-tune and sandbox prices are still unknown)
-| Step | What is billed | Size |
-|---|---|---|
-| Free proofs (P0, P1.1-P1.10, P3) | nothing | $0 |
-| P1.11 overfit | Qwen3-1.7B LoRA, 64 rows x 10 epochs; sandbox 64 x 2 generations | ~0.62M trained tokens; ~128 sandbox generations (~10-15 min) |
-| P1.12 pilot | 2-3 jobs x ~300 rows, ≥300 steps each | ~2-3M trained tokens; ~150 dev generations x 3 |
-| P4 = P5 full run, from the UI | teacher data + gate/stress teacher (~$1.4 at API prices); fine-tune ≥1,600 rows x 3 epochs; ~1,100 sandbox generations | ~4.6M trained tokens |
-The 0.6B smoke jobs trained 0.85M tokens in total. Their billed cost would price a token once you read the console. P1.11 and P3 are never dropped.
-
-## Where each step of the plan stands
-1. **Free diagnostics: done** (evidence below). 2. **Pre-registration: done** (DECISIONS.md, committed before any new data). 3. **Gold from templates: done** (code, audit, tests). 4. **Student config: done in code** (pinned hyperparameters, 50-step floor, base/student/teacher scored concurrently). 5. **Cost estimate: blocked on you** (console prices). 6. **Real backend: partly done** (see bottom); host and `vercel.json` decisions are yours.
-
-## Step 1 diagnostics (real data, 2026-09-30/10-01)
-- **(a) prices:** LLM prices found via the API (see Step 5). Billed spend, the fine-tune price and the sandbox price: console only, not done.
-- **(b) student on its OWN training rows (sandbox, run on the two real mini-run adapters): 16.2% (round 1, 117 rows) and 17.4% (round 2, 138 rows); base on the same rows 8.5% / 8.0%.** Threshold was "low if < 50%": **tripped.**
-- **(c) identical-string rate student vs base (extracted SQL): 0.9% to 3.3%** on train/dev/held-out. Threshold "high if > 90%": not tripped. The adapter is applied and changes outputs.
-- **(d) loss curves (real job objects):** tiny 3 steps (train 0.771 to 0.751), mini r1 6 steps (0.674 to 0.609), mini r2 9 steps (0.687 to 0.566). Loss fell, from only 3 to 9 optimizer steps.
-- **(e) prompt render: byte-identical.** Training row and rebuilt eval prompt are identical (system 215 chars, user 3886 chars, same text). Rendered through the checkpoint's own chat template with jinja2: `/no_think` is in both, and the thinking-off eval prompt ends with `<think>\n\n</think>\n\n`, the same block the training render puts before the answer. No template mismatch.
-- **(f)** the same 3 of 30 dev tasks were solved after round 1 and round 2.
-- **Reading:** root cause is the provider defaults the pipeline silently accepted (batch 8, lr 1e-5, lora_r 8, alpha 8, packing on): 3 to 9 optimizer steps. That is consistent with every number above (student ~2x base on its own training data, but far from fitting it). It is **not proven** to be the whole explanation; the properly configured run is the test. Fixed with explicit pinned hyperparameters, packing off, a refusal below 50 planned steps (raised to 300 on 2026-10-03, `fix(P1.7)`), and a `finetune` report section.
-
-## Benchmark as now built (offline, tested; fake-model dry run at full scale passes)
-- Gold = template SQL, executed in the sandbox; no model writes or vets it. The Ultra/Super agreement filter is gone; Ultra is only used for failure analysis.
-- Gate set: 300, in-distribution, every family also in train, questions never in train. **Stress set: 100 from reserved families `date_math`, `set_ops`** (rule `Random(777).sample`, verified), sealed separately, scored outside the gate.
-- Scale: train 1800 / dev 150 / gate 300 / stress 100, oversample 1.1.
-- **Measured caveat:** 1800 training tasks contain only 141 distinct question skeletons and **97.3% of gate questions share a skeleton with a training question** (same wording, other literals). The gate measures generalisation across literals within known question shapes; only the stress set tests unseen structure.
-- Template audit (89 templates, 300 draws each): found and fixed one real defect (a phrasing that hid a country filter the gold applied); now 0 gold errors, 0 ORDER BY ties, 0 LIMIT-without-ORDER, 0 ambiguous questions. It runs in CI.
-- Teacher yield risk: a train row exists only if the teacher's SQL matches gold, so rows = 1800 x teacher accuracy; if under 1500 the pre-registered range is missed and that is reported.
-
-## Step 5: pre-flight estimate (NOT approved, nothing spent)
-**LLM prices are now real**, read from the API itself (`GET /v1/models?verbose=true`, 2026-10-01): Nano $0.06 in / $0.24 out, Super $0.30 / $0.90, Ultra $1.00 / $3.00 per Mtok. My earlier ceilings were 3 to 10x too high. Re-priced, the two smoke runs consumed **$1.46 of LLM calls** (not about $4.2).
-`scripts/estimate_run_cost.py --scale full --rounds 1` (measured token averages from the real mini run): teacher on 1800 train rows **$1.13**, teacher on 400 gate/stress items **$0.25**, planner $0 (no analysis in a 1-round run), subtotal **$1.38**.
-**Still unpriced, and not findable without the console:** the SFT/LoRA fine-tune price (about 5.18M trained tokens for the run: 1800 rows x 960 tokens/row, measured by the three real jobs at 963/960/959, x 3 epochs) and the Sandbox price (1,100 generations x 7.8 s = 8,580 s). I searched the docs, the OpenAPI spec, the model endpoints and the pricing site: no usage or billing endpoint exists, and the only fine-tune price in the API is for a different product (speculative-decoder training). So no total is shown.
-**What fits, as arithmetic not a quote:** working budget $9.50 ($19.50 cap minus the $10 demo reserve), minus $1.46 spent on LLM calls, minus the $1.38 above. That leaves about $6.66 for the earlier fine-tune jobs (0.85M tokens) plus the new one (5.18M tokens) plus sandbox, so if sandbox is free everything fits only when the fine-tune price is under about **$1.10 per Mtok trained tokens**. The console price decides it.
-
-## Claims-real plan, code state (2026-10-02; evidence is offline only, no live run, no spend)
-Plan: `~/.claude/plans/eventual-wishing-patterson.md`. Three builders in separate worktrees, merged here.
-- **Step 1, human held-out set: built, offline-tested.** Loader (`taskpacks/sql/human.py`), `draft-heldout` (teacher k=3 at temp 0.8, keep only if all three execute to the same non-empty result, discards by reason), `confirm-heldout` CLI and an admin-gated `/humanset` screen, separate sealed set (`Store.seal_human/load_human`, AST test covers `load_human`), Gate B scored with the same thresholds as Gate A, stress still outside both gates. **Waiting for your question file;** all tests use a synthetic fixture. Disclosed bias: only teacher-solvable questions survive drafting.
-- **Step 2, paraphrase augmentation: built, offline-tested.** Nano paraphrases verified train originals only; a paraphrase becomes a row only if the teacher's SQL executes to the template gold; verified originals are kept first and paraphrases fill up to `train_row_cap=2000`. Isolation tests: recording transport (no gate, stress, dev or human text in any paraphraser request), AST test, id-prefix test. Yield is reported in `report.paraphrase`.
-- **Step 3, 1.7B spike: script written, NOT run.** `scripts/spike_student_latency.py` (15 offline tests). Nebius confirmed sandbox egress is open per operation and every sandbox is fixed at 4 vCPU / 4 GB, so 1.7B bf16 may not fit; an OOM abort is a valid recorded result. Needs your console balance before and after to derive the sandbox price.
-- **Merged checks:** `pytest` 556 passed; `ruff check` and `ruff format --check` clean; `mypy src scripts/spike_student_latency.py` clean; frontend `typecheck` clean, vitest 334 passed; Playwright not re-run. Offline `--dry-run --human-set` run: both gates, paraphrase section and manifest hashes line up (fake models, not results).
-- **Known issues to fix before the paid run:** `cost_per_1k_tasks.teacher` divides teacher spend over gate, stress and human by the gate n only; `--human-set` re-keys `split` and everything after it, so Step 5 needs a fresh run id.
-- **Not started:** Step 4 pre-registration and doc drift (needs your 0.6B vs 1.7B choice), Step 5 estimate and run, Step 6 BYO pack.
-
-## Live evidence, 2026-10-02/03 (real Nebius calls)
-- **Step 3 spike, Qwen3-1.7B base on a 4 vCPU / 4 GB sandbox (live, 60 generations, `docs/spikes/s5-qwen3-1_7b.json`):** image build 87 s; **it fits**: peak RSS 3,784 to 3,807 MB of 4,096 MB (about 93%, almost no headroom; short template prompts, max_new_tokens at the script default). Per-sample latency: 14.6 s (batch 1), 10.6 s (batch 2), 11.5 s (concurrency 1), 18.1 s (c5), 28.8 s (c10), 25.5 s (c20); throughput 0.04 (c1) to 0.22 samples/s (c20, the best level measured; not tested above 20). Baseline 0.6B: 7.8 s/sample, 2,140 MB (earlier measurement, not re-run in the same sweep, so the comparison is indicative only). Evaluating about 1,100 generations at 0.22 samples/s is roughly 83 minutes of wall-clock per model, run base and student concurrently within the 50-operation cap. Sandbox spend was not priced (no balance reading taken before the spike), so it still gives no price.
-- **First spike attempt failed for a network reason, not a model reason:** a client poll `ApiTimeoutError` aborted the build phase, while the build operation itself had SUCCEEDED on Nebius (62 s). Local network was degraded at the time (Render health 24 s, Token Factory call timed out) and recovered minutes later. Defect worth fixing: a transient poll timeout aborts an otherwise successful sandbox operation (the SDK retries internally but gave up).
-- **Deployed service smoke check (free): 18/18 passed on https://distillery.onrender.com**, including a real teacher answer and a dry run whose spend and stages advanced. This is the previously deployed code; the steps 1 to 3 commits have not been pushed or deployed.
-- **Not run live:** human-set drafting (needs your question file), the paraphrase stage against real Nano and teacher, and the paid fine-tune run (gated on the pre-registration, your 0.6B vs 1.7B choice and approval of the estimate). Playwright was not run on the merged tree.
-
-## What the earlier smoke runs do and do not show
-Both are plumbing proofs, not results: `sql-tiny-live1` (n=20: base 0.15, student 0.15, teacher 0.95, REJECT) and `sql-mini-live1` (n=60, 2 rounds: base 0.033, student 0.05, teacher 1.0, REJECT, real sandbox-branch tree). Estimated (not billed) spend about $3.07 and $6.46 at ceiling prices.
-
-## Step 6 backend / deploy
-**Live at https://distillery.onrender.com** (one Render Docker service serves the API and the built frontend from one origin; Vercel and the static snapshot are removed from the repo). Checked live: `/api/health` ok, both recorded runs listed, a POST for a new run without a token is refused (401), frontend serves. Hackathon credit is Token Factory only, so Nebius AI Cloud hosting was not used (see docs/DEPLOY.md).
-Code done: `/api/runs` lists recorded bundles (`replay/`), relative `spot_check_file`, playground teacher plus opt-in sandbox base/student (unverified live), New run locked (no admin token is set on the service; live runs start from the CLI on a trusted machine).
-Verified live on 2026-10-01 after setting the env vars through the Render API: mode `live`, models configured, playground teacher `ok` with a $0.50 daily cap, one real question answered (teacher SQL, $0.0005), base/student shown as `disabled`, both recorded runs listed, New run refused without a token (401). Render CLI is logged in on this machine (service `distillery`, `srv-dauuokk1nsns73fqcv70`, auto-deploy on push to `main`). The old Vercel project `frontend` still exists in your Vercel account but is no longer part of the build; delete it there if you want.
-
-## Observability, live checks and cleanup (2026-10-01)
-- **Telemetry:** every response has `X-Request-ID`; one JSON access-log line per request (route template, status, ms; no headers, bodies, tokens or IPs); `GET /api/metrics` (Prometheus text) and `GET /api/telemetry` (JSON: requests by status class, per-route latency bucket bounds, in-flight, open event streams, run counts, playground spend, playground and run-start counters). In-memory, reset on restart, and labelled so. Event streams are counted but kept out of latency.
-- **Live evaluation:** `python scripts/smoke_live.py https://distillery.onrender.com` (free, about $0.0005): **18/18 passed** on the deployed service, including a real playground answer and a dry run whose spend changed through 6 distinct values while its stages advanced to complete. A real Chrome session on the live site confirmed the home page now shows "Live and recent runs on this server" and "Watch a live demo run", the button leads to a run page that goes RUNNING to COMPLETE with spend $0.0000 to $0.0947, and the finished run then appears on the home page. A paid (real-model) live evaluation has NOT been run: it still needs the console prices and your approval of the estimate.
-- **Dead code removed:** about 1,070 lines (the dedicated-endpoint student, its orchestrator path, one-off ledger rebase script, never-set config flags, unused helpers), with docs updated. Nothing was found that docs promise but is not wired up.
-- **Tests on merged main:** 474 backend, 330 frontend unit, ruff and mypy clean. Local Playwright (offline mocks) passes 105 when the machine is not overloaded; on this 4-core box a heavy parallel run produced 3 axe timeouts that pass when re-run with fewer workers (48/48), so that is load, not a regression.
-
-## Config
-- Student `Qwen/Qwen3-1.7B` (LoRA; 0.6B only in the early smoke runs) on Nebius Sandbox CPU. Budget: $19.50 project cap, $10 reserved for the demo. Live home (spend ledger): `.distillery/live` (gitignored). Prices: `.distillery/prices.json` and `deploy/prices.json` (LLM prices from the API listing; no fine-tune or sandbox price yet).
+## What is next (WIN PLAN)
+- **H1** Measure the student on a time-boxed Nebius AI Cloud L40S vLLM + LoRA endpoint (deleted in `finally`) to get a real cost per 1k requests. Paid, about 1.55.
+- **H2** OpenAI-compatible gateway (`/v1/chat/completions`) plus the Acme analyst agent: only the base URL changes.
+- **H3** Certified router: `certify()` with alpha 0.08, delta 0.05, fit/calibration/test splits sealed and pre-registered before any scoring; serves N1 where certified, the teacher elsewhere.
+- **H4** UI: the Playground becomes the Acme agent (served by, confidence, SQL and rows, cost, server-side savings counter).
+- **H5** Receipts: every claim with its value, permalink, pre-registration commit and timestamp, sealed-set and adapter hashes, and ledger total; a `/receipts` route.
+- **H6** Drift: a `CERTIFIED -> ROLLBACK -> TEACHER` state machine with a simulated burst, rollback, and a queued (not run) re-distill.
 
 ## Blockers (you)
-Billed spend and the fine-tune and sandbox prices from the console; approval of the step-5 estimate; demo video; Devpost submit; make the repo public.
+- Console balance reading and the Sandboxes usage line, so sandbox seconds can be priced and the totals above stop being lower bounds.
+- Render: switch **Auto-Deploy off** on service `distillery` (`srv-dauuokk1nsns73fqcv70`) and confirm. No push before that.
+- Nebius AI Cloud login and billing for H1, and whether the hackathon credits cover AI Cloud.
+- Approval of each paid step: the Gate B re-score of the N1 adapter (about 0.05), H3 data and scoring (about 0.87 plus sandbox time), H1 (about 1.55), the end-to-end run.
+- Yours as agreed: the demo video (under 3:00, public on YouTube), the Devpost submit, making the repo public.
