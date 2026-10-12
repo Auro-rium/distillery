@@ -167,3 +167,22 @@ class EmbeddingIndex:
             flat.byteswap()
         rows = [flat[i * dims : (i + 1) * dims] for i in range(n)]
         return cls(rows, model=str(h["model"]), dims=dims, key=str(h["key"]))
+
+
+class IndexSimilarity:
+    """``router_data.Similarity`` over an index: embeds the queries (sync ``embed_many``, e.g. the
+    LLM client behind an AsyncBridge) and returns each one's nn_sim."""
+
+    def __init__(
+        self, index: EmbeddingIndex, embed_many: Callable[[list[str]], list[list[float]]]
+    ) -> None:
+        self.index = index
+        self._embed = embed_many
+
+    def nn_sim_many(self, questions: Sequence[str]) -> list[float]:
+        if not questions:
+            return []
+        vecs = self._embed(list(questions))
+        if len(vecs) != len(questions):
+            raise EmbedIndexError(f"{len(vecs)} vectors for {len(questions)} queries")
+        return [self.index.nn_sim(self.index.prepare(v)) for v in vecs]
