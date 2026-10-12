@@ -293,6 +293,23 @@ def build_splits(
         }
         for name, qs, items in (("cal", cal_q, cal), ("test", test_q, test))
     }
+    both = [*cal, *test]
+    vs_ref: dict[str, dict[str, dict[str, int]]] = {}
+    for ref, ref_qs in refs.items():
+        if not ref_qs:
+            continue
+        per: dict[str, dict[str, int]] = {}
+        for kind in KINDS:
+            ks = [normalise_question(str(i["question"])) for i in both if i["kind"] == kind]
+            oc = overlap_counts(ref_qs, ks, pk.skeleton)
+            per[kind] = {
+                "n": len(ks),
+                "exact": oc["exact_overlap"],
+                "skeleton": oc["skeleton_in_train"],
+            }
+        vs_ref[ref] = per
+    if any(v["exact"] for per in vs_ref.values() for v in per.values()):
+        raise RouterDataError("an item still matches a reference question exactly (bug)")
     sha_cal = store.seal_router_split(run_id, "cal", cal)
     sha_test = store.seal_router_split(run_id, "test", test)
     report: dict[str, Any] = {
@@ -325,6 +342,7 @@ def build_splits(
             "exact_cal_vs_test": cross["exact_overlap"],
             "skeleton_cal_vs_test": cross["skeleton_in_train"],
             "skeleton_in_train": skeleton_vs_train,
+            "vs_reference_sets": vs_ref,
             "note": "exact-text overlap is dropped; skeleton overlap is reported only (templated "
             "items share skeletons with training by design)",
         },
@@ -367,6 +385,10 @@ def unpack_student_output(out: Any) -> tuple[str, float | None]:
     return text, lp
 
 
+def _attr(obj: Any, name: str) -> Any:
+    return obj.get(name) if isinstance(obj, Mapping) else getattr(obj, name, None)
+
+
 def _verdict(
     pk: Pack, sqls: Sequence[str | None], executor: Executor, db_ref: str
 ) -> list[Any | None]:
@@ -387,6 +409,8 @@ def compute_signals(
     teacher: _TextGenerator | None = None,
     pack: Pack | None = None,
     split: str = "",
+    require_mean_logprob: bool = False,
+    missing_logprob: float | None = None,
 ) -> list[dict[str, Any]]:
     """One row per item (same order) with the router signals and the labels:
 
@@ -394,7 +418,13 @@ def compute_signals(
     ``mean_logprob`` (from the student, None when it does not supply one), ``nn_sim`` (max cosine
     to the training questions), ``correct`` (execution match with gold under the pack's verifier),
     ``output_sha256`` (of the raw student output), ``kind``/``family``, and ``teacher_correct``
-    (None unless a ``teacher`` generator is given). Rows hold no question or gold text."""
+    (None unless a ``teacher`` generator is given). Rows hold no question or gold text.
+
+    The student is asked through ``generate_detailed`` when it has one (``student.StudentOutput``
+    with ``mean_logprob``), else ``generate`` (strings, or objects/dicts with ``text`` and
+    ``mean_logprob``). ``require_mean_logprob`` raises right after the student answered (before
+    any embedding or teacher spend) if some output has no mean_logprob, unless ``missing_logprob``
+    is given: then that value is used for those items and the row says ``logprob_imputed``."""
     pk = pack or get_pack("sql")
     n = len(items)
     if n == 0:
@@ -402,14 +432,26 @@ def compute_signals(
     prompts = [
         pk.build_messages(str(it["question"]), schema_ddl, role="eval_student") for it in items
     ]
-    raw = list(student.generate(prompts))
+    gold = executor.run_batch(db_ref, [str(it[pk.gold_field]) for it in items])
+    for it, g in zip(
+        items, gold, strict=True
+    ):  # free check first: nothing is generated on a bad item
+        if not g.ok:
+            raise RuntimeError(f"gold answer failed for item {it.get('task_id')}: {g.error}")
+    detailed = getattr(student, "generate_detailed", None)
+    raw = list(detailed(prompts) if callable(detailed) else student.generate(prompts))
     if len(raw) != n:
         raise RuntimeError(f"student returned {len(raw)} outputs for {n} items")
     unpacked = [unpack_student_output(o) for o in raw]
-    gold = executor.run_batch(db_ref, [str(it[pk.gold_field]) for it in items])
-    for it, g in zip(items, gold, strict=True):
-        if not g.ok:
-            raise RuntimeError(f"gold answer failed for item {it.get('task_id')}: {g.error}")
+    student_errors = [bool(_attr(o, "error")) for o in raw]
+    imputed = [lp is None for _, lp in unpacked]
+    if require_mean_logprob and any(imputed):
+        if missing_logprob is None:
+            raise RouterDataError(
+                f"{sum(imputed)} of {n} student outputs have no mean_logprob (a server without "
+                "generate_detailed, or empty answers); pass missing_logprob to impute explicitly"
+            )
+        unpacked = [(t, missing_logprob if lp is None else lp) for t, lp in unpacked]
     s_out = _verdict(pk, [pk.extract_answer(t) for t, _ in unpacked], executor, db_ref)
     sims = similarity.nn_sim_many([str(it["question"]) for it in items])
     if len(sims) != n:
@@ -439,6 +481,8 @@ def compute_signals(
                 "family": str(it.get("family", "")),
                 "exec_ok": 1 if (o is not None and o.ok and len(o.rows) >= 1) else 0,
                 "mean_logprob": lp,
+                "logprob_imputed": imputed[i] if missing_logprob is not None else False,
+                "student_error": student_errors[i],
                 "nn_sim": float(sims[i]),
                 "correct": _matches(pk, o, gold[i], it),
                 "output_sha256": hashlib.sha256(text.encode("utf-8")).hexdigest(),

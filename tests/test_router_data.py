@@ -315,3 +315,31 @@ def test_compute_signals_failures_and_roundtrip(tmp_path: Path) -> None:
     p.write_text("{}")
     with pytest.raises(RouterDataError):
         read_signal_rows(p)
+
+
+def test_require_mean_logprob_raises_before_similarity_or_teacher() -> None:
+    tasks = PACK.generate_tasks(DB, 4, 5, exclude_families=PACK.stress_families()).tasks
+    items = [{**t.model_dump(mode="json"), "kind": "templated"} for t in tasks]
+    ex = LocalExecutor({"db": DB})
+    plain = Student([t.gold_sql for t in tasks], with_logprob=False)
+    sim = Sim()
+    with pytest.raises(RouterDataError, match="no mean_logprob"):
+        compute_signals(
+            items, plain, ex, sim, "db", schema_ddl=DDL, teacher=Teacher([]),
+            require_mean_logprob=True,
+        )  # fmt: skip
+    assert sim.seen == []  # no embedding spend after the refusal
+    rows = compute_signals(
+        items, plain, ex, sim, "db", schema_ddl=DDL, require_mean_logprob=True, missing_logprob=-9.0
+    )  # fmt: skip
+    assert all(r["mean_logprob"] == -9.0 and r["logprob_imputed"] for r in rows)
+
+
+def test_reference_set_overlap_is_reported_per_set(tmp_path: Path) -> None:
+    run = make_run(tmp_path)
+    rep = build_splits(run.store, RUN, executor=run.executor, db_ref=run.db_ref, params=PRM)
+    vs = rep["overlap"]["vs_reference_sets"]
+    assert set(vs) >= {"train", "dev", "gate", "stress", "human_sealed"}
+    for per in vs.values():
+        assert all(v["exact"] == 0 for v in per.values())
+    assert vs["train"]["templated"]["skeleton"] > 0  # templated shares skeletons with training

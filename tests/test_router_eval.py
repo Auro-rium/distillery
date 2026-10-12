@@ -283,3 +283,33 @@ def test_fit_and_certify_use_fit_grid_and_cal_only() -> None:
         certify_cal(m, fit, [], alpha=0.3, delta=0.1)
     with pytest.raises(RouterRefusal):
         fit_model([])
+
+
+def test_system_gate_is_exact_at_the_boundary() -> None:
+    """system == teacher_only - 0.01 must PASS; in float 0.06 >= 0.07 - 0.01 is False."""
+    assert not (6 / 100 >= 7 / 100 - 0.01)  # the float trap this test pins
+
+    def rows(teacher_deferred_ok: int) -> list[dict[str, Any]]:
+        out = [row(0, "templated", "agg", 0.9, False, teacher=True)]  # served, wrong, teacher right
+        for i in range(1, 100):
+            out.append(row(i, "templated", "agg", 0.1, True, teacher=i <= teacher_deferred_ok))
+        return out
+
+    at = evaluate_test(model(), 0.5, rows(6), alpha=0.05)["W-C1"]
+    assert (at["system_accuracy"], at["teacher_only_accuracy"]) == (0.06, 0.07)
+    assert at["system_accuracy_pass"] is True  # exactly teacher - 0.01
+    below = evaluate_test(model(), 0.5, rows(5), alpha=0.05)["W-C1"]
+    assert below["system_accuracy"] == 0.05 and below["teacher_only_accuracy"] == 0.06
+    assert below["system_accuracy_pass"] is True  # 0.05 >= 0.06 - 0.01 again exactly on the line
+    worse = rows(4)  # system 4/100, teacher 5/100 -> still exactly -0.01
+    assert evaluate_test(model(), 0.5, worse, alpha=0.05)["W-C1"]["system_accuracy_pass"] is True
+    bad = rows(6)
+    bad[0] = row(0, "templated", "agg", 0.9, False, teacher=True)
+    bad[1] = row(1, "templated", "agg", 0.9, False, teacher=False)
+    bad[2] = row(2, "templated", "agg", 0.9, False, teacher=True)  # served wrong, teacher right
+    assert evaluate_test(model(), 0.5, bad, alpha=0.05)["W-C1"]["system_accuracy_pass"] is False
+    # coverage and selective-error gates are exact as well: 30/100 coverage passes the 0.30 floor
+    cov = [row(i, "templated", "agg", 0.9 if i < 30 else 0.1, True) for i in range(100)]
+    c1 = evaluate_test(model(), 0.5, cov, alpha=0.05)["W-C1"]
+    assert c1["min_coverage_pass"] is True and c1["pass"] is True
+    assert evaluate_test(model(), 0.5, cov[1:], alpha=0.05)["W-C1"]["coverage"] < 0.30

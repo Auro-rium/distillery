@@ -30,7 +30,7 @@ from typing import Any
 from distillery import errors, evaluator
 from distillery import router_data as rd
 from distillery import router_eval as re_
-from distillery.budget import BudgetExceeded, Ledger
+from distillery.budget import BudgetExceeded, Ledger, UnknownPriceError
 from distillery.config import Config, ConfigError, load_config
 from distillery.embed_index import DEFAULT_DIMS, EmbeddingIndex, IndexSimilarity, cache_key
 from distillery.humanset import HumanSetError
@@ -74,6 +74,7 @@ class RuntimeContext:
     env: Mapping[str, str]
     say: Say
     want_teacher: bool
+    ledger: Ledger  # preflighted; the runtime must bill through this one
 
 
 RuntimeFactory = Callable[[RuntimeContext], RouterRuntime]
@@ -150,6 +151,10 @@ def add_router_parser(sub: Any) -> None:
     sg.add_argument("--budget-usd", type=float, default=None, help="per-run spend cap")
     sg.add_argument("--i-approve-spend", action="store_true")
     sg.add_argument("--overwrite", action="store_true", help="(fit only) replace signals_fit.json")
+    sg.add_argument(
+        "--missing-logprob", type=float, default=None,
+        help="impute this mean_logprob for outputs without one (default: refuse)",
+    )  # fmt: skip
 
     ft = rs.add_parser("fit", help="fit the router on the FIT signals only (free)")
     common(ft)
@@ -261,6 +266,16 @@ def _build_splits(args: argparse.Namespace, store: Store, out: Say) -> int:
         )
     out(f"realised mix: {json.dumps(rep['realised_mix'], sort_keys=True)}")
     out(
+        "skeleton overlap per reference set (reported, not dropped): "
+        + json.dumps(
+            {
+                r: {k: v["skeleton"] for k, v in per.items()}
+                for r, per in rep["overlap"]["vs_reference_sets"].items()
+            },
+            sort_keys=True,
+        )
+    )
+    out(
         f"skeleton overlap with training (reported, not dropped): "
         f"{json.dumps(rep['overlap']['skeleton_in_train'], sort_keys=True)}"
     )
@@ -318,6 +333,12 @@ def _signals(
     path = rdir / f"signals_{split}.json"
     if path.exists() and not (split == "fit" and args.overwrite):
         raise Refused(f"{path.name} already exists; signals are never recomputed over an artifact")
+    if (
+        split == "fit"
+        and path.exists()
+        and any((rdir / f).exists() for f in ("model.json", "signals_test.json", "cert.json"))
+    ):
+        raise Refused("signals_fit.json is already used (model/test artifacts exist); not replaced")
     if split != "fit" and args.human_file:
         raise Refused("--human-file only applies to --split fit (cal/test are sealed)")
     prereg: dict[str, Any] | None = None
@@ -351,36 +372,39 @@ def _signals(
     pk = get_pack("sql")
     ddl = sql_schema.schema_ddl(_db_seed(store, run_id))
     want_teacher = split == "test"
-    ctx = RuntimeContext(args, config, store, run_id, env, out, want_teacher)
+    teacher_model = config.model_ids.get("teacher") if want_teacher else None
+    if want_teacher and teacher_model is None:
+        raise Refused("no teacher model configured; test signals need teacher_correct")
+    # ONE ledger for the whole command (global ledger + project cap), preflighted BEFORE the paid
+    # runtime (sandbox images, student serving) is built; the runtime reuses it.
+    ledger = Ledger.from_config(run_id, config, store, env=env)
+    est = _estimate_usd(
+        ledger,
+        embed_model=args.embed_model,
+        embed_texts=[
+            *(() if cache.is_file() else train.train),
+            *(str(i["question"]) for i in items),
+        ],
+        teacher_model=teacher_model,
+        teacher_prompts=[
+            "".join(
+                m["content"]
+                for m in pk.build_messages(str(i["question"]), ddl, role="eval_teacher")
+            )
+            for i in items
+        ]
+        if want_teacher
+        else [],
+    )
+    out(
+        f"estimate usd {est['total_usd']:.6f} (embeddings {est['embed_usd']:.6f}, teacher "
+        f"{est['teacher_usd']:.6f}) - {est['basis']}"
+    )
+    ledger.preflight(est["total_usd"])  # BudgetExceeded -> refused, nothing spent yet
+    spent0 = ledger.spent()
+    ctx = RuntimeContext(args, config, store, run_id, env, out, want_teacher, ledger)
     rt = factory(ctx)
     try:
-        teacher_model = config.model_ids.get("teacher") if want_teacher else None
-        if want_teacher and teacher_model is None:
-            raise Refused("no teacher model configured; test signals need teacher_correct")
-        est = _estimate_usd(
-            rt.ledger,
-            embed_model=args.embed_model,
-            embed_texts=[
-                *(() if cache.is_file() else train.train),
-                *(str(i["question"]) for i in items),
-            ],
-            teacher_model=teacher_model,
-            teacher_prompts=[
-                "".join(
-                    m["content"]
-                    for m in pk.build_messages(str(i["question"]), ddl, role="eval_teacher")
-                )
-                for i in items
-            ]
-            if want_teacher
-            else [],
-        )
-        out(
-            f"estimate usd {est['total_usd']:.6f} (embeddings {est['embed_usd']:.6f}, teacher "
-            f"{est['teacher_usd']:.6f}) - {est['basis']}"
-        )
-        rt.ledger.preflight(est["total_usd"])  # BudgetExceeded -> refused, nothing spent yet
-        spent0 = rt.ledger.spent()
         index = EmbeddingIndex.build_sync(
             train.train,
             rt.embed_many,
@@ -402,10 +426,12 @@ def _signals(
             teacher=rt.teacher,
             pack=pk,
             split=split,
+            require_mean_logprob=True,
+            missing_logprob=args.missing_logprob,
         )
-        spent = rt.ledger.spent() - spent0
     finally:
-        rt.close()
+        rt.close()  # bills the sandbox seconds of the student
+    spent = ledger.spent() - spent0
     split_sha = store.router_split_sha(run_id, split) if split != "fit" else None
     extra: dict[str, Any] = {
         "run_id": run_id,
@@ -418,6 +444,7 @@ def _signals(
         },
         "models": rt.models,
         "kinds": dict(sorted(Counter(str(r["kind"]) for r in rows).items())),
+        "missing_logprob": args.missing_logprob,
         "estimate_usd": est["total_usd"],
         "spend_usd_this_command": spent,
         "fit_sources": sorted({str(i.get("source")) for i in items}) if split == "fit" else None,
@@ -448,8 +475,11 @@ def _fit(args: argparse.Namespace, store: Store, out: Say) -> int:
     if path.exists():
         if not args.overwrite:
             raise Refused("model.json already exists (use --overwrite before certifying)")
-        if (rdir / "cert.json").exists():
-            raise Refused("a certificate refers to model.json; it cannot be replaced")
+        if (rdir / "cert.json").exists() or (rdir / "signals_test.json").exists():
+            raise Refused(
+                "model.json cannot be replaced once a certificate or test signals exist "
+                "(test labels have been seen)"
+            )
         path.unlink()
     doc = rd.read_signal_rows(sig)
     model = re_.fit_model(doc["rows"], l2=args.l2)
@@ -631,6 +661,7 @@ def run_router(
         HumanSetError,
         ConfigError,
         BudgetExceeded,
+        UnknownPriceError,
         ConfigRefusal,
         ValueError,
     ) as exc:
@@ -671,7 +702,7 @@ def live_runtime(ctx: RuntimeContext, deps_builder: DepsBuilder) -> RouterRuntim
         try:
             deps = deps_builder(config, pcfg, bridge)
             pipe = Pipeline(pcfg, config, deps, store, run_id, say=ctx.say)
-            ledger = Ledger.from_config(run_id, config, store, env=ctx.env, dry_run=pcfg.dry_run)
+            ledger = ctx.ledger
             pipe.ledger = ledger
             pipe.sink = LedgerSink(ledger)
             kw: dict[str, Any] = {} if deps.llm_sleep is None else {"sleep": deps.llm_sleep}

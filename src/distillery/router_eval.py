@@ -18,6 +18,7 @@ import re
 import subprocess  # noqa: S404 - fixed argv, never a shell: only `git` read commands
 from collections import Counter
 from collections.abc import Mapping, Sequence
+from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
@@ -185,6 +186,12 @@ def _rate(num: int, den: int) -> float | None:
     return num / den if den else None
 
 
+def _dec(x: float) -> Fraction:
+    """A pre-registered threshold as the exact decimal it was written as (0.05 -> 1/20), so a
+    gate at the boundary is decided by integer arithmetic, not by float rounding."""
+    return Fraction(str(x))
+
+
 def evaluate_test(
     model: RouterModel,
     lambda_hat: float | None,
@@ -222,13 +229,14 @@ def evaluate_test(
     coverage = n_served / n
     sel_err = _rate(errors, n_served)
     sys_correct = sum(
-        i["correct"] if i["served_by"] == "student" else i["teacher_correct"] for i in items
+        1 for i in items if (i["correct"] if i["served_by"] == "student" else i["teacher_correct"])
     )
     system_acc = sys_correct / n
-    teacher_acc = sum(i["teacher_correct"] for i in items) / n
-    wc1_err_ok = sel_err is not None and sel_err <= alpha
-    wc1_cov_ok = coverage >= min_coverage
-    wc1_sys_ok = system_acc >= teacher_acc - tolerance
+    teacher_correct_n = sum(1 for i in items if i["teacher_correct"])
+    teacher_acc = teacher_correct_n / n
+    wc1_err_ok = n_served > 0 and Fraction(errors, n_served) <= _dec(alpha)
+    wc1_cov_ok = Fraction(n_served, n) >= _dec(min_coverage)
+    wc1_sys_ok = Fraction(sys_correct, n) >= Fraction(teacher_correct_n, n) - _dec(tolerance)
     w_c1 = {
         "coverage": coverage,
         "n_served": n_served,
@@ -259,9 +267,12 @@ def evaluate_test(
     elif not c_items:
         note = "no student-correct natural/stress items: deferral rate undefined, W-C2 cannot pass"
     wc2_pass = (
-        share is not None and lower is not None and rate_c is not None
-        and share >= deferred_share_min and lower > rate_c
-    )  # fmt: skip
+        bool(e_items)
+        and bool(c_items)
+        and lower is not None
+        and Fraction(e_def, len(e_items)) >= _dec(deferred_share_min)
+        and Fraction(lower) > Fraction(c_def, len(c_items))
+    )  # exact: the lower bound is a float, the deferral rate an exact rational
     by_family: dict[str, dict[str, int]] = {}
     for i in ns:
         f = by_family.setdefault(

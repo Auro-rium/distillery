@@ -12,7 +12,6 @@ from typing import Any
 import pytest
 from router_helpers import DDL, RUN, SynthRun, confirmed_file, make_run
 
-from distillery.budget import Ledger
 from distillery.cli import EXIT_OK, EXIT_REFUSED, main
 from distillery.pipeline_fakes import FAKE_MODELS, question_of
 from distillery.router_cmd import RouterRuntime, RuntimeContext
@@ -130,7 +129,8 @@ class Harness:
         self.factory_calls.append(ctx)
         sr: SynthRun = self.run
         gold = self.gold_map()
-        ledger = Ledger.from_config(ctx.run_id, ctx.config, ctx.store, env=ctx.env)
+        assert ctx.ledger.run_id == RUN  # the command's one, already preflighted ledger
+        ledger = ctx.ledger
         return RouterRuntime(
             student=FakeStudent(gold), teacher=FakeTeacher(gold) if ctx.want_teacher else None,
             executor=LocalExecutor(), embed_many=fake_embed, ledger=ledger, schema_ddl=DDL,
@@ -349,3 +349,76 @@ def test_default_live_wiring_refuses_cleanly_without_a_report(h: Harness) -> Non
     code, out = h.cli("signals", "--split", "fit", "--i-approve-spend", factory=None)
     assert code == EXIT_REFUSED and "report.json" in out[-1]
     assert not (h.rdir() / "signals_fit.json").exists()
+
+
+def test_unpriced_embedding_model_is_a_refusal_not_a_crash(h: Harness, tmp_path: Path) -> None:
+    h.build()
+    prices = json.loads(Path(h.env["DISTILLERY_PRICES_FILE"]).read_text())
+    prices.pop(EMBED)
+    nop = tmp_path / "prices_no_embed.json"
+    nop.write_text(json.dumps(prices))
+    h.env = {**h.env, "DISTILLERY_PRICES_FILE": str(nop)}
+    code, out = h.signals("fit")
+    assert code == EXIT_REFUSED and "no price configured" in out[-1] and h.factory_calls == []
+
+
+def test_preflight_happens_before_the_runtime_is_built(h: Harness) -> None:
+    h.build()
+    code, out = h.signals("fit", "--budget-usd", "0.0000000001")
+    assert code == EXIT_REFUSED and "run cap" in out[-1]
+    assert h.factory_calls == []  # no sandbox image / student was built
+
+
+def test_student_without_logprobs_is_refused_before_embedding_or_teacher_spend(
+    h: Harness,
+) -> None:
+    h.build()
+
+    class Plain(FakeStudent):
+        def generate(self, batch: Any) -> list[Any]:  # strings: no confidence at all
+            return [o.text for o in super().generate(batch)]
+
+    def factory(ctx: RuntimeContext) -> RouterRuntime:
+        rt = h.runtime(ctx)
+        rt.student = Plain(h.gold_map())
+        return rt
+
+    calls: list[int] = []
+
+    def counting_embed(texts: list[str]) -> list[list[float]]:
+        calls.append(len(texts))
+        return fake_embed(texts)
+
+    code, out = h.cli(
+        "signals", "--split", "fit", "--embed-dims", "8", "--i-approve-spend", factory=lambda c: _with(factory(c), counting_embed)
+    )  # fmt: skip
+    assert code == EXIT_REFUSED and "no mean_logprob" in out[-1]
+    assert not (h.rdir() / "signals_fit.json").exists()
+    assert len(calls) == 1  # only the training-index embedding happened, none for the items
+    # an explicit imputation is allowed and recorded
+    code, out = h.cli(
+        "signals", "--split", "fit", "--embed-dims", "8", "--i-approve-spend",
+        "--missing-logprob", "-5.0", factory=lambda c: _with(factory(c), fake_embed),
+    )  # fmt: skip
+    assert code == EXIT_OK, out
+    doc = json.loads((h.rdir() / "signals_fit.json").read_text())
+    assert doc["missing_logprob"] == -5.0 and all(r["logprob_imputed"] for r in doc["rows"])
+
+
+def _with(rt: RouterRuntime, embed: Any) -> RouterRuntime:
+    rt.embed_many = embed
+    return rt
+
+
+def test_fit_cannot_be_replaced_after_test_signals(h: Harness) -> None:
+    shas = h.build()
+    prereg = h.prereg(shas)
+    assert h.signals("fit")[0] == EXIT_OK
+    assert h.cli("fit")[0] == EXIT_OK
+    assert h.cli("fit", "--overwrite")[0] == EXIT_OK  # fine while test labels are unseen
+    assert h.signals("cal", "--prereg-commit", prereg)[0] == EXIT_OK
+    assert h.signals("test", "--prereg-commit", prereg)[0] == EXIT_OK
+    code, out = h.cli("fit", "--overwrite")
+    assert code == EXIT_REFUSED and "cannot be replaced" in out[-1]
+    code, out = h.signals("fit", "--overwrite")
+    assert code == EXIT_REFUSED and "already used" in out[-1]
