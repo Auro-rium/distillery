@@ -102,6 +102,15 @@ class EmbeddingIndex:
         return cls(rows, model=model, dims=dims, key=cache_key(model, dims, texts))
 
     @classmethod
+    def _cached(cls, cache_path: Path | str | None, key: str) -> EmbeddingIndex | None:
+        if cache_path is not None and Path(cache_path).is_file():
+            try:
+                return cls.load(cache_path, expect_key=key)
+            except EmbedIndexError:
+                return None  # stale or corrupt: rebuild and overwrite
+        return None
+
+    @classmethod
     async def build(
         cls,
         texts: Sequence[str],
@@ -112,14 +121,30 @@ class EmbeddingIndex:
         cache_path: Path | str | None = None,
     ) -> EmbeddingIndex:
         """Embed once, or load the cache when its key matches (no embed call then)."""
-        key = cache_key(model, dims, texts)
-        if cache_path is not None and Path(cache_path).is_file():
-            try:
-                return cls.load(cache_path, expect_key=key)
-            except EmbedIndexError:
-                pass  # stale or corrupt: rebuild and overwrite
+        hit = cls._cached(cache_path, cache_key(model, dims, texts))
+        if hit is not None:
+            return hit
         vectors = await embed(list(texts))
         idx = cls.from_vectors(texts, vectors, model=model, dims=dims)
+        if cache_path is not None:
+            idx.save(cache_path)
+        return idx
+
+    @classmethod
+    def build_sync(
+        cls,
+        texts: Sequence[str],
+        embed_many: Callable[[list[str]], list[list[float]]],
+        *,
+        model: str,
+        dims: int = DEFAULT_DIMS,
+        cache_path: Path | str | None = None,
+    ) -> EmbeddingIndex:
+        """``build`` for a synchronous embedder (e.g. the LLM client behind an AsyncBridge)."""
+        hit = cls._cached(cache_path, cache_key(model, dims, texts))
+        if hit is not None:
+            return hit
+        idx = cls.from_vectors(texts, embed_many(list(texts)), model=model, dims=dims)
         if cache_path is not None:
             idx.save(cache_path)
         return idx

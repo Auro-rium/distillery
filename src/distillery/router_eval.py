@@ -16,6 +16,7 @@ import json
 import os
 import re
 import subprocess  # noqa: S404 - fixed argv, never a shell: only `git` read commands
+from collections import Counter
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
@@ -295,7 +296,7 @@ def evaluate_test(
         "n_test": n,
         "lambda_hat": lambda_hat,
         "model_sha256": model.sha256(),
-        "counts_by_kind": {k: sum(1 for i in items if i["kind"] == k) for k in sorted({i["kind"] for i in items})},
+        "counts_by_kind": dict(sorted(Counter(i["kind"] for i in items).items())),
         "W-C1": w_c1,
         "W-C2": w_c2,
         "per_item": items,

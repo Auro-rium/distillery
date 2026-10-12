@@ -52,6 +52,7 @@ from distillery.orchestrator import (
     stage_rows,
 )
 from distillery.pipeline_fakes import build_dry_run, dry_run_id
+from distillery.router_cmd import RuntimeFactory, add_router_parser, run_router
 from distillery.sandbox import Sandbox
 from distillery.sandbox_executor import AsyncBridge, SandboxExecutor
 from distillery.store import Store, atomic_write_bytes, sha256_hex
@@ -142,6 +143,7 @@ def _parser() -> argparse.ArgumentParser:
     lsub.add_parser("status", help="committed total, cap, remaining, rows by kind, reservations")
     ls = lsub.add_parser("seed", help="insert seed spend rows and reservations from a JSON file")
     ls.add_argument("--file", required=True, metavar="JSON", help="e.g. deploy/ledger_seed.json")
+    add_router_parser(sub)
     ex = sub.add_parser("export-replay", help="bundle a finished run into replay/")
     ex.add_argument("run")
     ex.add_argument("--replay-dir", default=None, help="default: $DISTILLERY_REPLAY_DIR or replay")
@@ -818,6 +820,7 @@ def main(
     out: Callable[[str], None] = print,
     token_prompt: Callable[[], str] | None = None,
     ask: Callable[[str], str] = input,
+    router_runtime: RuntimeFactory | None = None,
 ) -> int:
     e: Mapping[str, str] = os.environ if env is None else env
     args = _parser().parse_args(argv)
@@ -829,6 +832,13 @@ def main(
         return _cmd_confirm_heldout(args, e, out, ask)
     if args.cmd == "score-human":
         return _cmd_score_human(args, e, deps_factory, out, token_prompt)
+    if args.cmd == "router":
+        return run_router(
+            args, e, out, root=_root(args, e), runtime_factory=router_runtime,
+            deps_builder=deps_factory
+            or (lambda cfg, pcfg, bridge: make_live_deps(cfg, pcfg, bridge, env=e)),
+            verify_admin=lambda cfg: cfg.verify_admin_token(_supplied_token(e, token_prompt)),
+        )  # fmt: skip
     if args.cmd == "serve":
         return _cmd_serve(args, e)
     if args.cmd == "export-replay":
