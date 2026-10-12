@@ -106,11 +106,41 @@ def _experiments(reader: RunReader, run_id: str) -> list[dict[str, Any]]:
         return []
 
 
+def _adapter_sha(report: Any) -> str | None:
+    """The trained artifact's digest, which tells two different trainings apart even when a later
+    round reuses the run id (and its cached stages) of an earlier one."""
+    evaluation = report.get("evaluation") if isinstance(report, dict) else None
+    artifact = evaluation.get("artifact") if isinstance(evaluation, dict) else None
+    sha = artifact.get("adapter_sha256") if isinstance(artifact, dict) else None
+    return sha if isinstance(sha, str) else None
+
+
 def export_bundle(
-    reader: RunReader, run_id: str, replay_dir: Path, *, allow_dry_run: bool, recorded_at: str
+    reader: RunReader,
+    run_id: str,
+    replay_dir: Path,
+    *,
+    allow_dry_run: bool,
+    recorded_at: str,
+    bundle_id: str | None = None,
 ) -> Path:
+    """Write ``replay_dir/<bundle id>/``; the bundle id is the run id unless ``bundle_id`` is given.
+
+    A custom bundle id lets a later round that reuses an earlier run id (same store lineage) sit
+    beside it: the API lists, and every file inside the bundle names, the bundle id; the run it was
+    exported from stays visible as ``manifest.source_run_id``. An existing bundle that holds a
+    different trained artifact is never overwritten.
+    """
     if not valid_run_id(run_id):
         raise ExportError(f"invalid run id {run_id!r}")
+    bid = bundle_id or run_id
+    if not valid_run_id(bid):
+        raise ExportError(f"invalid bundle id {bid!r}")
+    if bid.startswith(DRY_PREFIX) != run_id.startswith(DRY_PREFIX):
+        raise ExportError(
+            f"bundle id {bid!r} and run id {run_id!r} must agree on the {DRY_PREFIX!r} prefix "
+            "(it marks fake-model runs)"
+        )
     if run_id.startswith(DRY_PREFIX) and not allow_dry_run:
         raise ExportError(
             f"{run_id} is a dry run (fake models); refusing to export it as a recording "
@@ -121,6 +151,14 @@ def export_bundle(
         raise ExportError(f"run {run_id} has no report.json (not finished?)")
     if bool(report.get("dry_run")) != run_id.startswith(DRY_PREFIX):
         raise ExportError(f"run {run_id}: report dry_run flag disagrees with the run id")
+    dest = replay_dir / bid
+    existing = _load(dest / "report.json")
+    if isinstance(existing, dict) and _adapter_sha(existing) != _adapter_sha(report):
+        raise ExportError(
+            f"bundle {bid!r} already holds a different trained artifact "
+            f"(adapter sha256 {_adapter_sha(existing)!r}, this run has {_adapter_sha(report)!r}); "
+            "refusing to overwrite it (export under another name with --bundle-id)"
+        )
     data = report.get("data")
     if isinstance(data, dict) and isinstance(data.get("spot_check_file"), str):
         # older runs wrote the absolute path of the machine that ran them
@@ -130,7 +168,11 @@ def export_bundle(
     events, _ = reader.events_after(run_id, 0, detail, report.get("decision"), None)
     manifest = _load(reader.store_for(run_id).run_dir(run_id) / "manifest.json") or {}
     manifest = {**manifest, "recorded_at": recorded_at, "source_run_id": run_id}
-    dest = replay_dir / run_id
+    if bid != run_id:
+        # the API serves a bundle under its directory name, so the ids inside must say the same
+        report = {**report, "run_id": bid}
+        detail["run_id"] = bid
+        manifest = {**manifest, "run_id": bid, "bundle_id": bid}
     files: dict[str, Any] = {
         "report.json": report,
         "manifest.json": manifest,

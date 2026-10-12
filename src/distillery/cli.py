@@ -130,6 +130,13 @@ def _parser() -> argparse.ArgumentParser:
     ex.add_argument("run")
     ex.add_argument("--replay-dir", default=None, help="default: $DISTILLERY_REPLAY_DIR or replay")
     ex.add_argument("--allow-dry-run", action="store_true", help="export a dry run (labelled)")
+    ex.add_argument(
+        "--bundle-id",
+        default=None,
+        metavar="ID",
+        help="name the bundle ID instead of the run id (a later round that reuses a run id must "
+        "not overwrite the earlier bundle); the run id is kept as manifest.source_run_id",
+    )
     return p
 
 
@@ -716,6 +723,7 @@ def _cmd_export_replay(
             replay_dir,
             allow_dry_run=args.allow_dry_run,
             recorded_at=datetime.now(UTC).isoformat(),
+            bundle_id=args.bundle_id,
         )
     except ExportError as exc:
         out(f"refused: {exc}")
