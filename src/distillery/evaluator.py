@@ -902,3 +902,54 @@ def diagnose_with_heldout(
         generators, {**sets, "heldout": items}, executor,
         db_ref=db_ref, schema_ddl=schema_ddl,
     )  # fmt: skip
+
+
+# ---------------------------------------------------------------- router splits (H3)
+#
+# The certified router's FIT split is made of sets that are already sealed for the N1 run (the
+# held-out gate set, the stress set and the human set) plus confirmed human files. Its CAL and TEST
+# splits are fresh items sealed by ``Store.seal_router_split``. Only this module loads any of them;
+# ``router_data`` calls the two functions below. They are deliberately NOT named like the store's
+# ``load_router_split``: the AST guards forbid that name outside evaluator.py/store.py.
+
+
+def router_fit_items(
+    store: Store,
+    run_id: str,
+    human_files: Sequence[Path | str] = (),
+    *,
+    db_sha: str | None = None,
+) -> list[dict[str, Any]]:
+    """The router FIT split: sealed held-out + stress + human sets of the run, then every item of
+    the given confirmed human files (e.g. Gate B). Each item is tagged with ``kind``
+    (templated|natural|stress) and ``source`` (heldout|stress|human|human_file:<name>); a question
+    already present (normalised) is skipped, first occurrence wins. ``db_sha`` (the run's database
+    digest), when given, must equal each file's ``db_sha256``."""
+    out: list[dict[str, Any]] = []
+    seen: set[str] = set()
+
+    def add(items: Iterable[Mapping[str, Any]], source: str, kind: str) -> None:
+        for it in items:
+            key = normalise_question(str(it["question"]))
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append({**dict(it), "kind": kind, "source": source})
+
+    add(store.load_heldout(run_id), "heldout", "templated")
+    add(store.load_stress(run_id) or [], "stress", "stress")
+    add(store.load_human(run_id) or [], "human", "natural")
+    for f in human_files:
+        conf = read_confirmed(f)
+        if db_sha is not None and conf.db_sha256 != db_sha:
+            raise HumanSetError(f"{f}: drafted against a different database than this run's")
+        add(conf.items, f"human_file:{Path(f).name}", "natural")
+    return out
+
+
+def router_split_items(store: Store, run_id: str, name: str) -> list[dict[str, Any]]:
+    """A sealed router split (``cal`` or ``test``), verified against its recorded sha256."""
+    items = store.load_router_split(run_id, name)
+    if items is None:
+        raise HumanSetError(f"no router split {name!r} is sealed for run {run_id}")
+    return items

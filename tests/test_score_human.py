@@ -318,7 +318,11 @@ def test_existing_decision_human_is_never_overwritten(finished: Path) -> None:
 
 
 def test_only_evaluator_touches_sealed_loaders() -> None:
-    forbidden = {"load_heldout", "load_stress", "load_human", "read_confirmed", "seal_human"}
+    # load_router_split: sealed router CAL/TEST splits (H3), restricted like the other loaders
+    forbidden = {
+        "load_heldout", "load_stress", "load_human", "load_router_split", "read_confirmed",
+        "seal_human",
+    }  # fmt: skip
     for name in ("humanscore.py", "cli.py"):
         tree = ast.parse((SRC / name).read_text())
         names = {n.attr for n in ast.walk(tree) if isinstance(n, ast.Attribute)} | {

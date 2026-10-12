@@ -189,7 +189,11 @@ def test_synthetic_fixture_matches_the_database_and_executes() -> None:
 
 
 def test_orchestrator_never_reads_the_confirmed_file() -> None:
-    forbidden = {"read_confirmed", "load_human", "seal_human", "load_heldout", "load_stress"}
+    # load_router_split: sealed router CAL/TEST splits (H3), restricted like the other loaders
+    forbidden = {
+        "read_confirmed", "load_human", "seal_human", "load_heldout", "load_stress",
+        "load_router_split",
+    }  # fmt: skip
     tree = ast.parse((SRC / "orchestrator.py").read_text())
     names = {n.attr for n in ast.walk(tree) if isinstance(n, ast.Attribute)} | {
         n.id for n in ast.walk(tree) if isinstance(n, ast.Name)

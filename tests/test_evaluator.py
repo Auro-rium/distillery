@@ -258,10 +258,14 @@ def test_examples_cap_is_20_per_kind(env) -> None:  # type: ignore[no-untyped-de
     assert ex[0]["student_sql"] == "I cannot help with that."  # raw output kept when unparseable
 
 
-def test_only_evaluator_loads_heldout() -> None:
-    """Integrity rule 5.1: no module except evaluator.py (and its definition) may load held-out."""
+SEALED_LOADERS = {"load_heldout", "load_stress", "load_human", "load_router_split"}
+# load_router_split: the sealed CAL/TEST splits of the certified router (H3) are sealed sets too,
+# so its loader is restricted exactly like the three above.
+
+
+def sealed_loader_offenders(root: Path) -> list[str]:
     offenders: list[str] = []
-    for path in SRC.rglob("*.py"):
+    for path in root.rglob("*.py"):
         if path.name in {"evaluator.py", "store.py"}:
             continue
         for node in ast.walk(ast.parse(path.read_text())):
@@ -270,9 +274,23 @@ def test_only_evaluator_loads_heldout() -> None:
                 name = node.attr
             elif isinstance(node, ast.Name):
                 name = node.id
-            if name in {"load_heldout", "load_stress", "load_human"}:
-                offenders.append(f"{path.relative_to(SRC)}:{node.lineno}")
-    assert offenders == []
+            if name in SEALED_LOADERS:
+                offenders.append(f"{path.relative_to(root)}:{node.lineno}")
+    return offenders
+
+
+def test_only_evaluator_loads_heldout() -> None:
+    """Integrity rule 5.1: no module except evaluator.py (and its definition) may load held-out."""
+    assert sealed_loader_offenders(SRC) == []
+
+
+def test_guard_catches_router_split_misuse(tmp_path: Path) -> None:
+    (tmp_path / "bad.py").write_text(
+        "def f(store):\n    return store.load_router_split('r', 'cal')\n"
+    )
+    (tmp_path / "evaluator.py").write_text("x = store.load_router_split('r', 'cal')\n")
+    (tmp_path / "ok.py").write_text("y = 1\n")
+    assert sealed_loader_offenders(tmp_path) == ["bad.py:2"]
 
 
 # ---- student diagnostics

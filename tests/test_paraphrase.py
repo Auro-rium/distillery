@@ -96,7 +96,7 @@ def test_paraphrase_module_imports_nothing_sealed_and_names_no_loader() -> None:
         elif isinstance(node, ast.Attribute):
             names.add(node.attr)
     assert not [m for m in mods if "evaluator" in m or m.endswith("store") or "orchestrator" in m]
-    assert not {"load_heldout", "load_stress", "load_human"} & names
+    assert not {"load_heldout", "load_stress", "load_human", "load_router_split"} & names
     assert "evaluator" not in names and "Store" not in names
 
 

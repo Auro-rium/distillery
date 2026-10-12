@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any
 
 _RUN_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
+_ROUTER_SPLIT_RE = re.compile(r"^[a-z][a-z0-9]{0,15}$")
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS runs (
@@ -154,6 +155,13 @@ class Store:
         human = self._query("SELECT sha256 FROM seals WHERE run_id=? AND name='human'", (run_id,))
         if human:
             manifest["human_sha256"] = human[0][0]
+        routers = self._query(
+            "SELECT name, sha256 FROM seals WHERE run_id=? AND name LIKE 'router\\_%' ESCAPE '\\' "
+            "ORDER BY name",
+            (run_id,),
+        )
+        for name, digest in routers:
+            manifest[f"{name}_sha256"] = digest
         atomic_write_bytes(
             self.run_dir(run_id) / "manifest.json",
             json.dumps(manifest, indent=2, sort_keys=True).encode("utf-8"),
@@ -288,6 +296,68 @@ class Store:
             raise HeldoutIntegrityError("human set does not match its sealed sha256")
         items: list[dict[str, Any]] = json.loads(data)
         return items
+
+    # ---- router calibration / test splits (fresh items, sealed like the human set) -----
+    def _router_path(self, run_id: str, name: str) -> Path:
+        return self.run_dir(run_id) / "heldout" / f"router_{self._router_name(name)}.json"
+
+    @staticmethod
+    def _router_name(name: str) -> str:
+        if not _ROUTER_SPLIT_RE.fullmatch(name):
+            raise ValueError(f"invalid router split name {name!r}")
+        return name
+
+    def seal_router_split(self, run_id: str, name: str, items: list[dict[str, Any]]) -> str:
+        """Seal a router split (``cal`` / ``test``): sha256 of the canonical JSON goes into the
+        ``seals`` table under ``router_<name>``. Re-sealing identical content is a no-op; different
+        content raises (a sealed split never changes)."""
+        self.create_run(run_id)
+        payload = canonical_json(items).encode("utf-8")
+        digest = sha256_hex(payload)
+        seal = f"router_{self._router_name(name)}"
+        rows = self._query("SELECT sha256 FROM seals WHERE run_id=? AND name=?", (run_id, seal))
+        if rows and rows[0][0] != digest:
+            raise HeldoutIntegrityError(f"router split {name!r} already sealed with other content")
+        atomic_write_bytes(self._router_path(run_id, name), payload)
+        self._exec(
+            "INSERT OR REPLACE INTO seals(run_id, name, sha256) VALUES (?, ?, ?)",
+            (run_id, seal, digest),
+        )
+        self._write_manifest(run_id)
+        return digest
+
+    def router_split_sha(self, run_id: str, name: str) -> str | None:
+        """The sealed sha256 of a router split (metadata only: no item text), None if unsealed."""
+        rows = self._query(
+            "SELECT sha256 FROM seals WHERE run_id=? AND name=?",
+            (run_id, f"router_{self._router_name(name)}"),
+        )
+        return str(rows[0][0]) if rows else None
+
+    def load_router_split(self, run_id: str, name: str) -> list[dict[str, Any]] | None:
+        """Only evaluator.py may call this (enforced by an AST scan in tests). None = not sealed."""
+        digest = self.router_split_sha(run_id, name)
+        if digest is None:
+            return None
+        data = self._router_path(run_id, name).read_bytes()
+        if sha256_hex(data) != digest:
+            raise HeldoutIntegrityError(f"router split {name!r} does not match its sealed sha256")
+        items: list[dict[str, Any]] = json.loads(data)
+        return items
+
+    def completed_stage_output(self, run_id: str, stage: str) -> Any | None:
+        """The newest completed output of a stage (parsed JSON), None if there is none."""
+        rows = self._query(
+            "SELECT output_sha256 FROM stages WHERE run_id=? AND stage=? AND status='complete' "
+            "ORDER BY updated_at DESC, rowid DESC",
+            (run_id, stage),
+        )
+        for (digest,) in rows:
+            try:
+                return json.loads(self.get_artifact(run_id, digest))
+            except (OSError, ValueError):
+                continue
+        return None
 
     # ---- experiments / llm calls / spend ----------------------------
     def add_experiment(self, run_id: str, name: str, data: dict[str, Any]) -> None:

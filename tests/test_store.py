@@ -206,3 +206,37 @@ def test_old_db_without_seals_table_opens(tmp_path: Path) -> None:
     assert s2.load_stress("r1") is None
     s2.seal_stress("r1", [{"q": 3}])
     assert s2.load_stress("r1") == [{"q": 3}]
+
+
+def test_router_split_seal_round_trip_tamper_and_manifest(tmp_path: Path) -> None:
+    s = Store(tmp_path)
+    assert s.load_router_split("nope", "cal") is None and s.router_split_sha("nope", "cal") is None
+    items = [{"task_id": "t1", "question": "q?"}]
+    digest = s.seal_router_split("r1", "cal", items)
+    assert s.seal_router_split("r1", "cal", items) == digest  # idempotent
+    assert Store(tmp_path).load_router_split("r1", "cal") == items
+    assert s.router_split_sha("r1", "cal") == digest
+    assert s.load_router_split("r1", "test") is None
+    other = s.seal_router_split("r1", "test", [{"task_id": "t2"}])
+    assert other != digest
+    m = json.loads((tmp_path / "runs" / "r1" / "manifest.json").read_text())
+    assert (m["router_cal_sha256"], m["router_test_sha256"]) == (digest, other)
+    rows = s._query("SELECT sha256 FROM seals WHERE run_id=? AND name=?", ("r1", "router_cal"))
+    assert rows == [(digest,)]
+    with pytest.raises(HeldoutIntegrityError):
+        s.seal_router_split("r1", "cal", [{"task_id": "changed"}])
+    s._router_path("r1", "cal").write_bytes(b"[]")
+    with pytest.raises(HeldoutIntegrityError):
+        s.load_router_split("r1", "cal")
+    with pytest.raises(ValueError):
+        s.seal_router_split("r1", "../x", [])
+    # the router seals do not disturb the other sealed sets
+    assert s.load_human("r1") is None and s.load_stress("r1") is None
+
+
+def test_completed_stage_output_newest(tmp_path: Path) -> None:
+    s = Store(tmp_path)
+    assert s.completed_stage_output("r1", "split") is None
+    s.get_or_run("r1", "split", {"v": 1}, lambda: {"a": 1})
+    s.get_or_run("r1", "split", {"v": 2}, lambda: {"a": 2})
+    assert s.completed_stage_output("r1", "split") == {"a": 2}
