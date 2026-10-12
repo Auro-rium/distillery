@@ -20,7 +20,7 @@ CMD = ["run", "--dry-run", "--pack", "toolcall", "--scale", "tiny"]
 
 def main(out: str) -> int:
     with tempfile.TemporaryDirectory() as tmp:
-        subprocess.run(
+        subprocess.run(  # noqa: S603
             [sys.executable, "-m", "distillery", "--root", tmp, *CMD],
             check=True, capture_output=True, text=True,
         )  # fmt: skip
@@ -51,7 +51,8 @@ def main(out: str) -> int:
         "headroom": rep["headroom"],
         "teacher_data": {
             "verified_rows_round1": d["teacher_verified_rows_round1"],
-            "rule": "kept only if replaying the teacher's calls reaches the template gold's final state",
+            "rule": "kept only if replaying the teacher's calls reaches the template "
+            "gold's final state",
             "paraphrase_verified": rep["paraphrase"]["verified"],
             "paraphrase_failed_verification": rep["paraphrase"]["discards"]["failed_verification"],
         },

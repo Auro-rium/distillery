@@ -528,9 +528,7 @@ class ContreeSandbox(_SandboxBase):
         contree_error, timed_out_error = _sdk_error_types()
         transient = _transient_error_types()
         # only a disposable run may be repeated whole: it keeps no image, so a repeat is harmless
-        attempts = 1 + (
-            self._run_retries if disposable else UPLOAD_RETRIES if files else 0
-        )
+        attempts = 1 + (self._run_retries if disposable else UPLOAD_RETRIES if files else 0)
         async with self._global_sem:
             backstop = None if timeout is None else timeout + _TIMEOUT_GRACE_S
             for attempt in range(attempts):

@@ -10,7 +10,7 @@ import Replay from "./screens/replay";
 import LiveRun from "./screens/live";
 import Tree from "./screens/tree";
 import ReportScreen from "./screens/report";
-import NewRun from "./screens/new";
+import NewRun from "./screens/newrun";
 import Playground from "./screens/playground";
 import Humanset from "./screens/humanset";
 

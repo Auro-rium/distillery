@@ -1023,9 +1023,7 @@ class Pipeline:
                 f"({ns.db_sha256[:12]} != this run's {db_sha[:12]})"
             )
         for i, (row, q, sql) in enumerate(zip(ns.rows, ns.questions, ns.sqls, strict=True)):
-            want = self.pack.to_training_row(
-                cast(PackTask, _NaturalQ(q)), sql, context_text=ddl
-            )
+            want = self.pack.to_training_row(cast(PackTask, _NaturalQ(q)), sql, context_text=ddl)
             if canonical_json(row) != canonical_json(want):
                 raise ConfigRefusal(
                     f"natural train row {i} is not in this run's training format "

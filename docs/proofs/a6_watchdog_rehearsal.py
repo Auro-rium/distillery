@@ -105,14 +105,16 @@ def evaluate(
         "kill_audited_after_detection_before_restart": order.index("incident_detected")
         < order.index("kill_child")
         < order.index("restart")
-        if {"incident_detected", "kill_child", "restart"} <= set(order) else False,
+        if {"incident_detected", "kill_child", "restart"} <= set(order)
+        else False,
         "supervisor_restarted_once": sup.count("restart") == 1,
         "verdict_reached": report is not None and report.get("decision") in ("PROMOTE", "REJECT"),
         "incident_resolved_audited": acts.count("incident_resolved") == len(detected) >= 1,
         "no_escalation": "incident_escalated" not in acts,
         "exactly_one_admin_action_the_start": [a["action"] for a in by("admin")] == ["start"],
         "health_endpoint_finished": health.get("state") == "finished"
-        and health.get("watchdog_kills") == 1 and health.get("open_incidents") == [],
+        and health.get("watchdog_kills") == 1
+        and health.get("open_incidents") == [],
         "metrics_exposed": "distillery_watchdog_kills_total 1" in metrics
         and 'distillery_incidents_total{kind="stalled"} 1' in metrics,
     }
