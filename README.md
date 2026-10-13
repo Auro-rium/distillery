@@ -1,151 +1,111 @@
 # Distillery
 
-**Sandbox-verified distillation autopilot on Nebius Token Factory.**
+**Change one base URL and Distillery swaps your big model for a certified specialist that hands back anything it can't guarantee.**
 
-Distillery turns a narrow, repetitive job that a big model does well (today: text-to-SQL over a synthetic SQLite database) into a small fine-tuned model that does it for a fraction of the cost. A planner agent (Nemotron 3 Ultra) designs the task set and reads the failures, a teacher (Nemotron 3 Super) writes training answers, a cheap triager (Nemotron 3 Nano) flags dirty output, and a small student (Qwen3-1.7B, LoRA) is fine-tuned on Token Factory. Every training example and every evaluation is verified by executing the SQL in a sandbox, and a pure-Python gate (no LLM anywhere in it) decides PROMOTE or REJECT from a sealed held-out set.
+Distillery is an autonomous agent that distils a narrow, repetitive job (today: text-to-SQL over a synthetic SQLite database) from a big Nemotron model into a small fine-tuned student (`Qwen/Qwen3-1.7B`, LoRA), then ships it behind an OpenAI-compatible gateway. The agent writes the SQL, runs and tests it in Nebius Sandboxes, fine-tunes on Token Factory, gates the result with a pure-Python test, and certifies a router that serves the student only where it can bound the error rate; everything else goes back to the teacher. A drift guard rolls the gateway back to the teacher on its own.
 
-> **Status (2026-10-07): one gated run PROMOTEd on the in-distribution gate set, and it did not carry over to an independently written question set.** On the pre-registered 300-question held-out set the 1.7B student scores 92.3% vs base 25.7% and teacher 90.0% (ratio CI [0.993, 1.061], McNemar p 1.6e-57; run cost $4.26). On 86 questions written blind by a separate agent (not by a human) it scores 40.7% vs base 38.4%: **REJECT**, so the result does not generalise beyond the templated phrasing. Every number below is from a recorded run in [docs/proofs/evidence](docs/proofs/evidence); see [STATUS.md](STATUS.md).
+Track: Coding and Agentic Engineering (Nebius x NVIDIA Global AI Hackathon). Demo: `⟨DEMO_URL⟩`. Video: `⟨VIDEO_URL⟩`.
 
-## How it works
+> **Honest status.** The agent loop, the gate, the autonomy run, the gateway and the receipts page are built and measured. The student PROMOTEd on templated questions and **fails on naturally phrased ones** (Gate B and N1 are both REJECT, below). The certified router exists *because* the student fails on natural phrasing: it serves the student only where it is certified and defers the rest. Its test-split results, the drift burst, the serving cost and the end-to-end run are **pre-registered and not yet measured**; they appear as `pending` and nowhere as achieved.
 
-Each round the agent fine-tunes the student, scores it on a dev set, has the planner cluster the failures into task families, generates targeted data for those families, verifies it by execution, and branches the sandbox so every round is a node in an experiment tree. The held-out set is opened once, for the best-on-dev candidate only.
+## What it does
 
-```mermaid
-flowchart TD
-    A[Generate schema + questions<br/>template gold SQL, hand-written phrasings] --> B[Execute every gold in a sandbox:<br/>accept if it runs and returns rows]
-    B --> C[Verifier self-test:<br/>gold accepted, corruptions rejected]
-    C --> D[Split and SEAL<br/>train / dev / in-distribution gate set<br/>plus a separate stress set of reserved families]
-    D --> E[Headroom check:<br/>base student on dev, refuse if too easy]
-    E --> F[Teacher writes SQL for train tasks<br/>execution-verified rows only]
-    F --> G[Fine-tune student LoRA<br/>Token Factory, round r]
-    G --> H[Dev eval, round r]
-    H --> I{dev target met<br/>or rounds used up?}
-    I -- no --> J[Planner clusters dev failures<br/>into families]
-    J --> K[Targeted data for those families<br/>teacher + execution check]
-    K --> L[Sandbox branch:<br/>new node in the experiment tree]
-    L --> G
-    I -- yes --> M[Score best-dev candidate ONCE on sealed held-out<br/>base vs student vs teacher]
-    M --> N{Gate<br/>pure Python}
-    N -- pass --> P[PROMOTE]
-    N -- fail --> R[REJECT]
+```
+generate tasks -> execute gold in Sandboxes -> seal gate/stress sets -> teacher data (execution-verified)
+  -> fine-tune student (Token Factory) -> dev eval -> failure analysis -> next round (sandbox branch)
+  -> sealed held-out, scored once -> GATE (pure Python) -> PROMOTE / REJECT
+  -> certified router (Learn-then-Test threshold on a sealed calibration split)
+  -> gateway POST /v1/chat/completions: student if certified, else teacher
+  -> drift guard CERTIFIED -> ROLLBACK -> TEACHER  -> receipts (every claim, value, hash, commit)
 ```
 
-Sandbox branching is the experiment tree. Each round forks the previous round's sandbox image, so a node is a real image with a parent and a label, and the UI draws exactly that lineage joined with that round's metrics:
-
-```mermaid
-flowchart TD
-    root[base image<br/>python + sqlite] --> r1[round 1<br/>train rows, dev score]
-    r1 --> r2[round 2<br/>+ targeted families, dev score]
-    r2 --> r3[round 3<br/>+ targeted families, dev score]
-    r2 -. selected on best DEV score .-> sel((candidate))
-```
-
-(Shape of the tree only. The number of rounds and which node is selected come from the run, never from this diagram.)
-
-More detail, matched to the code: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
-
-## How we use Nemotron
-
-| Role | Model | Model ID (live-verified on `GET /v1/models`, 2026-09-30) | Job |
-|---|---|---|---|
-| Planner | Nemotron 3 Ultra | `nvidia/Nemotron-3-Ultra-550b-a55b` | clusters dev failures into task families to target (not used to vet gold) |
-| Teacher | Nemotron 3 Super | `nvidia/nemotron-3-super-120b-a12b` | writes SQL for training tasks; scored as the ceiling on held-out |
-| Triage | Nemotron 3 Nano | `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B` | advisory format check on teacher output; never drops verified rows |
-| Student | Qwen3-1.7B + LoRA | `Qwen/Qwen3-1.7B` (fine-tuned on Token Factory; served on Nebius Sandbox CPU; the live spike showed it fits a 4 GB sandbox with about 93% RAM use) | the small model we are distilling into |
-
-Roles map to IDs through `DISTILLERY_MODEL_PLANNER|TEACHER|TRIAGE|STUDENT`; nothing else in the code names a model. All three Nemotron models returned valid JSON with `response_format` `json_schema` (`strict: true`) on the first live try, and `usage` includes reasoning tokens.
-
-## Where Token Factory accelerated us
-
-Only things we actually observed. Anything not run yet says so.
-
-- **Structured output (measured, live):** `json_schema` mode worked on Nano, Super and Ultra with the `{name, schema, strict}` wrapper. The planner and triager return parsed, schema-checked objects, which is what lets the orchestrator stay a plain state machine. Reasoning text comes back in a separate field (`reasoning` / `reasoning_content`) so `content` is the final answer only.
-- **Fine-tuning API (run live, 3 jobs):** OpenAI-compatible files and jobs endpoints, LoRA on Qwen3-0.6B (earlier smoke runs; the gated run uses 1.7B), checkpoint download, cancel and resume-by-adoption all worked. Jobs expose resolved hyperparameters, trained tokens and per-step loss, which is how we found that the provider defaults had trained the student for only 3 to 9 steps.
-- **Sandboxes (run live):** every gold, training row and evaluation is executed in a Nebius Sandbox (4 CPU, about 4 GB); 40 in parallel worked, branching produced a real experiment-tree node, and the 0.6B student plus base run on sandbox CPU (about 7.8 s per sample). Friction is logged in [FEEDBACK.md](FEEDBACK.md).
-- **Friction we hit (real):** Sandboxes need a project id that the getting-started page does not mention; prices are not exposed in the API; the fine-tunable Qwen3-1.7B cannot be served serverless. Details in [FEEDBACK.md](FEEDBACK.md).
-
-## Nebius services used
-
-| Service | Use | Status |
-|---|---|---|
-| Token Factory inference (Nemotron 3 Ultra, Super, Nano) | planner, teacher, triage | live-verified for structured output and usage |
-| Token Factory fine-tuning (LoRA, Qwen3-1.7B for the gated run; 0.6B in the earlier smoke runs) | train the student | live-verified (3 jobs); undertrained at provider defaults, now pinned |
-| Sandboxes (Contree) | execute and verify SQL, serve base and student on CPU, branch experiments | live-verified |
-| Dedicated endpoints / serverless endpoint | serve the fine-tuned student and this app | not used for the student (it runs in Sandboxes); backend deploy on Nebius pending |
-
-Inference, fine-tuning and sandbox work run on Nebius Token Factory; the web app itself is hosted on Render (see [docs/DEPLOY.md](docs/DEPLOY.md)). The base model weights are never downloaded locally. The small LoRA adapter checkpoint that fine-tuning produces IS downloaded to the run directory (`run_dir/round*/checkpoints`) so its SHA-256 can be verified, and is then loaded inside Nebius for serving.
+- **Agent loop** (`orchestrator.py`, optional bounded Ultra controller `controller.py`, off by default): planner clusters dev failures into families, teacher writes SQL, only rows that execute correctly are kept, each round branches the sandbox into an experiment tree. Supervised, resumable, outage-aware (`server/worker.py`, `driver.py`).
+- **Gate** (`gate.py`, `stats.py`): PROMOTE only if the paired-bootstrap lower bound of student/teacher accuracy is at least 0.85 and the student beats base by exact McNemar (alpha 0.05). No LLM in the gate. The held-out set is readable only by `evaluator.py` (AST-tested).
+- **Certified router** (`router.py`, `router_data.py`, `router_eval.py`, `stats.certify`): a logistic score over three signals (execution OK, student mean log-prob, nearest-neighbour similarity to training questions via `Qwen/Qwen3-Embedding-8B`), with the serve-the-student threshold certified by Learn-then-Test on sealed CAL/TEST splits whose hashes and pre-registration commit are checked. Planned parameters: alpha 0.08, delta 0.05 ([STATUS.md](STATUS.md)).
+- **Gateway** (`server/gateway.py`): the certified `acme-sql` skill is recognised by the sha256 of its system prompt; `distillery` extension in the response says who answered; every call is a `gateway_calls` row; savings are computed server-side. With no loaded certificate, every request goes to the teacher.
+- **Acme analyst** (`acme.py`, `server/acme_api.py`, `scripts/acme_agent.py`): a plain `openai`-SDK agent. Pointing it at Token Factory or at the gateway differs only in `--base-url`.
+- **Drift guard** (`drift.py`, `drift_sim.py`): deferral-rate and teacher-audit detectors; rollback is automatic, the way back is a new certificate (`recertify`); a re-distill is queued, never run automatically.
+- **Money** (`global_ledger.py`, `budget.py`): one cross-process ledger, caps, preflight, paid jobs cancelled in `finally`.
+- **Receipts** (`scripts/build_evidence.py`, `/receipts`, `GET /api/evidence`): one row per claim with value, commit-pinned artifact, pre-registration commit, sealed-set and adapter hashes, ledger total. Pending claims show no number.
 
 ## Results
 
-Measured, from recorded runs (`docs/proofs/evidence/`, claims and procedure in [DECISIONS.md](DECISIONS.md)). The student is Qwen3-1.7B (LoRA); the teacher is Nemotron 3 Super.
+Every number is copied from the file in the Source column. Student is `Qwen/Qwen3-1.7B` + LoRA; teacher is Nemotron 3 Super. Evidence directory: [docs/proofs/evidence](docs/proofs/evidence).
 
-| Run | Set | Base | Student | Teacher | Verdict |
-|---|---|---|---|---|---|
-| P4 (gated) | 300 held-out, templated, in-distribution | 25.7% | 92.3% | 90.0% | **PROMOTE** (ratio CI [0.993, 1.061], McNemar p 1.6e-57, cost $4.26) |
-| P4 stress | stress set (concepts outside training) | 9% | 16% | 99% | not a pass: the student does not transfer to unseen concepts |
-| Gate B | 86 agent-authored natural questions | 38.4% | 40.7% | 98.8% (inflated: it drafted the gold) | **REJECT** (ratio lower bound 0.306, McNemar p 0.84) |
-| B2 fair teacher | same 300 held-out | n/a | 92.3% | 93.3% (8-shot Super, strongest on dev) | no beat-the-teacher claim (ratio 0.989, CI [0.957, 1.022]) |
-| A5 autonomy | fresh run under 8 injected faults | n/a | PROMOTE (ratio lower bound 1.022) | n/a | passed every check: 4 restarts, 1 adopted fine-tune job, $4.19 |
+| ID | Claim | Result | Status | Source |
+|---|---|---|---|---|
+| P4 | Student promoted on a sealed templated held-out (n=300) | base 0.257, student 0.923, teacher 0.900; ratio lower bound 0.993 (bar 0.85); McNemar 202 vs 2; run cost $4.26. Stress set (n=100, not a gate input): student 0.16 | **PROMOTE**, in-distribution only (skeleton overlap with train 0.9467) | [p4_run_summary.json](docs/proofs/evidence/p4_run_summary.json) |
+| A5 | Autonomy under injected faults, no human action | 8 injected faults, 4 supervisor restarts, 1 fine-tune job billed, verdict PROMOTE (lower bound 1.022), spend $4.1918 | **PASS** (5/5 criteria) | [a5_chaos.json](docs/proofs/evidence/a5_chaos.json) |
+| B2 | Student beats a fair (8-shot Super) teacher | student 0.9233 vs 0.9333; ratio lower bound 0.957 (claim needs > 1.0) | **no claim made** | [b2_fair_teacher_s0_s1.json](docs/proofs/evidence/b2_fair_teacher_s0_s1.json) |
+| Gate B | Student holds up on 86 natural, agent-authored questions | base 0.384, student 0.407; ratio lower bound 0.306; McNemar p 0.84 (teacher 0.988 is inflated: it drafted the gold) | **REJECT** | [gateb_agent_authored.json](docs/proofs/evidence/gateb_agent_authored.json) |
+| N1 | Training on natural phrasing closes the gap (fresh agent-authored set, n=98) | base 0.296, student 0.571, teacher 0.959; ratio lower bound 0.495 < 0.85; McNemar p 4.6e-07 | **REJECT** (better than base, short of the bar) | [n1_natural_round.json](docs/proofs/evidence/n1_natural_round.json) |
+| W-C1 | Certified router: selective error within alpha at minimum coverage, system accuracy not below teacher-only | `⟨PENDING:W-C1⟩` | pending: pre-registered, not yet scored | `router_eval_test.json` (does not exist yet) |
+| W-C2 | Router defers most wrong student answers, few right ones | `⟨PENDING:W-C2⟩` | pending: pre-registered, not yet scored | `router_eval_test.json` (does not exist yet) |
+| W-D | Drift burst trips the guard and rolls back to the teacher | `⟨PENDING:W-D⟩` | pending: not yet measured | `drift_burst.json` (does not exist yet) |
+| W-$ | Student cost per 1k requests on a time-boxed AI Cloud L40S vLLM endpoint | `⟨PENDING:W-$⟩` | pending: not yet measured | `h1_endpoint.json` (does not exist yet) |
+| W-G | An unchanged agent works against the gateway after one base-URL change | same agent code, base URL swapped; test passes | verified as a test | [tests/test_acme_wg.py](tests/test_acme_wg.py) |
+| W-E2E | Live end to end: certified router, student, deferral, drift guard | `⟨PENDING:W-E2E⟩` | pending: not yet measured | `w_e2e.json` (does not exist yet) |
 
-Cost per 1k tasks is not yet reported (serving path is sandbox CPU, not a priced endpoint). The "agent-authored" set was written blind to the templates by a Claude subagent and confirmed by it; it is not human-written.
+Spend to date (store ledgers; sandbox is recorded at $0, so this is a lower bound): $14.1952 of the 19.50 cap ([STATUS.md](STATUS.md)). Claims, procedures and pre-registrations: [DECISIONS.md](DECISIONS.md); the 25-claim audit: [GROUND_TRUTH.md](GROUND_TRUTH.md). Cost per 1k tasks for the student is not reported until W-$ exists.
 
-`python -m distillery run ... --dry-run` prints a report that looks like this but uses fake models and fake prices; it is labelled "DRY RUN, numbers are NOT results" everywhere it appears.
+## Nebius and NVIDIA usage
 
-## Integrity guarantees
+| Role | Model id | Job |
+|---|---|---|
+| Planner | `nvidia/Nemotron-3-Ultra-550b-a55b` (Nemotron 3 Ultra) | clusters dev failures into task families; optional bounded controller |
+| Teacher | `nvidia/nemotron-3-super-120b-a12b` (Nemotron 3 Super) | writes training SQL; scored as the ceiling; at runtime it answers every request the router defers |
+| Triage | `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B` (Nemotron 3 Nano) | format triage; one-line summaries in the Acme analyst; the only public passthrough model |
+| Student | `Qwen/Qwen3-1.7B` + LoRA | the small model we distil into |
+| Router embeddings | `Qwen/Qwen3-Embedding-8B` | `nn_sim` signal (Token Factory embeddings) |
 
-These are enforced in code and covered by offline tests, not by convention.
+Ids are set in [render.yaml](render.yaml) and read through `DISTILLERY_MODEL_PLANNER|TEACHER|TRIAGE|STUDENT`; prices in [deploy/prices.json](deploy/prices.json).
 
-- **Sealed held-out.** Only `evaluator.py` may call `Store.load_heldout` (an AST test enforces this). The held-out set is scored once, for the candidate with the best dev score, never per round.
-- **In-distribution gate plus a separate stress set.** The sealed gate set (n >= 300) only contains families the student trained on; its questions and gold never appear in train or dev, and the share of gate questions that reuse a training question skeleton is measured and reported. A second sealed stress set (about 100, reserved families chosen by a fixed seeded rule) is scored separately and is never a gate input. Both seals are readable only by `evaluator.py` (AST-tested).
-- **The planner never sees held-out** for failure analysis (tested). Gold is written by templates and executed; no model vets or writes it.
-- **Gate rules.** PROMOTE only if the paired-bootstrap lower bound of student/teacher accuracy is at least 0.85 AND the student beats base by an exact McNemar test at alpha 0.05 (student-only wins must exceed base-only wins). Thresholds are config, not code.
-- **Train prompts equal eval prompts.** One message builder (`prompts.py`) is used for training rows and evaluation.
-- **Artifact identity.** The adapter that is evaluated is checked by SHA-256 against the one the fine-tune job produced; a mismatch aborts.
-- **No LLM in the gate.** `gate.py` is a pure function over booleans; verification is execution match, not a judge.
-- **Money.** Paid resources (fine-tune jobs, sandbox serving) are cancelled or closed in `finally` blocks on failure and normal exit, covered by tests for failed jobs, failed generation and failing `close()` (a failed close is raised loudly, since it may keep billing); runs preflight against a budget cap; live runs need an admin token and explicit approval.
+- **Token Factory inference and structured output:** all three Nemotron models, `json_schema` strict mode.
+- **Token Factory fine-tuning:** LoRA on Qwen3-1.7B (the P4, A5 and N1 runs); checkpoints SHA-256-checked.
+- **Token Factory Sandboxes:** every gold, training row and evaluation is executed there; branching is the experiment tree; base and student run on sandbox CPU today.
+- **Token Factory embeddings:** `Qwen/Qwen3-Embedding-8B`.
+- **Nebius AI Cloud (H1):** a time-boxed L40S vLLM + LoRA endpoint harness (`aicloud_endpoint.py`, `h1_measure.py`, `scripts/h1_endpoint.py`), always deleted in `finally`. Offline-tested; not yet run live (W-$ pending).
+
+Friction and findings: [FEEDBACK.md](FEEDBACK.md).
 
 ## Quickstart
 
 ```bash
-cp .env.example .env          # then fill in secrets; .env is gitignored
-python -m venv .venv && .venv/bin/pip install -e ".[dev]" fastapi uvicorn httpx
+uv sync --extra dev
+cp .env.example .env     # fill in; .env is gitignored
 (cd frontend && npm install)
-make dev                      # backend on :8000 + Vite dev server
-make test                     # backend and frontend tests, all offline
 ```
 
-Try the pipeline with no network and no keys:
+Variables in `.env.example` (names only): `NEBIUS_API_KEY`, `NEBIUS_BASE_URL`, `NEBIUS_AI_PROJECT`, `DISTILLERY_SANDBOX_URL`, `DISTILLERY_SANDBOX_IMAGE`, `DISTILLERY_ADMIN_TOKEN`, `DISTILLERY_RUN_CAP_USD`, `DISTILLERY_PROJECT_CAP_USD`, `DISTILLERY_PLAYGROUND_DAILY_CAP_USD`, `DISTILLERY_PRICES_FILE`, `DISTILLERY_MODEL_PLANNER`, `DISTILLERY_MODEL_TEACHER`, `DISTILLERY_MODEL_TRIAGE`, `DISTILLERY_MODEL_STUDENT`, `DISTILLERY_HOME`, `DISTILLERY_REPLAY_DIR`, `DISTILLERY_ALLOWED_ORIGINS`, `DISTILLERY_SEED`. Gateway, router and drift settings are in [docs/API_CONTRACT.md](docs/API_CONTRACT.md).
+
+Free, offline (fake models, fake prices, labelled "DRY RUN"; proves plumbing, not quality):
 
 ```bash
-python -m distillery run --pack sql --scale tiny --dry-run
+uv run python -m distillery run --pack sql --scale tiny --dry-run
+uv run python -m distillery serve --port 8000        # API + replay; with `make dev`, the Vite UI too
+uv run python -m pytest -q -p no:cacheprovider
+uv run python -m distillery ledger status             # spend ledger
+uv run python scripts/build_evidence.py --out /tmp/evidence.json   # rebuild the receipts, free
 ```
 
-That uses FAKE models and FAKE prices and takes about 9 s. It proves the plumbing (resume, cancel-on-failure, budget refusal, sealed held-out, artifact check) and says nothing about model quality. Its output is labelled as a dry run.
+Paid or certified steps (all need `--i-approve-spend` / an admin token; read `--help` first): `run --scale gated`, `router build-splits | signals | fit | certify | evaluate`, `scripts/h1_endpoint.py` (`--plan-only` is free), `scripts/acme_agent.py --base-url <url>`. Container: `make docker`, then `docker run --rm -p 8000:8000 --env-file .env distillery:local` (without a key it starts in replay-only mode). Hosting notes: [docs/DEPLOY.md](docs/DEPLOY.md).
 
-## Deploy
+## For judges
 
-The app is deployed as one Render web service (see [docs/DEPLOY.md](docs/DEPLOY.md) for the settings and the free-plan limits); the Docker image below is the same one. Live check: `python scripts/smoke_live.py <url>` (18/18 passed on the deployed service).
-
-The `Dockerfile` builds the frontend, installs the backend, and serves the API plus `frontend/dist` with uvicorn on `$PORT` (default 8000) as a non-root user, with a healthcheck on `/api/health`. No secrets are baked in.
-
-```bash
-make docker                               # docker build -t distillery:local .
-docker run --rm -p 8000:8000 --env-file .env distillery:local
-```
-
-Without `NEBIUS_API_KEY` the server starts in `replay-only` mode and serves the labelled sample.
-
-- **Generic container host:** expose the container port, set `PORT` if the host injects one, mount a volume at `/data` (`DISTILLERY_HOME`) so runs survive restarts, and set the variables from `.env.example` in the host's secret store. Health check path: `/api/health`.
-- **Nebius Serverless Endpoints (first target):** we have not read a verified deploy procedure for it or run one. The expected shape is: push the image to a registry Nebius can pull from, create the endpoint with container port 8000, set the same environment variables as secrets, and point the health check at `/api/health`. Check each step against Nebius's current docs before relying on it.
+- **Demo:** `⟨DEMO_URL⟩` (free, no sign-in; the free host sleeps when idle, so the first request can take about a minute).
+- **Click, in order:** **Mission** (landing page: how it works, the proof ladder, stored runs), then **Evidence** (the featured recorded run's report: gate statistics, held-out and stress charts; the experiment tree is linked from the run); **Acme analyst** (`/playground`: ask a question, see who answered, the confidence against the threshold, SQL, rows, cost, the savings counter, the drift panel); **Receipts** (`/receipts`: every claim, its value, artifact link, hashes; pending claims show no number).
+- **Live vs replay:** stored runs are recorded real runs (banner "Recorded run · <time> · real Token Factory jobs"); a dry-run sample carries the banner "DRY RUN — fake models, numbers are NOT results". The Acme analyst and gateway are live requests, capped per address and per day. Until a certificate is loaded (W-C1 pending) the gateway says "Not certified yet: all traffic goes to the teacher". New runs are locked on the public demo.
+- **Public repo and license:** MIT, [LICENSE](LICENSE). Repo: `⟨REPO_URL⟩`.
+- **Lineage:** an earlier AWS-based prototype (Aug 2026) never completed an end-to-end run; Distillery is a from-scratch rebuild started Sep 29, 2026 on Nebius, and no code was carried over.
 
 ## Limitations
 
-- **The win is in-distribution only.** The gated run PROMOTEd on templated questions but the student scored 40.7% vs base 38.4% on 86 independently phrased questions (REJECT) and 16% on the stress set. Next step is training on naturally phrased, teacher-verified data.
-- **Student serving is slow.** Base and student run on Nebius Sandbox CPU (measured about 10 to 29 s per sample for Qwen3-1.7B depending on concurrency, 0.6B about 7.8 s; 4 CPU / 4 GB, with 1.7B using about 93% of the RAM), because neither is on the serverless inference API. Sandbox pricing is unknown, so cost per 1k tasks for the student is reported as unavailable.
-- **The gate set shares question wording with training.** Phrasings are hand-written templates; most gate questions reuse a training question skeleton with different literals. The report states the measured rate; the stress set is the only unseen-structure signal.
-- **Toy database.** A synthetic schema with 89 templates in 12 families. Results say little about real-world text-to-SQL.
-- **Small held-out.** The full scale holds 300 items and tiny holds 20, so confidence intervals are wide; the gate accounts for this by using a lower bound, but a small win can still be REJECTed.
-- **Prices are hand-copied** from the console into `DISTILLERY_PRICES_FILE`; fine-tune cost is an explicit estimate you pass in.
+- **The win is in-distribution.** P4 PROMOTEd on templated questions (skeleton overlap with train 0.9467, [p4_run_summary.json](docs/proofs/evidence/p4_run_summary.json)); Gate B and N1 are REJECT. The N1 and Gate B sets are agent-authored (a Claude subagent), not human-written, and their teacher accuracy is inflated by construction.
+- **Toy database:** a synthetic schema with templated gold. Results say little about real-world text-to-SQL. One task pack ships (`sql`); a `toolcall` pack has only a dry-run record ([c3_toolcall_dry_run.json](docs/proofs/evidence/c3_toolcall_dry_run.json)).
+- **Student serving is slow today:** sandbox CPU, with a per-day student call cap in the gateway; sandbox is unpriced, so no student cost per 1k is claimed until W-$.
+- **One run, one seed** for each result; small sealed sets (n=300, 98, 86) give wide intervals.
+- **Hosted on a free Render plan** (sleeps, ephemeral disk; see [docs/DEPLOY.md](docs/DEPLOY.md)); the autonomy claim is bounded to one instance lifetime.
+- **Streaming and tool-calling are not supported** on the gateway (`400`).
 
 ## License
 

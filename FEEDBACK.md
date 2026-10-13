@@ -1,4 +1,65 @@
-# FEEDBACK (Token Factory, Sandboxes, fine-tuning, Nemotron)
+# FEEDBACK (Token Factory, Sandboxes, fine-tuning, embeddings, AI Cloud, Nemotron)
+
+Two parts. The first is a per-tool summary of what we used, what worked and what needs work. The second is the dated log we kept while building, unchanged. Numbers below come from the repo files named next to them; where we have no measurement we say so.
+
+## Summary
+
+Context: Distillery is an agent that distils a text-to-SQL job from Nemotron 3 Super into a Qwen3-1.7B LoRA student. One gated run (P4) ran end to end on Token Factory for $4.26 ([p4_run_summary.json](docs/proofs/evidence/p4_run_summary.json)); the project total to date is $14.1952 ([STATUS.md](STATUS.md)).
+
+### Token Factory inference (OpenAI-compatible)
+- **Used for:** the planner, teacher and triage calls; in P4 alone Nano took 684 calls (126,538 input and 753,151 output tokens) and Super 2,638 calls (2,537,916 input, 1,079,412 output) ([p4_run_summary.json](docs/proofs/evidence/p4_run_summary.json)).
+- **Worked:** the OpenAI SDK works unchanged; `usage` includes reasoning tokens; reasoning comes back in a separate field so `content` is the final answer; per-token prices are readable from `GET /v1/models?verbose=true` ([deploy/prices.json](deploy/prices.json), read 2026-10-01).
+- **Needs work:** `verbose=true` is not in the quickstart, so we first believed there were no prices (2026-09-30 entry). There is no usage or billing endpoint: billed spend is readable only in the console, hours late (2026-10-04 entry). Nano spends far more output tokens than input on short answers (the P4 counts above), so "cheap model" is not "few tokens".
+
+### Structured output (`json_schema`)
+- **Used for:** planner and triage objects that the orchestrator parses.
+- **Worked:** `json_schema` with `strict: true` and the `{name, schema, strict}` wrapper worked on the first try on Nano, Super and Ultra.
+- **Needs work:** the fine-tuning doc's JSON-mode sample is inconsistent about the wrapper (2026-09-30 entry).
+
+### Fine-tuning (LoRA)
+- **Used for:** the student: Qwen3-1.7B at lr 1e-4 (P4: 1,488 steps, 5.84M trained tokens; N1: 1,674 steps) ([GROUND_TRUTH.md](GROUND_TRUTH.md) P4 result and row 25; learning rate from the P1.12 pilot, [DECISIONS.md](DECISIONS.md) 2026-10-04).
+- **Worked:** files and jobs endpoints, resolved hyperparameters, trained tokens and per-step loss on the job object, checkpoint download, cancel. A job survived a SIGKILL of our process and was adopted again by id, not re-bought (P4 and A5; [a5_chaos.json](docs/proofs/evidence/a5_chaos.json)). The price is $0.40 per 1M trained tokens ([deploy/prices.json](deploy/prices.json), console 2026-10-04); our recomputation from `trained_tokens` matched the console within a cent in both checks (GROUND_TRUTH row 19).
+- **Needs work:** defaults silently produce a near-untrained adapter (3 to 9 steps, 2026-10-03 entry); loss masking and the train-time chat template are undocumented; the tokens-per-batch minimum (32768) appears in neither docs nor schema; checkpoint order is unspecified; the job object carries no cost. A fine-tuned model can only be deployed through Dedicated endpoints ("Deployment options currently only include via Dedicated endpoints", models page) and the older "serverless LoRA, per-token billing" page returns Page Not Found ([b4_dedicated_research.md](docs/proofs/evidence/b4_dedicated_research.md), 2026-10-06).
+
+### Sandboxes (Contree)
+- **Used for:** executing every gold, training row and evaluation (10 SQL-runner jobs in flight, `EXECUTOR_CONCURRENCY` in `cli.py`, against a beta limit of 50 operations in total per the code comment); branching the experiment tree; serving base and student on CPU.
+- **Worked:** branching produced real image lineage that the UI draws; Qwen3-1.7B loads on a 4 vCPU / 4 GB sandbox (peak RSS 3,784 MB, 14.55 s per sample in the batch-1 phase, [docs/spikes/s5-qwen3-1_7b.json](docs/spikes/s5-qwen3-1_7b.json)); a chaos run with injected sandbox faults plus two unplanned ones (an adapter-upload ReadError, a sandbox file-GET read timeout) recovered without human action ([a5_chaos.json](docs/proofs/evidence/a5_chaos.json)).
+- **Needs work:** SDK docs and the published SDK disagree, the project id is missing from Getting Started, a job killed at our timeout is reported `SUCCESS` with its CPU accounting dropped, consumption fields are undocumented, no price (the console Usage view had no Sandboxes line on 2026-10-04, so we record sandbox at $0 and every total is a lower bound). Details in the log below.
+
+### Embeddings (`Qwen/Qwen3-Embedding-8B`)
+- **Used for:** the router's `nn_sim` signal (nearest-neighbour similarity to the training questions), truncated to the first 1024 of 4096 dimensions (it is Matryoshka-trained) and re-normalised (`embed_index.py`).
+- **Worked:** it is listed with a per-token price ($0.01 per 1M input tokens, read from the verbose model listing on 2026-10-12, [deploy/prices.json](deploy/prices.json)).
+- **Needs work / unknown:** no live embedding result is recorded in the repo yet, so we make no claim about quality or latency. The router that depends on it is pre-registered and pending (W-C1, W-C2 in [README.md](README.md)).
+
+### Nebius AI Cloud endpoints (H1)
+- **Used for:** a time-boxed L40S vLLM + LoRA endpoint to measure the student's serving cost (`aicloud_endpoint.py`, `scripts/h1_endpoint.py`). Not run live yet: W-$ is pending.
+- **Worked:** `nebius ai endpoint create --help` (nebius 0.12.282, read 2026-10-13) documents image, platform, preset, volume, auth and on-demand/preemptible flags, enough to build a harness and an offline-tested dry plan.
+- **Needs work:** hosting an app needs this separate product, its own CLI and a federated browser login, not the Token Factory key (2026-09-30 entry); the hackathon credit covers Token Factory only ([docs/DEPLOY.md](docs/DEPLOY.md)); several CLI shapes (`get`, `list`, `delete`, state field names) were unverified when the harness was written (listed in the `aicloud_endpoint.py` docstring).
+
+### Dedicated endpoints
+- **Used for:** research only; nothing was created ([b4_dedicated_research.md](docs/proofs/evidence/b4_dedicated_research.md), 2026-10-06).
+- **Finding:** custom weights on a Dedicated endpoint are "in beta and available on request", so serving a fine-tuned student is not self-service. The documented endpoint template carries model, flavor, `gpu_type`, `gpu_count` and region and no price, and no Qwen3-1.7B price is published. We did not list the templates (it needs an API token), so whether a small-model template exists is unchecked.
+
+### Nemotron 3 Ultra, Super, Nano
+- **Prices per 1M tokens (input / output):** Ultra 1.0 / 3.0, Super 0.3 / 0.9, Nano 0.06 / 0.24 ([deploy/prices.json](deploy/prices.json)).
+- **Super (teacher):** scores 0.900 on the 300 templated held-out questions ([p4_run_summary.json](docs/proofs/evidence/p4_run_summary.json)); with 8 examples in the prompt it scores 0.9333 on the same set, which is the fair bar the student did not beat ([b2_fair_teacher_s0_s1.json](docs/proofs/evidence/b2_fair_teacher_s0_s1.json)). It is also the model that answers every request the router defers.
+- **Ultra (planner):** clusters dev failures into families and, optionally, proposes round actions under pre-registered bounds. The P4 cost table lists only Nano and Super, because the gated run used one round, so we have no Ultra usage figure from it. The Ultra 8-shot teacher setup (S2) was deferred on budget.
+- **Nano (triage):** advisory format check and one-line summaries; see the token note above.
+
+### Zero to hello world
+We did not time it, so we give no number. What we recorded: inference with `json_schema` worked on the first try. Sandboxes took longer because of three gaps found the same day: `Contree(api_client)` raises `AttributeError` in the published SDK, the project id is not in Getting Started (the API answers `400 Missing "Project" header` and the SDK shows a generic `403`), and the PyPI package names are not in the docs (2026-09-30 entry).
+
+### Would we build on it again
+Yes, for inference, structured output, fine-tuning and Sandboxes: the whole agent loop ran live for $4.26 and survived injected faults. Not yet for serving the fine-tuned student: that path needs Support to enable custom weights or a separate AI Cloud account, which is why the cost-per-request claim is still pending.
+
+### The asks that would have saved us the most time
+1. A cost field on fine-tune job and sandbox operation objects (and a usage endpoint).
+2. Self-service serving of a LoRA adapter (serverless LoRA or Dedicated custom weights).
+3. Documented loss masking and chat template for Conversational rows, and a warning when planned steps are tiny.
+4. The project id in Getting Started and in the SDK error.
+5. A `TIMED_OUT` status with the CPU actually consumed.
+
+## Dated log
 
 Log each friction point as it happens: what I tried, what happened, what would have helped.
 
