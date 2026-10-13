@@ -1,0 +1,31 @@
+/* Receipts screen. Rows reuse the proof-ladder card (.proof-card in styles.css); single column on a phone. */
+.rc-page { display: grid; gap: var(--space-4); min-width: 0; }
+.rc-head h1 { margin: 0 0 var(--space-2); }
+.rc-lead { margin: 0; max-width: 64ch; }
+.rc-meta { margin: var(--space-2) 0 0; font-size: var(--step--1); overflow-wrap: anywhere; }
+.rc-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-4); grid-template-columns: minmax(0, 1fr); }
+.rc-list > li { display: flex; min-width: 0; }
+.rc-list .rc { flex: 1; min-width: 0; }
+@media (min-width: 900px) { .rc-list { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+.rc .rc-claim { overflow-wrap: anywhere; }
+.rc .rc-value { margin: 0; font-size: var(--step-0); line-height: 1.35; overflow-wrap: anywhere; }
+.rc.is-pass .rc-value { color: var(--ok); }
+.rc.is-fail .rc-value { color: var(--bad); }
+.rc.is-partial .rc-value { color: var(--warn); }
+.rc .rc-pending { margin: 0; padding: var(--space-2) var(--space-3); border-left: 3px solid var(--warn); background: var(--warn-bg); font-weight: 600; }
+.rc .rc-notmet { margin: 0; font-size: var(--step--1); }
+.rc .rc-facts { display: grid; gap: var(--space-2); margin: 0; min-width: 0; }
+.rc .rc-fact { min-width: 0; }
+.rc .rc-fact dd { margin: 2px 0 0; overflow-wrap: anywhere; min-width: 0; }
+.rc .rc-path { font-size: .84rem; overflow-wrap: anywhere; word-break: break-all; }
+.rc .rc-hash { font-size: .84rem; overflow-wrap: anywhere; word-break: break-all; }
+.rc .rc-when { font-size: .8rem; color: var(--ink-2); overflow-wrap: anywhere; }
+.rc .rc-sealed { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-1); }
+.rc .rc-sname { color: var(--ink-2); font-size: .84rem; }
+.rc .rc-gate { font-size: .86rem; min-width: 0; }
+.rc .rc-gate summary { cursor: pointer; min-height: 32px; }
+.rc .rc-gate-list { margin: var(--space-2) 0 0; display: grid; gap: var(--space-1); }
+.rc .rc-gate-list > div { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0 var(--space-3); }
+.rc .rc-gate-list dt { color: var(--ink-2); overflow-wrap: anywhere; }
+.rc .rc-gate-list dd { margin: 0; overflow-wrap: anywhere; }

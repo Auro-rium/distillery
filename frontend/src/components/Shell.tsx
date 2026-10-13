@@ -12,7 +12,7 @@ export const GITHUB_URL = "https://github.com/Auro-rium/distillery";
 interface NavItem { to: string; label: string; end: boolean }
 
 /**
- * Mission · Evidence · Live · Acme analyst · New run. Evidence (the featured run's report) and Live (its
+ * Mission · Evidence · Live · Acme analyst · Receipts · New run. Evidence (the featured run's report) and Live (its
  * run page) exist only once /api/replay names a featured run (see useFeaturedRun); with none they are
  * left out rather than pointed at a guessed target. Live uses `end` so it is not also active on the report.
  */
@@ -23,6 +23,7 @@ function useNav(): NavItem[] {
     { to: "/", label: "Mission", end: true },
     ...(id ? [{ to: `/runs/${id}/report`, label: "Evidence", end: true }, { to: `/runs/${id}`, label: "Live", end: true }] : []),
     { to: "/playground", label: "Acme analyst", end: false },
+    { to: "/receipts", label: "Receipts", end: false },
     { to: "/new", label: "New run", end: false },
   ];
 }
@@ -43,6 +44,7 @@ export function pageTitle(pathname: string): string {
   if (pathname === "/") return "Mission";
   if (pathname === "/new") return "New run";
   if (pathname === "/playground") return "Acme analyst";
+  if (pathname === "/receipts") return "Receipts";
   if (pathname === "/humanset") return "Human set";
   const m = /^\/runs\/([^/]+)(?:\/(report|tree))?\/?$/.exec(pathname);
   if (m) {

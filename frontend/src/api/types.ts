@@ -551,11 +551,35 @@ export interface ProofItem {
   evidence_path: string;
   evidence_url: string;
 }
+/**
+ * One checkable claim in deploy/evidence.json. `pending` = pre-registered and not yet scored: value_display and every
+ * field read from the evidence file are null/empty, and `artifact` is the file that WILL hold the result. `verified`
+ * only when the proof's own verdict is PASS; PARTIAL and FAIL are `failed` (`verdict` keeps which).
+ */
+export interface Receipt {
+  id: string;
+  claim: string;
+  status: "verified" | "pending" | "failed";
+  verdict: "PASS" | "PARTIAL" | "FAIL" | null;
+  value_display: string | null;
+  /** Repo path of the evidence file (or the test, for W-G). */
+  artifact: string;
+  /** {repo_url}/blob/{commit}/{artifact}; a pending claim's permalink does not exist yet. */
+  permalink: string;
+  prereg: { commit: string; committed_at: string } | null;
+  /** Sealed-set / question-file sha256 by name; empty when the evidence names none. */
+  sealed_sha256: Record<string, string>;
+  adapter_sha256: string | null;
+  /** The numbers the gate decided on, verbatim from the evidence file. */
+  gate_inputs: Record<string, number | string | boolean> | null;
+  ledger_total_usd: number | null;
+}
 export interface Evidence {
   generated_at: string;
   commit: string;
   repo_url: string;
   proofs: ProofItem[];
+  receipts: Receipt[];
 }
 
 export interface ExperimentRow { name: string; data: Record<string, unknown>; created_at?: string }

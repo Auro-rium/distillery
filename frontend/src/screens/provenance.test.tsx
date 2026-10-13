@@ -12,6 +12,8 @@ const SHA: Allow = { pattern: /adapter [0-9a-f]{12}(?![0-9a-f])/g, why: "first 1
 const CARD: Allow = { pattern: /\bcost \/ 1k tasks/g, why: "'1k' is part of the metric name 'cost per 1k tasks'" };
 const SHOWN: Allow = { pattern: /(capped list, \d+ shown|showing \d+ of \d+)/g, why: "count of items returned in the examples list (a list length, not a payload value)" };
 
+const RUNG: Allow = { pattern: /\b[A-Z]\d\b/g, why: "two-character proof ids from the evidence payload (W2, A5, N1 ...): payload strings shorter than three characters are not matched verbatim by the checker" };
+
 async function check(path: string, ready: RegExp | string, payloads: unknown[], allow: Allow[] = []) {
   const { container } = renderApp(path);
   await waitFor(() => expect(screen.getAllByText(ready).length).toBeGreaterThan(0), { timeout: 3000 });
@@ -30,7 +32,7 @@ describe("render provenance: numbers on screen come from the contract payloads",
   });
   it("replay", async () => {
     stubFetch(contractFetch());
-    await check("/", contract.replay[0].run_id, [contract.replay, contract.runs]);
+    await check("/", contract.replay[0].run_id, [contract.replay, contract.runs, contract.evidence], [RUNG]);
   });
   it("report", async () => {
     stubFetch(contractFetch());

@@ -63,14 +63,14 @@ describe("focus and title on route change", () => {
 });
 
 describe("phone menu", () => {
-  it("opens a named dialog with the same three destinations, navigates and closes", async () => {
+  it("opens a named dialog with the same destinations, navigates and closes", async () => {
     renderApp("/");
     const btn = screen.getByRole("button", { name: "Menu" });
     expect(btn.getAttribute("aria-haspopup")).toBe("dialog");
     fireEvent.click(btn);
     const dlg = await screen.findByRole("dialog", { name: "Menu" }); // dialog code is lazy-loaded
     // The contract replay list holds only a dry run, so no featured run: Evidence and Live are left out.
-    expect(within(dlg).getAllByRole("link").map((l) => l.textContent)).toEqual(["Mission", "Acme analyst", "New run", "GitHub"]);
+    expect(within(dlg).getAllByRole("link").map((l) => l.textContent)).toEqual(["Mission", "Acme analyst", "Receipts", "New run", "GitHub"]);
     expect(within(dlg).getByRole("link", { name: "Mission" }).getAttribute("aria-current")).toBe("page");
     fireEvent.click(within(dlg).getByRole("link", { name: "New run" }));
     await screen.findByRole("heading", { name: "New run" });
@@ -102,7 +102,7 @@ describe("featured-run nav", () => {
     const ev = await within(nav).findByRole("link", { name: "Evidence" });
     expect(ev.getAttribute("href")).toBe("/runs/new-promote/report");
     expect(within(nav).getByRole("link", { name: "Live" }).getAttribute("href")).toBe("/runs/new-promote");
-    expect(within(nav).getAllByRole("link").map((l) => l.textContent)).toEqual(["Mission", "Evidence", "Live", "Acme analyst", "New run"]);
+    expect(within(nav).getAllByRole("link").map((l) => l.textContent)).toEqual(["Mission", "Evidence", "Live", "Acme analyst", "Receipts", "New run"]);
   });
   it("leaves Evidence and Live out when the replay list fails", async () => {
     stubFetch((u) => (u.endsWith("/replay") ? new Response("{}", { status: 500 }) : contractFetch()(u)));

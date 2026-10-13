@@ -1,10 +1,10 @@
 {
-  "commit": "691e24394e745237b012b7530926f8f47e3f8009",
-  "generated_at": "2026-10-12T18:54:57+05:30",
+  "commit": "1459bf7afa222d35cf79be7321a61785609c98c5",
+  "generated_at": "2026-10-13T07:58:12+05:30",
   "proofs": [
     {
       "evidence_path": "docs/proofs/evidence/p1_11_overfit.json",
-      "evidence_url": "https://github.com/Auro-rium/distillery/blob/691e24394e745237b012b7530926f8f47e3f8009/docs/proofs/evidence/p1_11_overfit.json",
+      "evidence_url": "https://github.com/Auro-rium/distillery/blob/1459bf7afa222d35cf79be7321a61785609c98c5/docs/proofs/evidence/p1_11_overfit.json",
       "headline": {
         "label": "adapter on train set",
         "value": "64/64"
@@ -89,7 +89,7 @@
     },
     {
       "evidence_path": "docs/proofs/evidence/p1_12_decision.json",
-      "evidence_url": "https://github.com/Auro-rium/distillery/blob/691e24394e745237b012b7530926f8f47e3f8009/docs/proofs/evidence/p1_12_decision.json",
+      "evidence_url": "https://github.com/Auro-rium/distillery/blob/1459bf7afa222d35cf79be7321a61785609c98c5/docs/proofs/evidence/p1_12_decision.json",
       "headline": {
         "label": "arm A dev accuracy",
         "value": "142/150"
@@ -122,7 +122,7 @@
     },
     {
       "evidence_path": "docs/proofs/evidence/p2_data.json",
-      "evidence_url": "https://github.com/Auro-rium/distillery/blob/691e24394e745237b012b7530926f8f47e3f8009/docs/proofs/evidence/p2_data.json",
+      "evidence_url": "https://github.com/Auro-rium/distillery/blob/1459bf7afa222d35cf79be7321a61785609c98c5/docs/proofs/evidence/p2_data.json",
       "headline": {
         "label": "labels verified correct",
         "value": "276/276"
@@ -147,7 +147,7 @@
     },
     {
       "evidence_path": "docs/proofs/evidence/p3_calibrate.json",
-      "evidence_url": "https://github.com/Auro-rium/distillery/blob/691e24394e745237b012b7530926f8f47e3f8009/docs/proofs/evidence/p3_calibrate.json",
+      "evidence_url": "https://github.com/Auro-rium/distillery/blob/1459bf7afa222d35cf79be7321a61785609c98c5/docs/proofs/evidence/p3_calibrate.json",
       "headline": {
         "label": "verifier gold vs gold",
         "value": "1321/1321"
@@ -176,7 +176,7 @@
     },
     {
       "evidence_path": "docs/proofs/evidence/p4_run_summary.json",
-      "evidence_url": "https://github.com/Auro-rium/distillery/blob/691e24394e745237b012b7530926f8f47e3f8009/docs/proofs/evidence/p4_run_summary.json",
+      "evidence_url": "https://github.com/Auro-rium/distillery/blob/1459bf7afa222d35cf79be7321a61785609c98c5/docs/proofs/evidence/p4_run_summary.json",
       "headline": {
         "label": "decision",
         "value": "PROMOTE"
@@ -213,7 +213,7 @@
     },
     {
       "evidence_path": "docs/proofs/evidence/p5_live.json",
-      "evidence_url": "https://github.com/Auro-rium/distillery/blob/691e24394e745237b012b7530926f8f47e3f8009/docs/proofs/evidence/p5_live.json",
+      "evidence_url": "https://github.com/Auro-rium/distillery/blob/1459bf7afa222d35cf79be7321a61785609c98c5/docs/proofs/evidence/p5_live.json",
       "headline": {
         "label": "B3 job adopted, not recreated",
         "value": "PASS"
@@ -246,7 +246,7 @@
     },
     {
       "evidence_path": "docs/proofs/evidence/a5_chaos.json",
-      "evidence_url": "https://github.com/Auro-rium/distillery/blob/691e24394e745237b012b7530926f8f47e3f8009/docs/proofs/evidence/a5_chaos.json",
+      "evidence_url": "https://github.com/Auro-rium/distillery/blob/1459bf7afa222d35cf79be7321a61785609c98c5/docs/proofs/evidence/a5_chaos.json",
       "headline": {
         "label": "chaos criteria met",
         "value": "5/5"
@@ -279,7 +279,7 @@
     },
     {
       "evidence_path": "docs/proofs/evidence/b2_fair_teacher_s0_s1.json",
-      "evidence_url": "https://github.com/Auro-rium/distillery/blob/691e24394e745237b012b7530926f8f47e3f8009/docs/proofs/evidence/b2_fair_teacher_s0_s1.json",
+      "evidence_url": "https://github.com/Auro-rium/distillery/blob/1459bf7afa222d35cf79be7321a61785609c98c5/docs/proofs/evidence/b2_fair_teacher_s0_s1.json",
       "headline": {
         "label": "student/teacher ratio, lower bound",
         "value": 0.957
@@ -312,7 +312,7 @@
     },
     {
       "evidence_path": "docs/proofs/evidence/gateb_agent_authored.json",
-      "evidence_url": "https://github.com/Auro-rium/distillery/blob/691e24394e745237b012b7530926f8f47e3f8009/docs/proofs/evidence/gateb_agent_authored.json",
+      "evidence_url": "https://github.com/Auro-rium/distillery/blob/1459bf7afa222d35cf79be7321a61785609c98c5/docs/proofs/evidence/gateb_agent_authored.json",
       "headline": {
         "label": "decision",
         "value": "REJECT"
@@ -349,7 +349,7 @@
     },
     {
       "evidence_path": "docs/proofs/evidence/n1_natural_round.json",
-      "evidence_url": "https://github.com/Auro-rium/distillery/blob/691e24394e745237b012b7530926f8f47e3f8009/docs/proofs/evidence/n1_natural_round.json",
+      "evidence_url": "https://github.com/Auro-rium/distillery/blob/1459bf7afa222d35cf79be7321a61785609c98c5/docs/proofs/evidence/n1_natural_round.json",
       "headline": {
         "label": "decision",
         "value": "REJECT"
@@ -387,6 +387,294 @@
       ],
       "title": "Natural-phrasing training: fresh agent-authored set",
       "verdict": "FAIL"
+    }
+  ],
+  "receipts": [
+    {
+      "adapter_sha256": "6a4df564f20ef8b3242b496dfae41fe044e7b47b991c94d298212c3fe2cccf65",
+      "artifact": "docs/proofs/evidence/p1_11_overfit.json",
+      "claim": "The fine-tune pipeline can overfit a tiny training set: the adapter reproduces the answers it was trained on.",
+      "gate_inputs": null,
+      "id": "W1-P1.11",
+      "ledger_total_usd": null,
+      "permalink": "https://github.com/Auro-rium/distillery/blob/1459bf7afa222d35cf79be7321a61785609c98c5/docs/proofs/evidence/p1_11_overfit.json",
+      "prereg": null,
+      "sealed_sha256": {},
+      "status": "verified",
+      "value_display": "adapter on train set: 64/64",
+      "verdict": "PASS"
+    },
+    {
+      "adapter_sha256": null,
+      "artifact": "docs/proofs/evidence/p1_12_decision.json",
+      "claim": "A learning-rate pilot on a held-out dev set picks a working fine-tune setting.",
+      "gate_inputs": null,
+      "id": "W1-P1.12",
+      "ledger_total_usd": null,
+      "permalink": "https://github.com/Auro-rium/distillery/blob/1459bf7afa222d35cf79be7321a61785609c98c5/docs/proofs/evidence/p1_12_decision.json",
+      "prereg": null,
+      "sealed_sha256": {},
+      "status": "verified",
+      "value_display": "arm A dev accuracy: 142/150",
+      "verdict": "PASS"
+    },
+    {
+      "adapter_sha256": null,
+      "artifact": "docs/proofs/evidence/p2_data.json",
+      "claim": "Training labels are correct and the filter catches every true miss.",
+      "gate_inputs": null,
+      "id": "W2",
+      "ledger_total_usd": null,
+      "permalink": "https://github.com/Auro-rium/distillery/blob/1459bf7afa222d35cf79be7321a61785609c98c5/docs/proofs/evidence/p2_data.json",
+      "prereg": null,
+      "sealed_sha256": {},
+      "status": "failed",
+      "value_display": "labels verified correct: 276/276; filter recall on true misses: 85/86",
+      "verdict": "PARTIAL"
+    },
+    {
+      "adapter_sha256": null,
+      "artifact": "docs/proofs/evidence/p3_calibrate.json",
+      "claim": "The gate's verifier and its statistics work: gold matches gold, and the test has the power it was designed for.",
+      "gate_inputs": null,
+      "id": "W3",
+      "ledger_total_usd": null,
+      "permalink": "https://github.com/Auro-rium/distillery/blob/1459bf7afa222d35cf79be7321a61785609c98c5/docs/proofs/evidence/p3_calibrate.json",
+      "prereg": null,
+      "sealed_sha256": {},
+      "status": "verified",
+      "value_display": "verifier gold vs gold: 1321/1321",
+      "verdict": "PASS"
+    },
+    {
+      "adapter_sha256": "4bebc793ba4158532adc33ca5085f37003aad46b679db9085cc89864fa8f553f",
+      "artifact": "docs/proofs/evidence/p4_run_summary.json",
+      "claim": "The gated run promotes the student on a sealed held-out set: its accuracy ratio to the teacher clears the pre-registered lower bound.",
+      "gate_inputs": {
+        "base_acc": 0.25666666666666665,
+        "mcnemar_alpha": 0.05,
+        "mcnemar_p": 1.6266184059419292e-57,
+        "n": 300,
+        "ratio_hi": 1.0610687022900764,
+        "ratio_lo": 0.9927536231884058,
+        "ratio_lower_bound_min": 0.85,
+        "ratio_point": 1.025925925925926,
+        "student_acc": 0.9233333333333333,
+        "teacher_acc": 0.9
+      },
+      "id": "W4",
+      "ledger_total_usd": 4.258206120000003,
+      "permalink": "https://github.com/Auro-rium/distillery/blob/1459bf7afa222d35cf79be7321a61785609c98c5/docs/proofs/evidence/p4_run_summary.json",
+      "prereg": null,
+      "sealed_sha256": {
+        "heldout": "cf92bf60e3c734f63035273395e629f3dafe0afab8397c4b01e2976f683dd878",
+        "stress": "1ba7bcde6e2db4f29da897ab88c4a7f200eb6c96d3d3610da9ad3c1d2a172896"
+      },
+      "status": "verified",
+      "value_display": "decision: PROMOTE",
+      "verdict": "PASS"
+    },
+    {
+      "adapter_sha256": null,
+      "artifact": "docs/proofs/evidence/p5_live.json",
+      "claim": "A killed run resumes and adopts its fine-tune job instead of creating a second one, and every kill-resume check passes.",
+      "gate_inputs": null,
+      "id": "W5",
+      "ledger_total_usd": 1.667401,
+      "permalink": "https://github.com/Auro-rium/distillery/blob/1459bf7afa222d35cf79be7321a61785609c98c5/docs/proofs/evidence/p5_live.json",
+      "prereg": null,
+      "sealed_sha256": {},
+      "status": "failed",
+      "value_display": "B3 job adopted, not recreated: PASS; kill-resume checks passed: 3/8",
+      "verdict": "PARTIAL"
+    },
+    {
+      "adapter_sha256": null,
+      "artifact": "docs/proofs/evidence/a5_chaos.json",
+      "claim": "A chaos run with injected faults reaches a verdict with no human action.",
+      "gate_inputs": {
+        "every_injection_in_audit_and_recovered": true,
+        "exactly_one_admin_action_the_start": true,
+        "exactly_one_finetune_job_billed": true,
+        "spend_within_cap": true,
+        "verdict_reached": true
+      },
+      "id": "A5",
+      "ledger_total_usd": 4.1918,
+      "permalink": "https://github.com/Auro-rium/distillery/blob/1459bf7afa222d35cf79be7321a61785609c98c5/docs/proofs/evidence/a5_chaos.json",
+      "prereg": null,
+      "sealed_sha256": {},
+      "status": "verified",
+      "value_display": "chaos criteria met: 5/5",
+      "verdict": "PASS"
+    },
+    {
+      "adapter_sha256": "4bebc793ba4158532adc33ca5085f37003aad46b679db9085cc89864fa8f553f",
+      "artifact": "docs/proofs/evidence/b2_fair_teacher_s0_s1.json",
+      "claim": "The student beats the strongest fair (few-shot) teacher: the lower bound of its accuracy ratio exceeds one.",
+      "gate_inputs": {
+        "claim_rule": "ratio lower bound > 1.0",
+        "n": 300,
+        "ratio_hi": 1.022140221402214,
+        "ratio_lo": 0.9565217391304348,
+        "ratio_point": 0.9892857142857143,
+        "student_correct": 277,
+        "teacher_correct": 280
+      },
+      "id": "B2",
+      "ledger_total_usd": 1.649512,
+      "permalink": "https://github.com/Auro-rium/distillery/blob/1459bf7afa222d35cf79be7321a61785609c98c5/docs/proofs/evidence/b2_fair_teacher_s0_s1.json",
+      "prereg": null,
+      "sealed_sha256": {
+        "heldout": "cf92bf60e3c734f63035273395e629f3dafe0afab8397c4b01e2976f683dd878"
+      },
+      "status": "failed",
+      "value_display": "student/teacher ratio, lower bound: 0.957; beat-the-teacher claim: not made",
+      "verdict": "PARTIAL"
+    },
+    {
+      "adapter_sha256": "4bebc793ba4158532adc33ca5085f37003aad46b679db9085cc89864fa8f553f",
+      "artifact": "docs/proofs/evidence/gateb_agent_authored.json",
+      "claim": "The student holds up on naturally phrased, agent-authored questions: its accuracy ratio to the teacher clears the pre-registered lower bound.",
+      "gate_inputs": {
+        "base_acc": 0.38372093023255816,
+        "mcnemar_alpha": 0.05,
+        "mcnemar_p": 0.8388197422027588,
+        "n": 86,
+        "ratio_hi": 0.5176470588235295,
+        "ratio_lo": 0.3058823529411765,
+        "ratio_lower_bound_min": 0.85,
+        "ratio_point": 0.4117647058823529,
+        "student_acc": 0.4069767441860465,
+        "teacher_acc": 0.9883720930232558
+      },
+      "id": "Gate B",
+      "ledger_total_usd": 0.266778,
+      "permalink": "https://github.com/Auro-rium/distillery/blob/1459bf7afa222d35cf79be7321a61785609c98c5/docs/proofs/evidence/gateb_agent_authored.json",
+      "prereg": null,
+      "sealed_sha256": {
+        "confirmed_set": "68816123b3ab5c9fd322fd5d3fe256fa8931ade9517e944538ca9bd83d34d892",
+        "questions": "f791e32967f0e59aad7da28f8e53c4e183f5b99134662fc738b888d80c24da0a"
+      },
+      "status": "failed",
+      "value_display": "REJECT: ratio lower bound 0.306 < 0.85 (point 0.412)",
+      "verdict": "FAIL"
+    },
+    {
+      "adapter_sha256": "7d6ce813882bf3a211c84bfab7f8109b3bcdd6ca4617349a03bff58076b85193",
+      "artifact": "docs/proofs/evidence/n1_natural_round.json",
+      "claim": "A student trained on naturally phrased questions clears the same pre-registered bound on a fresh agent-authored set.",
+      "gate_inputs": {
+        "base_acc": 0.29591836734693877,
+        "mcnemar_alpha": 0.05,
+        "mcnemar_p": 4.628673195838928e-07,
+        "n": 98,
+        "ratio_hi": 0.6989247311827957,
+        "ratio_lo": 0.4946236559139785,
+        "ratio_lower_bound_min": 0.85,
+        "ratio_point": 0.5957446808510638,
+        "student_acc": 0.5714285714285714,
+        "teacher_acc": 0.9591836734693877
+      },
+      "id": "N1",
+      "ledger_total_usd": 3.828866,
+      "permalink": "https://github.com/Auro-rium/distillery/blob/1459bf7afa222d35cf79be7321a61785609c98c5/docs/proofs/evidence/n1_natural_round.json",
+      "prereg": {
+        "commit": "bcd5f2df9388a9c31be5972530a3d5d20744ee5d",
+        "committed_at": "2026-10-07T15:06:42+05:30"
+      },
+      "sealed_sha256": {
+        "heldout": "cf92bf60e3c734f63035273395e629f3dafe0afab8397c4b01e2976f683dd878",
+        "n1_eval": "ca474439e13a90622c5253f83d5046cc44195cf1956a172def8dba9fdc7d6725",
+        "stress": "1ba7bcde6e2db4f29da897ab88c4a7f200eb6c96d3d3610da9ad3c1d2a172896"
+      },
+      "status": "failed",
+      "value_display": "REJECT: ratio lower bound 0.495 < 0.85 (point 0.596)",
+      "verdict": "FAIL"
+    },
+    {
+      "adapter_sha256": null,
+      "artifact": "docs/proofs/evidence/router_eval_test.json",
+      "claim": "The router lets the student answer only where its selective error stays within alpha, at the minimum coverage, without losing system accuracy.",
+      "gate_inputs": null,
+      "id": "W-C1",
+      "ledger_total_usd": null,
+      "permalink": "https://github.com/Auro-rium/distillery/blob/1459bf7afa222d35cf79be7321a61785609c98c5/docs/proofs/evidence/router_eval_test.json",
+      "prereg": null,
+      "sealed_sha256": {},
+      "status": "pending",
+      "value_display": null,
+      "verdict": null
+    },
+    {
+      "adapter_sha256": null,
+      "artifact": "docs/proofs/evidence/router_eval_test.json",
+      "claim": "The router defers most of the answers the student gets wrong, and fewer of the ones it gets right.",
+      "gate_inputs": null,
+      "id": "W-C2",
+      "ledger_total_usd": null,
+      "permalink": "https://github.com/Auro-rium/distillery/blob/1459bf7afa222d35cf79be7321a61785609c98c5/docs/proofs/evidence/router_eval_test.json",
+      "prereg": null,
+      "sealed_sha256": {},
+      "status": "pending",
+      "value_display": null,
+      "verdict": null
+    },
+    {
+      "adapter_sha256": null,
+      "artifact": "docs/proofs/evidence/drift_burst.json",
+      "claim": "A burst of off-distribution traffic trips the drift guard and rolls the gateway back to the teacher.",
+      "gate_inputs": null,
+      "id": "W-D",
+      "ledger_total_usd": null,
+      "permalink": "https://github.com/Auro-rium/distillery/blob/1459bf7afa222d35cf79be7321a61785609c98c5/docs/proofs/evidence/drift_burst.json",
+      "prereg": null,
+      "sealed_sha256": {},
+      "status": "pending",
+      "value_display": null,
+      "verdict": null
+    },
+    {
+      "adapter_sha256": null,
+      "artifact": "docs/proofs/evidence/h1_endpoint.json",
+      "claim": "The student's cost per 1k requests is measured on a real endpoint at its measured throughput.",
+      "gate_inputs": null,
+      "id": "W-$",
+      "ledger_total_usd": null,
+      "permalink": "https://github.com/Auro-rium/distillery/blob/1459bf7afa222d35cf79be7321a61785609c98c5/docs/proofs/evidence/h1_endpoint.json",
+      "prereg": null,
+      "sealed_sha256": {},
+      "status": "pending",
+      "value_display": null,
+      "verdict": null
+    },
+    {
+      "adapter_sha256": null,
+      "artifact": "tests/test_acme_wg.py",
+      "claim": "An unchanged agent works against the gateway after one base-URL change.",
+      "gate_inputs": null,
+      "id": "W-G",
+      "ledger_total_usd": null,
+      "permalink": "https://github.com/Auro-rium/distillery/blob/1459bf7afa222d35cf79be7321a61785609c98c5/tests/test_acme_wg.py",
+      "prereg": null,
+      "sealed_sha256": {},
+      "status": "verified",
+      "value_display": "same agent code, base URL swapped; test passes",
+      "verdict": null
+    },
+    {
+      "adapter_sha256": null,
+      "artifact": "docs/proofs/evidence/w_e2e.json",
+      "claim": "The whole path runs end to end on the live gateway: certified router, student, deferral and the drift guard.",
+      "gate_inputs": null,
+      "id": "W-E2E",
+      "ledger_total_usd": null,
+      "permalink": "https://github.com/Auro-rium/distillery/blob/1459bf7afa222d35cf79be7321a61785609c98c5/docs/proofs/evidence/w_e2e.json",
+      "prereg": null,
+      "sealed_sha256": {},
+      "status": "pending",
+      "value_display": null,
+      "verdict": null
     }
   ],
   "repo_url": "https://github.com/Auro-rium/distillery"

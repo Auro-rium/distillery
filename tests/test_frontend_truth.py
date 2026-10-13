@@ -59,7 +59,16 @@ NULLABLE: dict[str, set[str]] = {
         "nodes[].sandbox_image",
     },
     "examples": set(),
-    "evidence": set(),
+    # receipts: a claim not yet scored (status "pending") has no value, verdict or ledger total;
+    # prereg / adapter / gate inputs exist only where the evidence file records them
+    "evidence": {
+        "receipts[].value_display",
+        "receipts[].verdict",
+        "receipts[].prereg",
+        "receipts[].adapter_sha256",
+        "receipts[].gate_inputs",
+        "receipts[].ledger_total_usd",
+    },
     "experiments": set(),
     # response headers of /examples, parsed: X-Examples-Available / -Cap-Per-Kind / -Totals
     "examples_headers": {"totals.fixed", "totals.still_wrong", "totals.regressed"},

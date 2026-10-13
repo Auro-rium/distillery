@@ -13,6 +13,7 @@ import ReportScreen from "./screens/report";
 import NewRun from "./screens/newrun";
 import Playground from "./screens/playground";
 import Humanset from "./screens/humanset";
+import Receipts from "./screens/receipts";
 
 type Doc = Document & { startViewTransition?: (cb: () => void) => unknown };
 
@@ -45,6 +46,7 @@ function RouteStage() {
         <Route path="/runs/:id/report" element={<ReportScreen />} />
         <Route path="/new" element={<NewRun />} />
         <Route path="/playground" element={<Playground />} />
+        <Route path="/receipts" element={<Receipts />} />
         <Route path="/humanset" element={<Humanset />} />
         <Route path="*" element={<EmptyState title="Page not found"><Link to="/">Back to Mission</Link></EmptyState>} />
       </Routes>
