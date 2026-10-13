@@ -10,10 +10,11 @@ from fastapi.testclient import TestClient
 from server_helpers import ADMIN, GOLD, make_config, make_settings
 from test_gateway import NANO, TEACHER, Env, FakeUpstream, student_for, write_router
 
-from distillery.acme import SUMMARY_MAX_TOKENS
+from distillery.acme import SUMMARY_MAX_TOKENS, summary_messages
 from distillery.prompts import SYSTEM_PROMPT
 from distillery.server import create_app
 from distillery.server.gateway_config import GatewaySettings
+from distillery.taskpacks.sql.runner import run_select
 
 Q = "How many accounts are there?"
 
@@ -68,6 +69,21 @@ def test_bad_sql_is_reported_and_summary_skipped(tmp_path: Path) -> None:
     assert d["answer"]["error"].startswith("query failed")
     assert d["summary"] is None and d["summary_error"] is None
     assert len(d["calls"]) == 1
+
+
+def test_many_rows_are_capped_in_the_answer_but_the_summary_sees_the_real_count(
+    tmp_path: Path,
+) -> None:
+    env = Env(
+        tmp_path, upstream=FakeUpstream({TEACHER: "```sql\nSELECT account_id FROM accounts\n```"})
+    )
+    d = ask(env).json()
+    assert d["answer"]["row_count"] > 20 and len(d["answer"]["rows"]) == 20
+    total = d["answer"]["row_count"]
+    user = env.upstream.calls[1][1][1]["content"]
+    assert f"of {total}):" in user
+    full = run_select(env.app.state.playground.demo_db(), "SELECT account_id FROM accounts")
+    assert env.upstream.calls[1][1] == summary_messages(Q, full.columns, full.rows)
 
 
 def test_no_sql_in_the_answer(tmp_path: Path) -> None:

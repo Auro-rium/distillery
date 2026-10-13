@@ -13,7 +13,6 @@
 @media (min-width: 960px) { .pg-top { grid-template-columns: minmax(0, 3fr) minmax(19rem, 2fr); gap: var(--space-5); } }
 .pg-main, .pg-side { display: grid; gap: var(--space-4); min-width: 0; align-content: start; }
 .pg-main > *, .pg-side > * { min-width: 0; }
-@media (max-width: 959px) { .pg-side { order: -1; } } /* the certificate comes first on a phone: it frames the answer */
 
 /* ---------- ask ---------- */
 .pg-form { display: grid; gap: var(--space-4); margin-top: var(--space-3); }
@@ -54,6 +53,10 @@
 .pg .pg-meter-list > div { display: flex; flex-wrap: wrap; justify-content: space-between; gap: var(--space-1) var(--space-4); }
 .pg .pg-meter-list dt { color: var(--ink-2); font-size: .9rem; }
 .pg .pg-meter-list dd { margin: 0; overflow-wrap: anywhere; }
+
+.pg .pg-fine { display: grid; gap: var(--space-1); font-size: .8rem; }
+.pg .pg-fine p { margin: 0; overflow-wrap: anywhere; }
+.pg .pg-fine .eyebrow { margin-right: var(--space-2); }
 
 /* rows the SQL returned */
 .pg .pg-rows { min-width: 0; }

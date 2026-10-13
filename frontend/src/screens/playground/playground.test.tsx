@@ -135,6 +135,9 @@ describe("an answer served by the certified student", () => {
     expect(screen.getByText(`$${d.cost_usd.toFixed(6)}`)).toBeTruthy();
     expect(screen.getByText(`${d.latency_ms.toFixed(1)} ms`)).toBeTruthy();
     expect(screen.getByText(d.request_id)).toBeTruthy();
+    // the basis of the cost figures is on the page as text, not only in a tooltip
+    expect(screen.getByText(d.usage_basis)).toBeTruthy();
+    expect(screen.getByText(d.counterfactual_basis)).toBeTruthy();
     expect(screen.queryByRole("alert")).toBeNull();
   });
   it("every number on the card is explained by the response (render provenance)", async () => {

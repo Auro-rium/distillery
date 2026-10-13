@@ -57,15 +57,16 @@ export function AnswerCard({ r }: { r: AcmeAskResponse }) {
       {!a.error && a.sql && <RowsPreview rows={{ columns: a.columns, rows: a.rows, row_count: a.row_count }} />}
 
       <dl className="pg-meter-list">
-        <div><dt>Cost of this request</dt><dd className="num">{fmtUsd(d.cost_usd, 6)}</dd></div>
-        <div>
-          <dt>A teacher-only call would have cost</dt>
-          <dd className="num" title={d.counterfactual_basis}>{fmtUsd(d.teacher_cost_usd_counterfactual, 6)}</dd>
-        </div>
-        {r.summary_cost_usd !== null && <div><dt>Summary call</dt><dd className="num">{fmtUsd(r.summary_cost_usd, 6)}</dd></div>}
-        <div><dt>Latency</dt><dd className="num">{fmtNumber(d.latency_ms, 1)} ms</dd></div>
+        <div><dt>SQL call (gateway), cost</dt><dd className="num">{fmtUsd(d.cost_usd, 6)}</dd></div>
+        <div><dt>The same call on the teacher would have cost</dt><dd className="num">{fmtUsd(d.teacher_cost_usd_counterfactual, 6)}</dd></div>
+        {r.summary_cost_usd !== null && <div><dt>Summary call, cost</dt><dd className="num">{fmtUsd(r.summary_cost_usd, 6)}</dd></div>}
+        <div><dt>SQL call, latency</dt><dd className="num">{fmtNumber(d.latency_ms, 1)} ms</dd></div>
         <div><dt>Request</dt><dd className="mono">{d.request_id}</dd></div>
       </dl>
+      <div className="muted pg-fine">
+        <p><span className="eyebrow">cost basis</span> {d.usage_basis}</p>
+        <p><span className="eyebrow">teacher comparison</span> {d.counterfactual_basis}</p>
+      </div>
     </Card>
   );
 }

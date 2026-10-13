@@ -153,6 +153,7 @@ def install(app: FastAPI, ip_of: Callable[[Request], str]) -> None:
             # 2. the served SQL runs read-only on the demo database
             sql = extract_sql(text)
             columns: list[str] = []
+            full_rows: list[Any] = []
             rows: list[list[Any]] = []
             row_count = 0
             error: str | None = None
@@ -163,8 +164,9 @@ def install(app: FastAPI, ip_of: Callable[[Request], str]) -> None:
                 out = await run_in_threadpool(_run_sql, request, sql)
                 if out.ok:
                     columns = list(out.columns)
-                    rows = [[_cell(c) for c in r] for r in out.rows[:MAX_ROWS]]
-                    row_count = len(out.rows)
+                    full_rows = list(out.rows)  # uncapped: the summary prompt states the real count
+                    rows = [[_cell(c) for c in r] for r in full_rows[:MAX_ROWS]]
+                    row_count = len(full_rows)
                     verified = row_count >= 1
                 else:
                     error = f"query failed: {out.error[:200]}"
@@ -182,11 +184,10 @@ def install(app: FastAPI, ip_of: Callable[[Request], str]) -> None:
                         "status": 503,
                     }
                 else:
-                    out_rows = [list(r) for r in rows]
                     sres = await post(
                         {
                             "model": triage,
-                            "messages": summary_messages(question, columns, out_rows),
+                            "messages": summary_messages(question, columns, full_rows),
                             "max_tokens": SUMMARY_MAX_TOKENS,
                         }
                     )
