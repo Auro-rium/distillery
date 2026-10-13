@@ -64,8 +64,9 @@ NULLABLE: dict[str, set[str]] = {
     "examples_headers": {"totals.fixed", "totals.still_wrong", "totals.regressed"},
     "health": set(),
     "config": set(),
-    # certified gateway: no reason; the cert may or may not carry each figure
-    "gateway_status": {"reason"},
+    # certified gateway: no reason; the cert may or may not carry each figure. drift.state is null
+    # while the drift guard is not configured (enabled: false)
+    "gateway_status": {"reason", "drift.state"},
     # student serving cost is "pending H1" until deploy/serving_price.json exists
     "gateway_savings": {"saved_pct", "saved_pct_display", "student_usd_per_1k", "student_cost_usd"},
     # a student-served answer: no gateway error, no summary failure

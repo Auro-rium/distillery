@@ -414,6 +414,8 @@ export interface GatewayStatus {
     student_calls: number;
     student_daily_max: number;
   };
+  /** Drift guard: state is null while the guard is not configured. */
+  drift: { enabled: boolean; state: "CERTIFIED" | "ROLLBACK" | "TEACHER" | null };
 }
 
 /** GET /api/gateway/savings: every figure is computed by the server; `*_display` strings are shown as they are. */
