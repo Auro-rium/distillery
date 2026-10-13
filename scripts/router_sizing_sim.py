@@ -147,7 +147,8 @@ def toy_rep_factory(
 
 def load_fit_items(path: Path) -> tuple[list[dict[str, float]], list[bool]]:
     data: Any = json.loads(path.read_text(encoding="utf-8"))
-    items = data["items"] if isinstance(data, dict) else data
+    # a router signals file (``distillery router signals``) keeps them under "rows"
+    items = (data.get("items") or data.get("rows") or []) if isinstance(data, dict) else data
     rows = [{f: float(it[f]) for f in FEATURES} for it in items]
     labels = [bool(it["correct"]) for it in items]
     if len(rows) < 20:

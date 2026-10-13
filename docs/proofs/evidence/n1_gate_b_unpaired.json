@@ -1,0 +1,47 @@
+{
+  "what": "D: N1 adapter on the Gate B agent-authored set (n=86), from the fit-split signals regenerated in step B. Reported only; never a gate.",
+  "label": "AGENT-AUTHORED set (Claude subagent), NOT human-written; UNPAIRED comparison",
+  "adapter_sha256": "7d6ce813882bf3a211c84bfab7f8109b3bcdd6ca4617349a03bff58076b85193",
+  "gate_b_file_sha256": "68816123b3ab5c9fd322fd5d3fe256fa8931ade9517e944538ca9bd83d34d892",
+  "source_signals": {
+    "path": ".distillery/n1live/runs/sql-gated-20261004T155134Z-66ff347c/router/signals_fit.json",
+    "sha256": "fe9cf67142f37c5c4f759b5c3b8faccc68dba4649655f12609c55d5665722247"
+  },
+  "n1_student": {
+    "correct": 66,
+    "n": 86,
+    "accuracy": 0.7674418604651163,
+    "wilson95": [
+      0.6679041457768022,
+      0.8441089111435891
+    ]
+  },
+  "recorded_same_set": {
+    "source": "docs/proofs/evidence/gateb_agent_authored.json (scored 2026-10-06 with the P4 adapter)",
+    "teacher_accuracy": 0.9883720930232558,
+    "base_accuracy": 0.38372093023255816,
+    "p4_student_accuracy": 0.4069767441860465
+  },
+  "why_unpaired": "Per-item teacher and base results on Gate B were never stored (report_human.json keeps aggregates and examples only), and score-human refuses on N1's run because it already has a sealed human set. So no paired bootstrap or McNemar is computed; the student/teacher ratio below is a point estimate only.",
+  "ratio_point_vs_recorded_teacher": 0.7764705882352941,
+  "regression_check_step_B": {
+    "criterion": "each set within \u00b12 items of N1's recorded count, written before signals existed",
+    "heldout": {
+      "regenerated": 276,
+      "recorded": 276,
+      "n": 300
+    },
+    "stress": {
+      "regenerated": 66,
+      "recorded": 66,
+      "n": 100
+    },
+    "n1_eval": {
+      "regenerated": 56,
+      "recorded": 56,
+      "n": 98
+    },
+    "result": "PASS (exact match on all three)"
+  },
+  "spend_usd": 0.00097652
+}

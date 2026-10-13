@@ -1,0 +1,482 @@
+{
+  "audit": {
+    "alpha": 0.08,
+    "k": 10,
+    "p_window_has_k_disagreements_at_alpha": {
+      "10": 0.005634867214830559,
+      "11": 0.001707696910178419,
+      "12": 0.000465903928470232,
+      "5": 0.3710498611828817,
+      "6": 0.20812628630950164,
+      "7": 0.10187178095729725,
+      "8": 0.043794784243048876,
+      "9": 0.01665010099617193
+    },
+    "rate": 0.1,
+    "window_m": 50
+  },
+  "format": "distillery-h3-drift-params-v1",
+  "inputs": {
+    "model_sha256": "5592a87b02131075dfd5a21c516604784e8c438a7dd7c3b73adf0ce6ccfb364c",
+    "signals_fit": {
+      "n": 584,
+      "sha256": "fe9cf67142f37c5c4f759b5c3b8faccc68dba4649655f12609c55d5665722247"
+    }
+  },
+  "latency_sim": {
+    "n_before": 200,
+    "n_burst": 30,
+    "note": "synthetic bursts: a share p deferred, every student answer wrong; in-distribution requests drawn with replacement from the fit rows",
+    "rows": [
+      {
+        "burst_deferral_share": 1.0,
+        "false_alarm_before_burst": 2,
+        "fit_coverage_level": 0.46,
+        "latency_max": 19,
+        "latency_median": 17,
+        "latency_p95": 19,
+        "missed_within_burst": 0,
+        "seeds": 300,
+        "tau": 0.95,
+        "wrong_during_burst_max": 0,
+        "wrong_during_burst_median": 0,
+        "wrong_during_burst_p95": 0
+      },
+      {
+        "burst_deferral_share": 0.95,
+        "false_alarm_before_burst": 2,
+        "fit_coverage_level": 0.46,
+        "latency_max": 30,
+        "latency_median": 19,
+        "latency_p95": 28,
+        "missed_within_burst": 31,
+        "seeds": 300,
+        "tau": 0.95,
+        "wrong_during_burst_max": 4,
+        "wrong_during_burst_median": 1,
+        "wrong_during_burst_p95": 2
+      },
+      {
+        "burst_deferral_share": 0.9,
+        "false_alarm_before_burst": 2,
+        "fit_coverage_level": 0.46,
+        "latency_max": 30,
+        "latency_median": 20,
+        "latency_p95": 28,
+        "missed_within_burst": 113,
+        "seeds": 300,
+        "tau": 0.95,
+        "wrong_during_burst_max": 5,
+        "wrong_during_burst_median": 1,
+        "wrong_during_burst_p95": 3
+      },
+      {
+        "burst_deferral_share": 0.8,
+        "false_alarm_before_burst": 2,
+        "fit_coverage_level": 0.46,
+        "latency_max": 30,
+        "latency_median": 20,
+        "latency_p95": 29,
+        "missed_within_burst": 243,
+        "seeds": 300,
+        "tau": 0.95,
+        "wrong_during_burst_max": 5,
+        "wrong_during_burst_median": 1,
+        "wrong_during_burst_p95": 4
+      },
+      {
+        "burst_deferral_share": 1.0,
+        "false_alarm_before_burst": 3,
+        "fit_coverage_level": 0.56,
+        "latency_max": 17,
+        "latency_median": 14,
+        "latency_p95": 17,
+        "missed_within_burst": 0,
+        "seeds": 300,
+        "tau": 0.85,
+        "wrong_during_burst_max": 0,
+        "wrong_during_burst_median": 0,
+        "wrong_during_burst_p95": 0
+      },
+      {
+        "burst_deferral_share": 0.95,
+        "false_alarm_before_burst": 3,
+        "fit_coverage_level": 0.56,
+        "latency_max": 28,
+        "latency_median": 15,
+        "latency_p95": 19,
+        "missed_within_burst": 1,
+        "seeds": 300,
+        "tau": 0.85,
+        "wrong_during_burst_max": 5,
+        "wrong_during_burst_median": 0,
+        "wrong_during_burst_p95": 3
+      },
+      {
+        "burst_deferral_share": 0.9,
+        "false_alarm_before_burst": 3,
+        "fit_coverage_level": 0.56,
+        "latency_max": 30,
+        "latency_median": 17,
+        "latency_p95": 23,
+        "missed_within_burst": 7,
+        "seeds": 300,
+        "tau": 0.85,
+        "wrong_during_burst_max": 6,
+        "wrong_during_burst_median": 1,
+        "wrong_during_burst_p95": 4
+      },
+      {
+        "burst_deferral_share": 0.8,
+        "false_alarm_before_burst": 3,
+        "fit_coverage_level": 0.56,
+        "latency_max": 30,
+        "latency_median": 19,
+        "latency_p95": 28,
+        "missed_within_burst": 105,
+        "seeds": 300,
+        "tau": 0.85,
+        "wrong_during_burst_max": 9,
+        "wrong_during_burst_median": 3,
+        "wrong_during_burst_p95": 6
+      },
+      {
+        "burst_deferral_share": 1.0,
+        "false_alarm_before_burst": 5,
+        "fit_coverage_level": 0.66,
+        "latency_max": 15,
+        "latency_median": 12,
+        "latency_p95": 15,
+        "missed_within_burst": 0,
+        "seeds": 300,
+        "tau": 0.75,
+        "wrong_during_burst_max": 0,
+        "wrong_during_burst_median": 0,
+        "wrong_during_burst_p95": 0
+      },
+      {
+        "burst_deferral_share": 0.95,
+        "false_alarm_before_burst": 5,
+        "fit_coverage_level": 0.66,
+        "latency_max": 19,
+        "latency_median": 13,
+        "latency_p95": 16,
+        "missed_within_burst": 0,
+        "seeds": 300,
+        "tau": 0.75,
+        "wrong_during_burst_max": 4,
+        "wrong_during_burst_median": 0,
+        "wrong_during_burst_p95": 2
+      },
+      {
+        "burst_deferral_share": 0.9,
+        "false_alarm_before_burst": 5,
+        "fit_coverage_level": 0.66,
+        "latency_max": 29,
+        "latency_median": 14,
+        "latency_p95": 18,
+        "missed_within_burst": 0,
+        "seeds": 300,
+        "tau": 0.75,
+        "wrong_during_burst_max": 7,
+        "wrong_during_burst_median": 1,
+        "wrong_during_burst_p95": 4
+      },
+      {
+        "burst_deferral_share": 0.8,
+        "false_alarm_before_burst": 5,
+        "fit_coverage_level": 0.66,
+        "latency_max": 30,
+        "latency_median": 17,
+        "latency_p95": 25,
+        "missed_within_burst": 13,
+        "seeds": 300,
+        "tau": 0.75,
+        "wrong_during_burst_max": 9,
+        "wrong_during_burst_median": 3,
+        "wrong_during_burst_p95": 7
+      }
+    ]
+  },
+  "min_requests": 20,
+  "resampling": "iid (block_len 1)",
+  "seed": 20261013,
+  "target_false_alarm_per_1000": 0.1,
+  "tau_table": [
+    {
+      "fit_coverage_level": 0.2,
+      "lambda": 0.9635775095149832,
+      "note": "no feasible tau: no tau <= 1 reaches 0.1 false alarms per 1000 requests with window 20 (at tau = 1: 196 of 200 streams trip); use a larger window or a larger target",
+      "tau": null
+    },
+    {
+      "fit_coverage_level": 0.22,
+      "lambda": 0.9622550627279346,
+      "note": "no feasible tau: no tau <= 1 reaches 0.1 false alarms per 1000 requests with window 20 (at tau = 1: 193 of 200 streams trip); use a larger window or a larger target",
+      "tau": null
+    },
+    {
+      "fit_coverage_level": 0.24,
+      "lambda": 0.9602399868807353,
+      "note": "no feasible tau: no tau <= 1 reaches 0.1 false alarms per 1000 requests with window 20 (at tau = 1: 179 of 200 streams trip); use a larger window or a larger target",
+      "tau": null
+    },
+    {
+      "fit_coverage_level": 0.26,
+      "lambda": 0.958289760845734,
+      "note": "no feasible tau: no tau <= 1 reaches 0.1 false alarms per 1000 requests with window 20 (at tau = 1: 148 of 200 streams trip); use a larger window or a larger target",
+      "tau": null
+    },
+    {
+      "fit_coverage_level": 0.28,
+      "lambda": 0.9559577119956152,
+      "note": "no feasible tau: no tau <= 1 reaches 0.1 false alarms per 1000 requests with window 20 (at tau = 1: 112 of 200 streams trip); use a larger window or a larger target",
+      "tau": null
+    },
+    {
+      "fit_coverage_level": 0.3,
+      "lambda": 0.9541290882118855,
+      "note": "no feasible tau: no tau <= 1 reaches 0.1 false alarms per 1000 requests with window 20 (at tau = 1: 77 of 200 streams trip); use a larger window or a larger target",
+      "tau": null
+    },
+    {
+      "fit_coverage_level": 0.32,
+      "lambda": 0.9516721357356034,
+      "note": "no feasible tau: no tau <= 1 reaches 0.1 false alarms per 1000 requests with window 20 (at tau = 1: 44 of 200 streams trip); use a larger window or a larger target",
+      "tau": null
+    },
+    {
+      "baseline_deferral_share": 0.6592465753424658,
+      "false_alarm_per_1000": 0.06918168707526436,
+      "fit_coverage_level": 0.34,
+      "lambda": 0.948624199264337,
+      "tau": 1.0,
+      "validation_false_alarm_per_1000": 0.07853523659417051
+    },
+    {
+      "baseline_deferral_share": 0.6386986301369864,
+      "false_alarm_per_1000": 0.02819746427893957,
+      "fit_coverage_level": 0.36,
+      "lambda": 0.946834137354677,
+      "tau": 1.0,
+      "validation_false_alarm_per_1000": 0.04737403113526602
+    },
+    {
+      "baseline_deferral_share": 0.6198630136986302,
+      "false_alarm_per_1000": 0.015189719597776225,
+      "fit_coverage_level": 0.38,
+      "lambda": 0.9423174250940989,
+      "tau": 1.0,
+      "validation_false_alarm_per_1000": 0.025770140653427684
+    },
+    {
+      "baseline_deferral_share": 0.5993150684931506,
+      "false_alarm_per_1000": 0.005022715229625984,
+      "fit_coverage_level": 0.4,
+      "lambda": 0.9384380292222224,
+      "tau": 1.0,
+      "validation_false_alarm_per_1000": 0.007589595170993579
+    },
+    {
+      "baseline_deferral_share": 0.5787671232876712,
+      "false_alarm_per_1000": 0.0840817057194546,
+      "fit_coverage_level": 0.42,
+      "lambda": 0.9353324051459492,
+      "tau": 0.95,
+      "validation_false_alarm_per_1000": 0.12263099219620958
+    },
+    {
+      "baseline_deferral_share": 0.559931506849315,
+      "false_alarm_per_1000": 0.04700315704538154,
+      "fit_coverage_level": 0.44,
+      "lambda": 0.9302886743775018,
+      "tau": 0.95,
+      "validation_false_alarm_per_1000": 0.05523888185981424
+    },
+    {
+      "baseline_deferral_share": 0.5393835616438356,
+      "false_alarm_per_1000": 0.020359756904502563,
+      "fit_coverage_level": 0.46,
+      "lambda": 0.9259158927619601,
+      "tau": 0.95,
+      "validation_false_alarm_per_1000": 0.03355635402469748
+    },
+    {
+      "baseline_deferral_share": 0.5188356164383562,
+      "false_alarm_per_1000": 0.005016403639902481,
+      "fit_coverage_level": 0.48,
+      "lambda": 0.9219367677313574,
+      "tau": 0.95,
+      "validation_false_alarm_per_1000": 0.02040301046419399
+    },
+    {
+      "baseline_deferral_share": 0.5,
+      "false_alarm_per_1000": 0.05498821681068342,
+      "fit_coverage_level": 0.5,
+      "lambda": 0.9172253676263808,
+      "tau": 0.9,
+      "validation_false_alarm_per_1000": 0.07768529953040576
+    },
+    {
+      "baseline_deferral_share": 0.4794520547945205,
+      "false_alarm_per_1000": 0.025601376329991498,
+      "fit_coverage_level": 0.52,
+      "lambda": 0.9077074922476142,
+      "tau": 0.9,
+      "validation_false_alarm_per_1000": 0.04381612691212289
+    },
+    {
+      "baseline_deferral_share": 0.4589041095890411,
+      "false_alarm_per_1000": 0.012641681647059418,
+      "fit_coverage_level": 0.54,
+      "lambda": 0.9011830112585604,
+      "tau": 0.9,
+      "validation_false_alarm_per_1000": 0.025512026369230455
+    },
+    {
+      "baseline_deferral_share": 0.4383561643835616,
+      "false_alarm_per_1000": 0.06693332904960028,
+      "fit_coverage_level": 0.56,
+      "lambda": 0.8919114622047413,
+      "tau": 0.85,
+      "validation_false_alarm_per_1000": 0.05831120158182387
+    },
+    {
+      "baseline_deferral_share": 0.4195205479452055,
+      "false_alarm_per_1000": 0.025730025138234563,
+      "fit_coverage_level": 0.58,
+      "lambda": 0.8844314387999046,
+      "tau": 0.85,
+      "validation_false_alarm_per_1000": 0.031090015959541525
+    },
+    {
+      "baseline_deferral_share": 0.398972602739726,
+      "false_alarm_per_1000": 0.007566318784143013,
+      "fit_coverage_level": 0.6,
+      "lambda": 0.8732626250168869,
+      "tau": 0.85,
+      "validation_false_alarm_per_1000": 0.007569621594616486
+    },
+    {
+      "baseline_deferral_share": 0.3784246575342466,
+      "false_alarm_per_1000": 0.06743925072294876,
+      "fit_coverage_level": 0.62,
+      "lambda": 0.8658741996987618,
+      "tau": 0.8,
+      "validation_false_alarm_per_1000": 0.04423581331445939
+    },
+    {
+      "baseline_deferral_share": 0.3595890410958904,
+      "false_alarm_per_1000": 0.015319761726639278,
+      "fit_coverage_level": 0.64,
+      "lambda": 0.8591178777519574,
+      "tau": 0.8,
+      "validation_false_alarm_per_1000": 0.020350279180392505
+    },
+    {
+      "baseline_deferral_share": 0.339041095890411,
+      "false_alarm_per_1000": 0.061519038805139786,
+      "fit_coverage_level": 0.66,
+      "lambda": 0.8479961884474154,
+      "tau": 0.75,
+      "validation_false_alarm_per_1000": 0.06096526570253191
+    },
+    {
+      "baseline_deferral_share": 0.3184931506849315,
+      "false_alarm_per_1000": 0.033711682135142355,
+      "fit_coverage_level": 0.68,
+      "lambda": 0.8388107860982873,
+      "tau": 0.75,
+      "validation_false_alarm_per_1000": 0.03102522868178974
+    },
+    {
+      "baseline_deferral_share": 0.2996575342465753,
+      "false_alarm_per_1000": 0.08453223677752207,
+      "fit_coverage_level": 0.7,
+      "lambda": 0.8288009270510889,
+      "tau": 0.7,
+      "validation_false_alarm_per_1000": 0.09885221593717393
+    },
+    {
+      "baseline_deferral_share": 0.2791095890410959,
+      "false_alarm_per_1000": 0.03660465663524767,
+      "fit_coverage_level": 0.72,
+      "lambda": 0.8165117945429635,
+      "tau": 0.7,
+      "validation_false_alarm_per_1000": 0.05288836588171517
+    },
+    {
+      "baseline_deferral_share": 0.2585616438356164,
+      "false_alarm_per_1000": 0.0616924657405644,
+      "fit_coverage_level": 0.74,
+      "lambda": 0.8019065021150349,
+      "tau": 0.65,
+      "validation_false_alarm_per_1000": 0.0866797589219205
+    },
+    {
+      "baseline_deferral_share": 0.23972602739726026,
+      "false_alarm_per_1000": 0.03117555213201807,
+      "fit_coverage_level": 0.76,
+      "lambda": 0.7874621118722387,
+      "tau": 0.65,
+      "validation_false_alarm_per_1000": 0.0415780966586802
+    },
+    {
+      "baseline_deferral_share": 0.2191780821917808,
+      "false_alarm_per_1000": 0.0846661422828177,
+      "fit_coverage_level": 0.78,
+      "lambda": 0.7758732340696184,
+      "tau": 0.6,
+      "validation_false_alarm_per_1000": 0.11693203742938836
+    },
+    {
+      "baseline_deferral_share": 0.19863013698630136,
+      "false_alarm_per_1000": 0.0390827538229447,
+      "fit_coverage_level": 0.8,
+      "lambda": 0.7578022628684216,
+      "tau": 0.6,
+      "validation_false_alarm_per_1000": 0.0412086496955711
+    },
+    {
+      "baseline_deferral_share": 0.1797945205479452,
+      "false_alarm_per_1000": 0.07016483338550718,
+      "fit_coverage_level": 0.82,
+      "lambda": 0.7182425642322502,
+      "tau": 0.55,
+      "validation_false_alarm_per_1000": 0.11105835839087544
+    },
+    {
+      "baseline_deferral_share": 0.15924657534246575,
+      "false_alarm_per_1000": 0.023162982465622275,
+      "fit_coverage_level": 0.84,
+      "lambda": 0.6688636020522386,
+      "tau": 0.55,
+      "validation_false_alarm_per_1000": 0.031056302488386235
+    },
+    {
+      "baseline_deferral_share": 0.1386986301369863,
+      "false_alarm_per_1000": 0.031331919915612697,
+      "fit_coverage_level": 0.86,
+      "lambda": 0.5987628073524522,
+      "tau": 0.5,
+      "validation_false_alarm_per_1000": 0.04704172862672127
+    },
+    {
+      "baseline_deferral_share": 0.11986301369863013,
+      "false_alarm_per_1000": 0.07889610742929277,
+      "fit_coverage_level": 0.88,
+      "lambda": 0.5153902738311404,
+      "tau": 0.45,
+      "validation_false_alarm_per_1000": 0.07741281048543171
+    },
+    {
+      "baseline_deferral_share": 0.09931506849315068,
+      "false_alarm_per_1000": 0.0974083804604355,
+      "fit_coverage_level": 0.9,
+      "lambda": 0.3923492793653761,
+      "tau": 0.4,
+      "validation_false_alarm_per_1000": 0.08277482577234253
+    }
+  ],
+  "window_w": 20
+}

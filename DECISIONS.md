@@ -307,3 +307,103 @@ Evidence: `docs/proofs/evidence/n1_natural_round.json` (written by `docs/proofs/
 - **Spend** (store ledgers; sandbox is recorded at $0, so all figures are lower bounds). N1 $3.8289 of the $5.00 ceiling: drafting N1-eval 0.2065 and N1-train 0.6826, plus the N1 run beyond P4's stages 2.9398 (fine-tune 2.6288, LLM 0.3110 incl. scoring N1-eval 0.0610). Project total since P4 $14.1952 of $19.50 (P4 4.2582, B2 1.6495, Gate B 0.2668, A5 4.1918, N1 3.8289; rounded to 4 d.p., A5 as recorded in `a5_chaos.json` (ledger 4.191885); exact total 14.195248). Correction: Gate B's ledger total is 0.2668 (drafting 0.1743 plus two scoring passes, 0.0925), not 0.22, so the $10.32 recorded in the N1 pre-registration was $10.37 (4 d.p.: 10.3664).
 - **Pending.** Gate B (n = 86) re-score of the N1 adapter as a post-hoc transfer number: needs a small paid run (one earlier Gate B pass cost about $0.05), not run, no number exists.
 - **Reading.** Naturally phrased training data moved the student from indistinguishable-from-base on Gate B (P4 adapter: 0.407 vs base 0.384, McNemar p 0.84) to significantly better than base on N1-eval (0.571 vs 0.296), but it stays below the 0.85 ratio bound. The two sets differ, so this is not a measured improvement. Teacher accuracy on both sets is inflated by construction (gold drafted by the teacher and kept only where its drafts agree), so the base and student numbers are the informative ones. One run, one seed.
+
+## 2026-10-13 (pre-registration, recorded BEFORE any calibration, test or burst item is scored): H3 certified router
+This commit's hash is what `distillery router signals|certify|evaluate --prereg-commit` checks: it must be an ancestor of HEAD and this text must contain each sealed sha256 below. Advisor-reviewed before commit. Nothing below changes after any calibration, test or burst item is scored.
+
+**What is certified.**
+- Adapter: N1, `7d6ce813…` (job `ftjob-6cfd065b…`), base Qwen/Qwen3-1.7B.
+- Serving path: Nebius Sandbox CPU, transformers bf16, greedy, max_new_tokens 160, merged adapter. This is the same path the hosted router uses.
+- Teacher: Nemotron 3 Super (`nvidia/nemotron-3-super-120b-a12b`), zero-shot, the canonical eval prompt.
+
+**Guarantee.**
+- With probability at least 1 − δ over the draw of the calibration set, the selective error of student-served answers is at most α, for traffic drawn from the calibration mix (Learn-then-Test, fixed-sequence binomial tests).
+- α = **0.08**, δ = **0.05**.
+
+**Derivation of α** (already-recorded numbers from the N1 run report only; no new data).
+- Teacher error: 10.0% on the 300 templated held-out (0.900), 4.1% on N1-eval (0.959), 2.0% on stress (0.98).
+- Weighted 0.50 / 0.25 / 0.25 plus 2 points: 0.0500 + 0.0103 + 0.0050 + 0.02 = 0.0853, **rounded down to 0.08**.
+- Disclosure: natural items survive drafting only when the teacher's drafts agree, which deflates teacher error on natural items. Calibration and test natural items pass the same filter, so α and the guarantee describe the same filtered mix.
+
+**Splits.**
+- **Fit** (already scored in earlier rounds; used only to fit the combiner, fix the grid and set the drift parameters; never for certification or any pass/fail number): held-out 300, stress 100, Gate B 86, N1-eval 98 = 584 rows, `signals_fit.json` sha256 `fe9cf67142f37c5c4f759b5c3b8faccc68dba4649655f12609c55d5665722247`. Regenerating them reproduced N1's recorded scores exactly (held-out 276/300, stress 66/100, N1-eval 56/98; criterion ±2 items, written before the run).
+- **Calibration:** n = 489, sha256 `fe725827586278074b8847a0aeaec85d548c928eb31d8ef700b78e42925db137` (templated 250 / natural 114 / stress 125).
+- **Test:** n = 490, sha256 `abc6e2943d3b68b0b4e513e7050de9690abf16d05a19a8bfbfe8860ab68de75d` (templated 250 / natural 115 / stress 125).
+- Natural fell 21 short of the 250 target: 300 written → 239 kept by drafting (38 disagree, 22 exec error, 1 no SQL; $0.686) → 229 mechanically confirmed against the author's blind reference SQL (10 rejected; `human_confirmed.json` sha256 `5b307813ba16b5f52ca6492a49908e0684bab09b02c785d78dec5c59377c9f30`, question file `094e5fc0…`).
+- How each kind was built: templated = fresh draws from the 10 training families, seed 20261012; stress = fresh `date_math` + `set_ops` draws, excluding the sealed 100; natural = written by a blind author from the schema and DB only, drafted by the teacher (k=3, temp 0.8, kept if all agree), mechanically confirmed. One pool per kind, split at random (seeded) into calibration and test, so the two are exchangeable.
+- **Overlap removed** (exact) against N1's 2,297 training questions (the split's train stage plus both round training files, incl. the 249 natural), dev, gate, stress, Gate B, N1-eval, and calibration vs test. Drops: templated 157 (train 101, gate 38, dev 18), stress 17 (sealed stress set), natural 0. Skeleton overlap is reported, not dropped: templated items share skeletons with training by construction (243 per split); natural and stress share none with training. Builder report: `router/splits.json` in the N1 run dir.
+
+**Signals and combiner (fixed now).**
+- `exec_ok`: the extracted SQL runs read-only with no error and returns ≥ 1 row.
+- `mean_logprob`: the mean token log-probability of the answer tokens, think block excluded.
+- `nn_sim`: the maximum cosine similarity to the same 2,297 training questions, Qwen3-Embedding-8B truncated to 1024 dims (first 1024 components, re-normalised).
+- **Combiner:** logistic regression (IRLS, L2 = 0.01) on standardised features, fitted on **fit only**: weights exec_ok 2.9737, mean_logprob 0.7096, nn_sim 0.6034, bias 1.2858. Model sha256 `5592a87b02131075dfd5a21c516604784e8c438a7dd7c3b73adf0ce6ccfb364c` (copy: `docs/proofs/evidence/h3_router_model.json`).
+- **Short-circuit:** if even exec_ok = 1 and logprob = 0 cannot reach λ̂ at this nn_sim, the request goes straight to the teacher. Decisions are identical with and without it.
+
+**Certification** (`distillery router certify --alpha 0.08 --delta 0.05`, calibration only).
+- Grid: thresholds at fit-split coverage 0.20, 0.22, …, 0.90, most to least conservative.
+- At each step p = BinomCDF(errors; n_selected, α); reject if p ≤ δ; stop at the first non-rejection. λ̂ = the last threshold that rejected; if none did, nothing is served by the student.
+- Sizing on the real fit signals (`scripts/h3_router_sizing.py`, 1,000 bootstrap pipelines of the 5-fold out-of-fold scores, evidence `docs/proofs/evidence/h3_router_sizing.json`): P(certification fails) 0.000; mean test coverage 0.575; mean test selective error 0.051; P(test point estimate > 0.08 | certified) 0.191; **P(W-C1 risk and coverage clauses pass) ≈ 0.78**. Certifying at a stricter internal α was simulated (0.07 → 0.82, 0.06 → 0.83, 0.05 → 0.73) and **not adopted**: the guarantee is stated at 0.08 and certifying at 0.08 is the honest test of it. The bootstrap resamples about 290 items per half with replacement, so it overstates test variance somewhat.
+
+**Test, scored ONCE.** No refit, recertify or threshold change after any test item is scored. The student and the teacher are both scored on every test item.
+
+**W-C1 (pass = all three):**
+1. Selective error point estimate on test ≤ 0.08.
+2. Test coverage ≥ 0.30 (a vacuous pass is FAIL).
+3. System accuracy (student where served, teacher otherwise) ≥ teacher-only accuracy on test − 0.01.
+Also reported: the Clopper–Pearson 95% upper bound on selective error; system accuracy vs 8-shot Super (B2 S1, 0.933 on held-out), context only.
+
+**W-C2 (pass = both):** let E = test items of kind natural or stress the student gets wrong.
+1. At least 80% of E are deferred to the teacher.
+2. The one-sided 95% Clopper–Pearson **lower** bound on that deferred share **exceeds** the deferral rate on the student's correct natural + stress test items.
+Reported, not gated: counts per family; the stress routing share; natural-phrasing errors deferred vs served wrong.
+
+**W-D drift.**
+- **Burst:** 30 questions, fixed before any scoring: a new product line, credit grants. Written by a blind author from the schema and DB only, against a copy of the billing DB plus one new table `credit_grants` (376 seeded rows, `build_extension.py`, Random(20261012)). Every reference SQL needs that table. No N1 training, natural, Gate B or N1-eval question mentions credits (0 exact, 0 skeleton overlap). sha256:
+  - extended DB `e50f7b39e1a39065c0fd1922f9bc4b6c1aa719dca72b48d2d89d980ed15a50cd`
+  - questions `447103a535175859a3e9cee591e7cdcac438f11f89f06ca75161c3534b2878b2`
+  - references `cfe2526a3bba767697c563caeb30aaf4de03d6689919d74b48e11b687aa6fb0c`
+  - During the burst the prompt's DDL includes `extension.sql` and SQL runs on the extended DB. Scored by `distillery router signals --split burst` (refuses unless this commit holds all three hashes); student and teacher answer every burst item, so the replay is free.
+- **Detector (fixed now; evidence `docs/proofs/evidence/h3_drift_params.json`, `scripts/h3_drift_params.py`, fit split only):**
+  - (a) deferral share over the last **W = 20** requests ≥ **τ**, armed after **20** requests. τ is read from the table below at the **certified grid level**: `levels[i]` in `cert.json`, where `i` is the position of λ̂ in `cert.json`'s `grid` (by position, never by float matching); each τ is the smallest value with ≤ **0.1 false rollbacks per 1,000** in-distribution fit requests (iid resampling; the fit rows are stored grouped by source, so a block bootstrap would invent runs of deferrals).
+
+    | certified fit-coverage level | τ |
+    |---|---|
+    | 0.20–0.32 | none feasible: W-D is FAIL (not run) |
+    | 0.34–0.40 | 1.00 |
+    | 0.42–0.48 | 0.95 |
+    | 0.50–0.54 | 0.90 |
+    | 0.56–0.60 | 0.85 |
+    | 0.62–0.64 | 0.80 |
+    | 0.66–0.68 | 0.75 |
+    | 0.70–0.72 | 0.70 |
+    | 0.74–0.76 | 0.65 |
+    | 0.78–0.80 | 0.60 |
+    | 0.82–0.84 | 0.55 |
+    | 0.86 | 0.50 |
+    | 0.88 | 0.45 |
+    | 0.90 | 0.40 |
+
+  - (b) the teacher shadows **10%** of student-served requests; **≥ 10** audit disagreements in the last **50** audited answers trip it (P(Binomial(50, 0.08) ≥ 10) = 0.0056 per window; the earlier draft's k = 2 would give 0.917 per window). In this 230-request replay only about 10–13 answers are audited, so (b) essentially cannot trip and **W-D is decided by detector (a) alone**; (b) is there for long-run hosted traffic.
+  - Either one trips: CERTIFIED → ROLLBACK → TEACHER. Re-distil is queued, not run. Returning to CERTIFIED needs a new gate.
+- **Replay (one pre-registered run, after `router certify`):** with `R = .distillery/n1live/runs/sql-gated-20261004T155134Z-66ff347c/router`,
+  `uv run python scripts/drift_sim.py --fit-rows $R/signals_fit.json --in-dist-rows $R/signals_test.json --burst-rows $R/signals_burst.json --router-dir $R --target-fa 0.1 --tau <τ from the table> --window 20 --min-requests 20 --audit-rate 0.10 --audit-window 50 --audit-k 10 --n-before 200 --n-burst 30 --seed 20261013 --out docs/proofs/evidence/drift_burst.json`
+  (λ̂ comes from `$R/cert.json`; rows are scored with `$R/model.json`). In-distribution rows are the 490 scored test rows and burst rows the 30 scored burst rows; the simulator draws both **with replacement**, so some burst questions repeat and some are absent in the 30-request burst. Audits replay as disagree iff the recorded student answer is wrong. The command was smoke-tested on fit rows before this commit.
+- **Pass (all):**
+  1. No rollback before the first burst request (a false alarm is FAIL).
+  2. Rollback within **N = 25** requests of the first burst request, counting it as 1.
+  3. Wrong student answers served during the burst before rollback ≤ **3**.
+  If certification fails (no λ̂) or the certified level has no feasible τ, W-D is FAIL.
+- Simulation behind N and the bound (synthetic bursts, 300 seeds, level 0.56 / τ 0.85): burst deferral 1.0 → median 14, p95 17, 0 wrong; 0.95 → p95 19, p95 wrong 3; 0.9 → p95 23, 7/300 missed; 0.8 → 105/300 missed. Pre-burst false alarms 3/300 per 200-request prefix. So W-D passes if the router defers about ≥ 90–95% of burst requests and fails otherwise; it tests the router's out-of-distribution deferral plus the state machine.
+- Reported, not gated: 0 student answers after rollback (holds by construction); the same replay over seeds 0–299 (latency quantiles, miss rate, false alarms); the false-alarm count on a 1,000-request test-row stream without a burst; a second scenario whose burst is the fit family with the highest student error, **stress `date_math`** (fit error 22/62 = 0.355), drawn from the test rows of that family.
+
+**Recorded per item:** output sha256, signals, score, route, correctness, so the served path is reproducible.
+
+**Disclosures.**
+- The guarantee covers the calibration mix only, not arbitrary traffic. One adapter, one calibration draw.
+- Fit sets were used in earlier gates.
+- N1 scores 0.66 on stress, so stress is **not** an unseen family for N1; no "unseen family" claim is made.
+- The teacher touched the natural cal/test items during drafting (k=3, temp 0.8, drafting prompt). Teacher-only accuracy on test comes from a separate zero-shot scoring pass and on natural items is near 1.0 by construction.
+- Gate B re-score of N1 was done without new calls and is unpaired (`docs/proofs/evidence/n1_gate_b_unpaired.json`: 66/86 = 0.767); it is a fit-split number, not an H3 result.
+
+**Spend pre-flight** (approved 2026-10-13 as step C): student generation on cal 489 + test 490 + burst 30 on Sandbox CPU (sandbox seconds unpriced, recorded at $0), embeddings ≈ $0.0005, teacher zero-shot on test 490 + burst 30 ≈ $0.33. Total ≈ $0.33 of the remaining $3.12 under the global ledger (committed $16.38 incl. the $1.50 hosted reserve, cap $19.50). Each `router signals` call carries a run-total cap (`--budget-usd`) of the run's ledger total plus $0.40.

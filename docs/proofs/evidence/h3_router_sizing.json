@@ -1,0 +1,49 @@
+{
+  "delta": 0.05,
+  "format": "distillery-h3-router-sizing-v1",
+  "inputs": {
+    "n_fit": 584,
+    "signals_fit_sha256": "fe9cf67142f37c5c4f759b5c3b8faccc68dba4649655f12609c55d5665722247"
+  },
+  "n_cal": 489,
+  "n_test": 490,
+  "note": "the system-accuracy clause of W-C1 is not simulated (it needs teacher outcomes on test)",
+  "reps": 1000,
+  "results": [
+    {
+      "cert_alpha": 0.08,
+      "mean_test_coverage_given_cert": 0.5753816326530619,
+      "mean_test_risk_given_cert": 0.05106592828951909,
+      "p_cert_fail": 0.0,
+      "p_test_risk_over_bar_given_cert": 0.191,
+      "p_wc1_risk_and_coverage_pass": 0.782
+    },
+    {
+      "cert_alpha": 0.07,
+      "mean_test_coverage_given_cert": 0.5150714285714288,
+      "mean_test_risk_given_cert": 0.040828956156004036,
+      "p_cert_fail": 0.0,
+      "p_test_risk_over_bar_given_cert": 0.105,
+      "p_wc1_risk_and_coverage_pass": 0.82
+    },
+    {
+      "cert_alpha": 0.06,
+      "mean_test_coverage_given_cert": 0.45760612244897947,
+      "mean_test_risk_given_cert": 0.030506777314465158,
+      "p_cert_fail": 0.0,
+      "p_test_risk_over_bar_given_cert": 0.043,
+      "p_wc1_risk_and_coverage_pass": 0.827
+    },
+    {
+      "cert_alpha": 0.05,
+      "mean_test_coverage_given_cert": 0.39835918367346945,
+      "mean_test_risk_given_cert": 0.023863842821884532,
+      "p_cert_fail": 0.0,
+      "p_test_risk_over_bar_given_cert": 0.023,
+      "p_wc1_risk_and_coverage_pass": 0.728
+    }
+  ],
+  "seed": 20261013,
+  "wc1_bar": 0.08,
+  "wc1_min_coverage": 0.3
+}
