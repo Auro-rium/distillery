@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../../api/client";
-import type { GatewaySavings, GatewayStatus } from "../../api/types";
+import type { GatewayDrift, GatewaySavings, GatewayStatus } from "../../api/types";
 
 export type Loaded<T> = { state: "loading" } | { state: "error"; error: unknown } | { state: "ok"; data: T };
 
@@ -29,10 +29,19 @@ function useReread<T>(fn: () => Promise<T>): [Loaded<T>, () => void] {
   return [res, useCallback(() => load(true), [load])];
 }
 
-/** GET /api/gateway/status and GET /api/gateway/savings; `refresh` re-reads both after a question was asked. */
-export function useGateway(): { status: Loaded<GatewayStatus>; savings: Loaded<GatewaySavings>; refresh: () => void } {
+/**
+ * GET /api/gateway/status, /savings and /drift; `refresh` re-reads all three after a question was asked (a rollback can
+ * happen on any question, so the drift guard is re-read with the rest).
+ */
+export function useGateway(): {
+  status: Loaded<GatewayStatus>;
+  savings: Loaded<GatewaySavings>;
+  drift: Loaded<GatewayDrift>;
+  refresh: () => void;
+} {
   const [status, refreshStatus] = useReread(api.gatewayStatus);
   const [savings, refreshSavings] = useReread(api.gatewaySavings);
-  const refresh = useCallback(() => { refreshStatus(); refreshSavings(); }, [refreshStatus, refreshSavings]);
-  return { status, savings, refresh };
+  const [drift, refreshDrift] = useReread(api.gatewayDrift);
+  const refresh = useCallback(() => { refreshStatus(); refreshSavings(); refreshDrift(); }, [refreshStatus, refreshSavings, refreshDrift]);
+  return { status, savings, drift, refresh };
 }

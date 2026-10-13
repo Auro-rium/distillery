@@ -19,6 +19,7 @@ from fastapi.testclient import TestClient
 from server_helpers import make_settings, scripted_executor, seed_finished_run
 from test_gateway import FakeUpstream, student_for, write_router
 
+from distillery.drift import DriftParams, RouteEvent
 from distillery.server import create_app
 from distillery.server.gateway_config import GatewaySettings
 
@@ -71,6 +72,20 @@ NULLABLE: dict[str, set[str]] = {
     "gateway_savings": {"saved_pct", "saved_pct_display", "student_usd_per_1k", "student_cost_usd"},
     # a student-served answer: no gateway error, no summary failure
     "acme_ask": {"answer.error", "summary_error", "distillery.error"},
+    # the drift guard: everything but the audit counters is null while it is not configured
+    # (enabled: false). window.deferral_share is null while the window is empty (right after a
+    # rollback the windows restart empty); events[].detector is null for a recertify event.
+    "gateway_drift": {
+        "state",
+        "allows_student",
+        "reason",
+        "detector",
+        "params",
+        "cert_sha256",
+        "window",
+        "window.deferral_share",
+        "events[].detector",
+    },
 }
 
 
@@ -155,6 +170,9 @@ def responses(tmp_path_factory: pytest.TempPathFactory) -> dict[str, Any]:
         gateway=GatewaySettings(
             router_dir=write_router(tmp / "router"), upstream=FakeUpstream(), nn_sim=nn,
             serving_price_file=None, ip_salt="s",
+            drift=DriftParams(
+                window_w=4, tau=0.75, audit_rate=0.0, audit_window_m=4, audit_k=2, min_requests=4
+            ),
         ),
     )  # fmt: skip
     gate = threading.Event()
@@ -211,6 +229,18 @@ def responses(tmp_path_factory: pytest.TempPathFactory) -> dict[str, Any]:
             r = c.get(path)
             assert r.status_code == 200, (name, r.text)
             out[name] = r.json()
+        # a drift burst: requests in a row go to the teacher until the guard rolls back (the same
+        # events the live gateway persists); the state, params and event log are then real
+        gw = app.state.gateway
+        burst: list[Any] = []
+        n = 0
+        while not burst:
+            n += 1
+            burst = gw.drift.observe(RouteEvent("teacher", f"req_burst_{n}"))
+        gw._persist_drift(burst)  # noqa: SLF001
+        r = c.get("/api/gateway/drift")
+        assert r.status_code == 200, r.text
+        out["gateway_drift"] = r.json()
     return out
 
 
@@ -229,6 +259,7 @@ ENDPOINTS = [
     "gateway_status",
     "gateway_savings",
     "acme_ask",
+    "gateway_drift",
 ]
 
 

@@ -86,3 +86,18 @@
 .pg .pg-basis dl { margin: var(--space-2) 0 0; display: grid; gap: var(--space-1); }
 .pg .pg-basis dt { font-weight: 600; margin-top: var(--space-2); }
 .pg .pg-basis dd { margin: 0; color: var(--ink-2); overflow-wrap: anywhere; }
+
+/* ---------- drift guard panel ---------- */
+.pg .pg-drift .pg-st-list { margin-bottom: var(--space-3); }
+.pg .pg-dr-sha { grid-column: 1 / -1; }
+.pg .pg-dr-sha dd { font: 400 .8rem/1.4 var(--font-mono); overflow-wrap: anywhere; word-break: break-all; }
+.pg .pg-dr-off { margin: 0 0 var(--space-2); font-weight: 600; }
+.pg .pg-dr-note { margin: var(--space-3) 0 0; font-size: .84rem; overflow-wrap: anywhere; }
+.pg .pg-dr-log { margin-top: var(--space-2); min-width: 0; }
+.pg .pg-dr-none { margin: 0; font-size: .88rem; }
+.pg .pg-dr-events { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-2); }
+.pg .pg-dr-event { display: grid; gap: var(--space-1); padding-top: var(--space-2); border-top: 1px solid var(--line); min-width: 0; }
+.pg .pg-dr-event > * { overflow-wrap: anywhere; min-width: 0; }
+.pg .pg-dr-time { font-size: .8rem; color: var(--ink-2); }
+.pg .pg-dr-kind { font-weight: 600; }
+.pg .pg-dr-det { font-size: .84rem; }

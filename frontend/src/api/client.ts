@@ -1,5 +1,5 @@
 import type {
-  AcmeAskResponse, Config, Evidence, ExampleKind, ExperimentsResult, ExamplesResult, GatewaySavings, GatewayStatus, Health,
+  AcmeAskResponse, Config, Evidence, ExampleKind, ExperimentsResult, ExamplesResult, GatewayDrift, GatewaySavings, GatewayStatus, Health,
   HumansetDrafts, NewRunBody, PlaygroundResponse, Report, RunDetail, RunSummary, Tree,
 } from "./types";
 
@@ -114,6 +114,8 @@ export const api = {
     request<PlaygroundResponse>("/playground", post({ question })),
   gatewayStatus: () => request<GatewayStatus>("/gateway/status"),
   gatewaySavings: () => request<GatewaySavings>("/gateway/savings"),
+  /** The drift guard: state, detector parameters, window and audit counters, recent events. Read-only. */
+  gatewayDrift: () => request<GatewayDrift>("/gateway/drift"),
   /** The Acme analyst: the server runs the question through its own gateway (certified specialist or teacher). */
   acmeAsk: (question: string) => request<AcmeAskResponse>("/acme/ask", post({ question })),
 };

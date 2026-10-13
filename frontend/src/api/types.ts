@@ -445,6 +445,57 @@ export interface GatewaySavings {
   passthrough_usd: number;
 }
 
+/** Detector parameters of the drift guard, exactly as configured (docs/API_CONTRACT.md, drift guard). */
+export interface DriftParams {
+  window_w: number;
+  tau: number;
+  audit_rate: number;
+  audit_window_m: number;
+  audit_k: number;
+  min_requests: number;
+}
+
+/** One row of `drift_events`; `details` is the detector's own record and differs by `kind`. */
+export interface DriftEventRow {
+  id: number;
+  created_at: string;
+  state_from: string;
+  state_to: string;
+  /** rollback | teacher_only | redistill_queued | recertify */
+  kind: string;
+  detector: string | null;
+  details: Record<string, unknown>;
+}
+
+/**
+ * GET /api/gateway/drift (public, read-only): the drift guard's state, detector parameters, window and audit
+ * counters, and the last 20 events (newest first). While the guard is not configured `enabled` is false and
+ * state, params and window are null. The window and audit counters are in memory (a restart empties them).
+ */
+export interface GatewayDrift {
+  enabled: boolean;
+  state: "CERTIFIED" | "ROLLBACK" | "TEACHER" | null;
+  allows_student: boolean | null;
+  reason: string | null;
+  detector: string | null;
+  params: DriftParams | null;
+  cert_sha256: string | null;
+  rolled_back_cert_sha256: string[];
+  window: {
+    requests_seen: number;
+    window_requests: number;
+    window_deferred: number;
+    /** Fraction in [0, 1], or null while the window is empty. */
+    deferral_share: number | null;
+    audits_in_window: number;
+    audit_disagreements: number;
+    armed: boolean;
+  } | null;
+  audits: { audits: number; inconclusive: number; skipped_cap: number; skipped_error: number; spent_usd: number };
+  events: DriftEventRow[];
+  note: string;
+}
+
 /** The `distillery` object the gateway puts on every skill response (`served_by` is the truth). */
 export interface GatewayInfo {
   served_by: "student" | "teacher" | "passthrough" | string;

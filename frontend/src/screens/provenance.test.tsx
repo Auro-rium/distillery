@@ -50,7 +50,7 @@ describe("render provenance: numbers on screen come from the contract payloads",
   });
   it("acme analyst", async () => {
     stubFetch(contractFetch());
-    await check("/playground", /Savings so far/, [contract.gatewayStatus, contract.gatewaySavings], [
+    await check("/playground", /Savings so far/, [contract.gatewayStatus, contract.gatewaySavings, contract.gatewayDrift], [
       { pattern: /\d+ \/ 500/g, why: "character counter against the 500-character input limit (input length / UI constant)" },
     ]);
   });

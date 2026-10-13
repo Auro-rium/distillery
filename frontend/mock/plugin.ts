@@ -121,8 +121,15 @@ export function mockApi(): Plugin {
           return send(res, 200, {
             certified: false, reason: NOTE, lambda: null, coverage: null, selective_risk: null, alpha: null, delta: null,
             model_sha256: null, prereg_commit: null, similarity_index: false, teacher_model: null, passthrough_models: [],
-            passthrough_max_tokens: 256, student: "disabled",
+            passthrough_max_tokens: 256, student: "disabled", drift: { enabled: false, state: null },
             today: { day: "mock", served_by: {}, refused: 0, student_calls: 0, student_daily_max: 0 },
+          });
+        if (p === "/gateway/drift")
+          return send(res, 200, {
+            enabled: false, state: null, allows_student: null, reason: null, detector: null, params: null,
+            cert_sha256: null, rolled_back_cert_sha256: [], window: null,
+            audits: { audits: 0, inconclusive: 0, skipped_cap: 0, skipped_error: 0, spent_usd: 0 },
+            events: [], note: NOTE,
           });
         if (p === "/gateway/savings")
           return send(res, 200, {

@@ -4,6 +4,7 @@ import type { AcmeAskResponse } from "../../api/types";
 import { ApiErrorState } from "../../components";
 import { Button, Card, Field, Spinner, Textarea } from "../../ui";
 import { AnswerCard } from "./AnswerCard";
+import { DriftPanel } from "./DriftPanel";
 import { Failure } from "./Failure";
 import { Savings } from "./Savings";
 import { StatusStrip } from "./StatusStrip";
@@ -41,7 +42,7 @@ export default function Playground() {
   const [busy, setBusy] = useState(false);
   const [out, setOut] = useState<AcmeAskResponse | null>(null);
   const [err, setErr] = useState<unknown>(null);
-  const { status, savings, refresh } = useGateway();
+  const { status, savings, drift, refresh } = useGateway();
 
   async function submit(ev?: FormEvent) {
     ev?.preventDefault();
@@ -114,6 +115,9 @@ export default function Playground() {
           {status.state === "loading" && <Spinner lines={3} label="Loading the gateway status" />}
           {status.state === "error" && <ApiErrorState title="Could not load the gateway status" error={status.error} />}
           {status.state === "ok" && <StatusStrip s={status.data} />}
+          {drift.state === "loading" && <Spinner lines={3} label="Loading the drift guard" />}
+          {drift.state === "error" && <ApiErrorState title="Could not load the drift guard" error={drift.error} />}
+          {drift.state === "ok" && <DriftPanel d={drift.data} />}
           {savings.state === "loading" && <Spinner lines={3} label="Loading the savings" />}
           {savings.state === "error" && <ApiErrorState title="Could not load the savings" error={savings.error} />}
           {savings.state === "ok" && <Savings s={savings.data} />}

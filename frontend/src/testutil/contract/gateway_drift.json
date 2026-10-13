@@ -1,0 +1,100 @@
+{
+  "allows_student": false,
+  "audits": {
+    "audits": 0,
+    "inconclusive": 0,
+    "skipped_cap": 0,
+    "skipped_error": 0,
+    "spent_usd": 0.0
+  },
+  "cert_sha256": "2b85cf5ea14b5984aae07a3576c2e1a2dd2f9895ebbb7094cdd1115cb73e814d",
+  "detector": "deferral_rate",
+  "enabled": true,
+  "events": [
+    {
+      "created_at": "2026-10-13T02:30:51.358271+00:00",
+      "details": {
+        "cert_sha256": "2b85cf5ea14b5984aae07a3576c2e1a2dd2f9895ebbb7094cdd1115cb73e814d",
+        "note": "queued only: nothing re-distils automatically",
+        "queued": true
+      },
+      "detector": "deferral_rate",
+      "id": 3,
+      "kind": "redistill_queued",
+      "state_from": "TEACHER",
+      "state_to": "TEACHER"
+    },
+    {
+      "created_at": "2026-10-13T02:30:51.357136+00:00",
+      "details": {
+        "cert_sha256": "2b85cf5ea14b5984aae07a3576c2e1a2dd2f9895ebbb7094cdd1115cb73e814d"
+      },
+      "detector": "deferral_rate",
+      "id": 2,
+      "kind": "teacher_only",
+      "state_from": "ROLLBACK",
+      "state_to": "TEACHER"
+    },
+    {
+      "created_at": "2026-10-13T02:30:51.355335+00:00",
+      "details": {
+        "audit": {
+          "audited": 0,
+          "disagreements": 0,
+          "k": 2,
+          "window_m": 4
+        },
+        "cert_sha256": "2b85cf5ea14b5984aae07a3576c2e1a2dd2f9895ebbb7094cdd1115cb73e814d",
+        "deferral": {
+          "deferred": 3,
+          "min_requests": 4,
+          "share": 0.75,
+          "tau": 0.75,
+          "window_requests": 4,
+          "window_w": 4
+        },
+        "fired": [
+          "deferral_rate"
+        ],
+        "params": {
+          "audit_k": 2,
+          "audit_rate": 0.0,
+          "audit_window_m": 4,
+          "min_requests": 4,
+          "tau": 0.75,
+          "window_w": 4
+        },
+        "request_id": "req_burst_3",
+        "requests_seen": 4
+      },
+      "detector": "deferral_rate",
+      "id": 1,
+      "kind": "rollback",
+      "state_from": "CERTIFIED",
+      "state_to": "ROLLBACK"
+    }
+  ],
+  "note": "window and audit counters are in memory (reset by a restart); the state and events are persisted",
+  "params": {
+    "audit_k": 2,
+    "audit_rate": 0.0,
+    "audit_window_m": 4,
+    "min_requests": 4,
+    "tau": 0.75,
+    "window_w": 4
+  },
+  "reason": "rollback: drift detected \u2192 teacher (deferral_rate)",
+  "rolled_back_cert_sha256": [
+    "2b85cf5ea14b5984aae07a3576c2e1a2dd2f9895ebbb7094cdd1115cb73e814d"
+  ],
+  "state": "TEACHER",
+  "window": {
+    "armed": false,
+    "audit_disagreements": 0,
+    "audits_in_window": 0,
+    "deferral_share": null,
+    "requests_seen": 0,
+    "window_deferred": 0,
+    "window_requests": 0
+  }
+}

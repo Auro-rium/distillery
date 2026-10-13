@@ -4,6 +4,7 @@ import acmeAsk from "./contract/acme_ask.json";
 import config from "./contract/config.json";
 import examples from "./contract/examples.json";
 import examplesHeaders from "./contract/examples_headers.json";
+import gatewayDrift from "./contract/gateway_drift.json";
 import gatewaySavings from "./contract/gateway_savings.json";
 import gatewayStatus from "./contract/gateway_status.json";
 import health from "./contract/health.json";
@@ -13,7 +14,7 @@ import run from "./contract/run.json";
 import runs from "./contract/runs.json";
 import tree from "./contract/tree.json";
 
-export const contract = { acmeAsk, config, examples, examplesHeaders, gatewaySavings, gatewayStatus, health, replay, report, run, runs, tree };
+export const contract = { acmeAsk, config, examples, examplesHeaders, gatewayDrift, gatewaySavings, gatewayStatus, health, replay, report, run, runs, tree };
 
 const json = (b: unknown, status = 200, h: Record<string, string> = {}) =>
   new Response(JSON.stringify(b), { status, headers: h });
@@ -29,6 +30,7 @@ export function contractFetch(over: Overrides = {}): (url: string, init?: Reques
     if (u === "/health") return ok(c.health);
     if (u === "/config") return ok(c.config);
     if (u === "/gateway/status") return ok(c.gatewayStatus);
+    if (u === "/gateway/drift") return ok(c.gatewayDrift);
     if (u === "/gateway/savings") return ok(c.gatewaySavings);
     if (u === "/acme/ask") return ok(c.acmeAsk);
     if (u === "/replay") return ok(c.replay);

@@ -12,17 +12,20 @@ afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 const A = contract.acmeAsk;
 const ST = contract.gatewayStatus;
 const SV = contract.gatewaySavings;
+const DR = contract.gatewayDrift;
 
 interface Routes {
   status?: () => Response;
   savings?: () => Response;
+  drift?: () => Response;
   ask?: (body: { question: string }) => Response;
 }
-/** The three endpoints the screen reads; each one defaults to the generated contract fixture. */
+/** The four endpoints the screen reads; each one defaults to the generated contract fixture. */
 function stub(r: Routes = {}) {
   return stubFetch((url, init) => {
     if (url.endsWith("/gateway/status")) return r.status ? r.status() : json(ST);
     if (url.endsWith("/gateway/savings")) return r.savings ? r.savings() : json(SV);
+    if (url.endsWith("/gateway/drift")) return r.drift ? r.drift() : json(DR);
     if (url.endsWith("/acme/ask")) return r.ask ? r.ask(JSON.parse(String(init?.body))) : json(A);
     return json({ error: "not_found", message: url }, 404);
   });
@@ -105,7 +108,7 @@ describe("the question box", () => {
   });
   it("says a request is running while it runs, and Ask is busy", async () => {
     let done!: (r: Response) => void;
-    stubFetch((u) => (u.endsWith("/acme/ask") ? new Promise<Response>((r) => { done = r; }) as unknown as Response : u.endsWith("/status") ? json(ST) : json(SV)));
+    stubFetch((u) => (u.endsWith("/acme/ask") ? new Promise<Response>((r) => { done = r; }) as unknown as Response : u.endsWith("/status") ? json(ST) : u.endsWith("/drift") ? json(DR) : json(SV)));
     await ask();
     const btn = screen.getByRole("button", { name: "Ask" }) as HTMLButtonElement;
     await waitFor(() => expect(btn.disabled).toBe(true));
@@ -148,7 +151,7 @@ describe("an answer served by the certified student", () => {
       { pattern: /\d+ \/ 500/g, why: "character counter against the 500-character input limit" },
       { pattern: /(?<=\s)08(?=\s)/g, why: "tail of the response value $0.001408 left after the checker removed the server display string $0.0014 (a substring of it)" },
     ];
-    expect(unexplained(visibleText(container), [A, ST, SV], allow)).toEqual([]);
+    expect(unexplained(visibleText(container), [A, ST, SV, DR], allow)).toEqual([]);
   });
 });
 
@@ -247,7 +250,7 @@ describe("failures are told apart, and none of them is an empty answer", () => {
     expect(a.textContent).toContain("upstream_unavailable");
     expect(a.textContent).toContain("no upstream model provider is configured");
     cleanup();
-    vi.stubGlobal("fetch", vi.fn((u: string) => (u.endsWith("/acme/ask") ? Promise.reject(new TypeError("Failed to fetch")) : Promise.resolve(json(u.endsWith("/status") ? ST : SV)))));
+    vi.stubGlobal("fetch", vi.fn((u: string) => (u.endsWith("/acme/ask") ? Promise.reject(new TypeError("Failed to fetch")) : Promise.resolve(json(u.endsWith("/status") ? ST : u.endsWith("/drift") ? DR : SV)))));
     await ask();
     expect((await screen.findByRole("alert")).textContent).toContain("network");
   });
@@ -268,7 +271,8 @@ describe("the savings counter", () => {
     open();
     await screen.findByText(/Savings so far/);
     expect(screen.getAllByText(SV.saved_display).length).toBeGreaterThan(0);
-    expect(screen.getByText(SV.actual_display)).toBeTruthy();
+    const sv = within(document.querySelector(".pg-savings") as HTMLElement);
+    expect(sv.getByText(SV.actual_display)).toBeTruthy();
     expect(screen.getAllByText(SV.teacher_only_display).length).toBeGreaterThan(0);
     expect(screen.getByText(SV.saved_pct_display!)).toBeTruthy();
     expect(screen.getByText("student serving cost: pending H1")).toBeTruthy();
@@ -312,6 +316,6 @@ describe("the page renders no number the API did not send", () => {
     await screen.findByText(/Savings so far/);
     await screen.findByText("Gateway");
     const allow = [{ pattern: /\d+ \/ 500/g, why: "character counter against the 500-character input limit" }];
-    expect(unexplained(visibleText(container), [ST, SV], allow)).toEqual([]);
+    expect(unexplained(visibleText(container), [ST, SV, DR], allow)).toEqual([]);
   });
 });
