@@ -94,7 +94,26 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--n-streams", type=int, default=DEFAULT_N_STREAMS)
     p.add_argument("--block-len", type=int, default=DEFAULT_BLOCK_LEN)
     p.add_argument("--seed", type=int, default=0)
+    p.add_argument(
+        "--pass-within", type=int, help="verdict: pass needs a rollback within N burst requests"
+    )
+    p.add_argument(
+        "--max-wrong-during-burst", type=int, help="verdict: at most K wrong answers in the burst"
+    )
     return p
+
+
+def verdict(burst: dict[str, Any], n: int, max_wrong: int) -> dict[str, Any]:
+    """The pre-registered W-D rule: no false alarm before the burst, a rollback within ``n``
+    burst requests (the first one counts as 1) and at most ``max_wrong`` wrong student answers
+    served during the burst."""
+    lat = burst["detection_latency_requests"]
+    clauses = {
+        "no_false_alarm": burst["false_alarms_before_burst"] == 0,
+        "rolled_back_within_n": lat is not None and lat <= n,
+        "wrong_during_burst_ok": burst["wrong_student_answers_served_during_burst"] <= max_wrong,
+    }
+    return {"n": n, "max_wrong_during_burst": max_wrong, **clauses, "pass": all(clauses.values())}
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -153,6 +172,10 @@ def main(argv: list[str] | None = None) -> int:
                 "window already holds k disagreements; keep it small",
             },
         }
+        if (a.pass_within is None) != (a.max_wrong_during_burst is None):
+            raise DriftSimError("--pass-within and --max-wrong-during-burst go together")
+        if a.pass_within is not None:
+            doc["verdict"] = verdict(burst_report, a.pass_within, a.max_wrong_during_burst)
         write_new_json(a.out, doc)
     except (DriftSimError, DriftError, RouterRefusal, OSError, ValueError, KeyError) as exc:
         print(f"error: {exc}", file=sys.stderr)

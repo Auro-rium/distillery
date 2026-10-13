@@ -493,14 +493,14 @@ KEYS: dict[str, dict[str, Any]] = {
         "claim": "A burst of off-distribution traffic trips the drift guard and rolls the gateway "
         "back to the teacher.",
         "file": "drift_burst",
-        "pass": "burst.rolled_back",
+        "pass": "verdict.pass",
         "value": "rolled back by {detector} after {latency} burst requests; {wrong} wrong "
-        "student answers served before the rollback, {after} after it, {false} false alarms "
-        "before the burst",
+        "student answers served during the burst, {after} after the rollback, {false} false "
+        "alarms before the burst",
         "value_keys": {
             "detector": "burst.detector",
             "latency": "burst.detection_latency_requests",
-            "wrong": "burst.wrong_student_answers_served_before_rollback",
+            "wrong": "burst.wrong_student_answers_served_during_burst",
             "after": "burst.student_answers_served_after_rollback",
             "false": "burst.false_alarms_before_burst",
         },

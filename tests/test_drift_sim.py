@@ -357,3 +357,41 @@ def test_cli_scores_rows_with_a_router_dir_and_given_tau(tmp_path: Path) -> None
     assert doc["calibration"] is None and doc["tau_source"].startswith("given")
     assert doc["inputs"]["lambda"] == 0.8
     assert doc["burst"]["rolled_back"]
+
+
+def test_cli_verdict_applies_the_preregistered_rule(tmp_path: Path) -> None:
+    fit = _write(tmp_path / "fit.json", rows(600, 0.5))
+    burst = _write(tmp_path / "burst.json", rows(100, 1.0, seed=2))
+    base = [
+        "--fit-rows", str(fit), "--burst-rows", str(burst), "--window", "40", "--target-fa", "2",
+        "--tau", "0.9", "--audit-rate", "0.1", "--n-before", "200", "--n-burst", "100",
+        "--seed", "5",
+    ]  # fmt: skip
+    out = tmp_path / "v.json"
+    assert script.main([*base, "--pass-within", "60", "--max-wrong-during-burst", "3",
+                        "--out", str(out)]) == 0  # fmt: skip
+    doc = json.loads(out.read_text())
+    lat = doc["burst"]["detection_latency_requests"]
+    v = doc["verdict"]
+    assert v["n"] == 60 and v["rolled_back_within_n"] == (lat is not None and lat <= 60)
+    assert v["pass"] == (v["no_false_alarm"] and v["rolled_back_within_n"]
+                         and v["wrong_during_burst_ok"])  # fmt: skip
+    assert "verdict" not in json.loads(_run_plain(base, tmp_path / "p.json"))
+    assert script.main([*base, "--pass-within", "5", "--out", str(tmp_path / "x.json")]) == 2
+
+
+def _run_plain(base: list[str], out: Path) -> str:
+    assert script.main([*base, "--out", str(out)]) == 0
+    return out.read_text()
+
+
+def test_verdict_clauses() -> None:
+    rep = {"detection_latency_requests": 25, "false_alarms_before_burst": 0,
+           "wrong_student_answers_served_during_burst": 3}  # fmt: skip
+    assert script.verdict(rep, 25, 3)["pass"]
+    assert not script.verdict({**rep, "detection_latency_requests": 26}, 25, 3)["pass"]
+    assert not script.verdict({**rep, "detection_latency_requests": None}, 25, 3)["pass"]
+    assert not script.verdict({**rep, "false_alarms_before_burst": 1}, 25, 3)["pass"]
+    assert not script.verdict({**rep, "wrong_student_answers_served_during_burst": 4}, 25, 3)[
+        "pass"
+    ]

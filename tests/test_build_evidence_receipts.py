@@ -30,6 +30,10 @@ _spec = importlib.util.spec_from_file_location("build_evidence", ROOT / "scripts
 assert _spec and _spec.loader
 be = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(be)
+_dspec = importlib.util.spec_from_file_location("drift_sim_cli", ROOT / "scripts/drift_sim.py")
+assert _dspec and _dspec.loader
+drift_script = importlib.util.module_from_spec(_dspec)
+_dspec.loader.exec_module(drift_script)
 
 COMMIT = "b" * 40
 FIELDS = {
@@ -240,6 +244,7 @@ def test_drift_burst_keys_match_the_simulator(sandbox: Path) -> None:
         "params": p.to_json(),
         "inputs": {"fit_rows": {"sha256": "e" * 64}, "burst_rows": {"sha256": "f" * 64}},
         "burst": rep,
+        "verdict": drift_script.verdict(rep, 25, 3),
     }
     put(sandbox, "drift_burst", doc)
     r = by_id(sandbox)["W-D"]
@@ -247,7 +252,7 @@ def test_drift_burst_keys_match_the_simulator(sandbox: Path) -> None:
     assert r["sealed_sha256"] == {"fit_rows": "e" * 64, "burst_rows": "f" * 64}
     assert r["gate_inputs"] == p.to_json()
     assert str(rep["detection_latency_requests"]) in r["value_display"]
-    doc["burst"] = {**rep, "rolled_back": False}
+    doc["verdict"] = drift_script.verdict({**rep, "detection_latency_requests": 26}, 25, 3)
     put(sandbox, "drift_burst", doc)
     assert by_id(sandbox)["W-D"]["status"] == "failed"
 
