@@ -48,6 +48,9 @@ CREATE TABLE IF NOT EXISTS gateway_calls (
     counterfactual_basis TEXT, student_called INTEGER NOT NULL DEFAULT 0,
     latency_ms REAL NOT NULL DEFAULT 0, status TEXT NOT NULL, error TEXT);
 CREATE INDEX IF NOT EXISTS gateway_calls_day ON gateway_calls(day);
+CREATE TABLE IF NOT EXISTS drift_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, created_at TEXT NOT NULL, state_from TEXT NOT NULL,
+    state_to TEXT NOT NULL, kind TEXT NOT NULL, detector TEXT, details_json TEXT NOT NULL);
 """
 
 
@@ -483,6 +486,43 @@ class Store:
         if day is not None:
             sql, params = sql + " WHERE day=?", (day,)
         return [dict(zip(cols, r, strict=True)) for r in self._query(sql + " ORDER BY id", params)]
+
+    def gateway_add_cost(self, request_id: str, usd: float) -> None:
+        """Add late spend (a drift audit run after the answer was sent) to the call row."""
+        self._exec(
+            "UPDATE gateway_calls SET cost_usd = cost_usd + ? WHERE request_id=?",
+            (usd, request_id),
+        )
+
+    # ---- drift guard events (state transitions of the certified router's drift monitor) ----
+    def add_drift_event(self, row: dict[str, Any]) -> None:
+        self._exec(
+            "INSERT INTO drift_events(created_at, state_from, state_to, kind, detector, "
+            "details_json) VALUES (?,?,?,?,?,?)",
+            (
+                _now(),
+                row["state_from"],
+                row["state_to"],
+                row["kind"],
+                row.get("detector"),
+                canonical_json(row.get("details") or {}),
+            ),
+        )
+
+    def drift_events(self, limit: int | None = None) -> list[dict[str, Any]]:
+        """Persisted drift events, OLDEST first (the order a restart replays them); with
+        ``limit``, the NEWEST ``limit`` of them (still oldest first)."""
+        cols = ("id", "created_at", "state_from", "state_to", "kind", "detector", "details_json")
+        sql = f"SELECT {_quoted(cols)} FROM drift_events"  # noqa: S608 - fixed column names
+        rows = self._query(sql + " ORDER BY id")
+        if limit is not None:
+            rows = rows[-limit:] if limit > 0 else []
+        out: list[dict[str, Any]] = []
+        for r in rows:
+            d = dict(zip(cols, r, strict=True))
+            d["details"] = json.loads(d.pop("details_json"))
+            out.append(d)
+        return out
 
     def gateway_count(self, day: str, what: Literal["student_called", "not_ok"]) -> int:
         """Rows of ``day`` where the student was invoked / that were refused or failed."""

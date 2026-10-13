@@ -18,6 +18,7 @@ import hmac
 import json
 import logging
 import math
+import re
 import secrets
 import threading
 import time
@@ -26,13 +27,25 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
+from starlette.background import BackgroundTask
 from starlette.concurrency import run_in_threadpool
 
 from distillery.budget import PLAYGROUND, BudgetExceeded, UnknownPriceError
+from distillery.drift import (
+    AUDIT_AGREE,
+    AUDIT_DISAGREE,
+    AuditResult,
+    DriftError,
+    DriftEvent,
+    DriftMonitor,
+    DriftParams,
+    DriftState,
+    RouteEvent,
+)
 from distillery.prompts import SYSTEM_PROMPT, extract_sql, parse_user_content, strip_thinking
 from distillery.router import RouterModel, decide, precheck
 from distillery.server.gateway_config import (
@@ -52,6 +65,7 @@ from distillery.server.playground import (
 from distillery.student import generate_detailed
 from distillery.taskpacks.sql import schema as sql_schema
 from distillery.taskpacks.sql.runner import ExecOutcome, run_select
+from distillery.taskpacks.sql.verifier import compare_outcomes
 
 log = logging.getLogger("distillery.gateway")
 
@@ -66,6 +80,7 @@ MAX_DDL_CHARS = 2 * len(sql_schema.schema_ddl(0))  # bigger "schemas" are not th
 DDL_SHA256 = hashlib.sha256(sql_schema.schema_ddl(0).strip().encode("utf-8")).hexdigest()
 BASIS_ACTUAL_TEACHER = "actual teacher call (measured tokens x configured price)"
 BASIS_STUDENT_PENDING = "pending H1"
+DRIFT_FILE = "drift.json"
 
 
 class GatewayError(Exception):
@@ -183,6 +198,7 @@ class RouterState:
     coverage: float | None = None
     selective_risk: float | None = None
     model_sha256: str | None = None
+    cert_sha256: str | None = None  # sha256 of the cert.json bytes (what the drift guard pins)
     prereg_commit: str | None = None
     index_file: Path | None = None
     error: str | None = None  # why nothing is certified, when artifacts were configured
@@ -221,6 +237,7 @@ def load_router(router_dir: Path | None) -> RouterState:
         cpath = d / "cert.json"
         if not cpath.is_file():
             return replace(base, error="no cert.json: model is not certified")
+        cert_sha = hashlib.sha256(cpath.read_bytes()).hexdigest()
         cdoc = _json_file(cpath)
         pinned = cdoc.get("model_sha256")
         if pinned != sha:
@@ -246,6 +263,7 @@ def load_router(router_dir: Path | None) -> RouterState:
             coverage=num("coverage"),
             selective_risk=num("selective_risk"),
             model_sha256=sha,
+            cert_sha256=cert_sha,
             prereg_commit=str(commit) if commit else None,
             index_file=index_file,
             error=None if lam_f is not None else "certificate found no threshold: not certified",
@@ -359,6 +377,7 @@ class CallLog:
     latency_ms: float = 0.0
     status: str = "error"
     error: str | None = None
+    drift_work: _DriftWork | None = None  # set when this request feeds the drift monitor
 
     @property
     def total_cost_usd(self) -> float:
@@ -380,6 +399,19 @@ class CallLog:
 
 
 @dataclass
+class _DriftWork:
+    """What the drift monitor needs about one served skill request (fed after the response)."""
+
+    request_id: str
+    served_by: Literal["student", "teacher"]
+    req: ChatRequest
+    outcome: (
+        ExecOutcome | None
+    )  # the student's executed SQL (None: not executable / unknown schema)
+    ddl_known: bool
+
+
+@dataclass
 class _Routed:
     served_by: str  # "student" | "teacher"
     text: str
@@ -395,6 +427,9 @@ class _Routed:
     short_circuit: bool
     usage_basis: str
     extra: dict[str, Any] = field(default_factory=dict)
+    # True when the ROUTER decided (precheck / decide), False for infrastructure deferrals
+    # (student unavailable, embedding failed, rollback ...): only decisions feed the drift monitor
+    decided: bool = False
 
 
 def _ascii(text: str) -> str:
@@ -439,6 +474,188 @@ class Gateway:
         self._student_day: tuple[str, int] | None = None
         self.nn_sim: Callable[[str], float] | None = self.g.nn_sim
         self.index = load_index(self.router) if self.router.certified else None
+        self._drift_lock = threading.Lock()
+        self._drift_stats: dict[str, Any] = {
+            "audits": 0, "inconclusive": 0, "skipped_cap": 0, "skipped_error": 0, "spent_usd": 0.0,
+        }  # fmt: skip
+        self.drift: DriftMonitor | None = self._init_drift()
+
+    # ---- drift guard ------------------------------------------------------------------------
+    def _init_drift(self) -> DriftMonitor | None:
+        """The monitor, restored from the persisted events (a restart never returns to CERTIFIED
+        by itself). Config: ``GatewaySettings.drift`` (env ``DISTILLERY_DRIFT_*``), else
+        ``drift.json`` in the router dir; neither = disabled, EXCEPT when the last persisted state
+        is not CERTIFIED: then the params recorded in the rollback event keep the guard on (removing
+        the config must not re-trust the student; only ``recertify`` does that)."""
+        params: DriftParams | None = self.g.drift
+        if params is None and self.g.router_dir is not None:
+            f = Path(self.g.router_dir) / DRIFT_FILE
+            if f.is_file():
+                params = DriftParams.from_mapping(_json_file(f))  # malformed: stop the server
+        persisted = self.store.drift_events()
+        if params is None and persisted and persisted[-1]["state_to"] != "CERTIFIED":
+            for e in reversed(persisted):
+                rec = e["details"].get("params")
+                if e["kind"] == "rollback" and isinstance(rec, dict):
+                    params = DriftParams.from_mapping(rec)
+                    log.warning(
+                        "drift guard: no drift config, but the last state is %s; keeping the "
+                        "guard on with the params recorded at the rollback",
+                        persisted[-1]["state_to"],
+                    )
+                    break
+        if params is None:
+            return None
+        mon = DriftMonitor(params, self.router.cert_sha256)
+        mon.restore(persisted)
+        self._persist_drift(mon.bind_cert(self.router.cert_sha256))
+        return mon
+
+    def _persist_drift(self, events: Sequence[DriftEvent]) -> None:
+        for e in events:
+            try:
+                self.store.add_drift_event(e.to_row())
+            except Exception:  # noqa: BLE001 - the in-memory state still holds; say it loudly
+                log.exception("gateway: could not persist the drift event %s", e.kind)
+            if e.kind == "rollback":
+                log.warning("drift guard: ROLLBACK to teacher-only (%s): %s", e.detector, e.details)
+
+    async def _drift_after(self, work: _DriftWork) -> None:
+        """Runs after the response is sent: the optional audit, then feed the monitor."""
+        mon = self.drift
+        if mon is None:
+            return
+        try:
+            audit: AuditResult | None = None
+            if (
+                work.served_by == "student"
+                and mon.allows_student()
+                and mon.wants_audit(work.request_id)
+            ):
+                audit = await self._audit(work)
+            self._persist_drift(mon.observe(RouteEvent(work.served_by, work.request_id, audit)))
+        except Exception:  # noqa: BLE001 - a background failure must never reach the client
+            log.exception("gateway: drift bookkeeping failed for %s", work.request_id)
+
+    async def _audit(self, work: _DriftWork) -> AuditResult | None:
+        """Ask the teacher the same question (through the daily-cap reservation) and compare the two
+        answers by EXECUTING both SQLs (the verifier's multiset comparison). None = no verdict
+        (cap refused, upstream failed, or the teacher's SQL did not run): never a disagreement."""
+        st = self._drift_stats
+        if work.outcome is None or not work.ddl_known or not self.teacher_model:
+            st["inconclusive"] += 1
+            return None
+        now = self._now()
+        scratch = CallLog(work.request_id + ":audit", "", now.isoformat(), now.date().isoformat())
+        params = dict(work.req.params)
+        params["max_tokens"] = min(
+            work.req.max_tokens or self.g.skill_max_tokens, self.g.skill_max_tokens
+        )
+        try:
+            res, usd = await self._upstream_call(
+                self.teacher_model, work.req.messages, params, scratch
+            )
+        except GatewayError as exc:  # cap reached (429), unpriced (503), upstream down (502)
+            st["skipped_cap" if exc.code == "daily_budget_exhausted" else "skipped_error"] += 1
+            log.warning("drift audit skipped for %s: %s", work.request_id, exc.code)
+            return None
+        st["audits"] += 1
+        st["spent_usd"] += usd
+        self.store.gateway_add_cost(work.request_id, usd)  # audits are part of the real cost
+        teacher_out = await run_in_threadpool(self._verify, extract_sql(res.text), True)
+        if teacher_out is None or not teacher_out.ok:
+            st["inconclusive"] += 1
+            return None
+        same = compare_outcomes(work.outcome, teacher_out, False).ok
+        return AUDIT_AGREE if same else AUDIT_DISAGREE
+
+    def drift_status(self) -> dict[str, Any]:
+        mon = self.drift
+        events = [
+            {k: e[k] for k in ("id", "created_at", "state_from", "state_to", "kind", "detector")}
+            | {"details": e["details"]}
+            for e in reversed(self.store.drift_events(limit=20))
+        ]
+        stats = dict(self._drift_stats)
+        stats["spent_usd"] = round(stats["spent_usd"], 8)
+        if mon is None:
+            return {
+                "enabled": False, "state": None, "allows_student": None, "reason": None,
+                "detector": None, "params": None, "cert_sha256": self.router.cert_sha256,
+                "rolled_back_cert_sha256": [], "window": None, "audits": stats, "events": events,
+                "note": "drift guard not configured: set DISTILLERY_DRIFT_WINDOW and "
+                "DISTILLERY_DRIFT_TAU (or a drift.json in the router dir); without it the gateway "
+                "never rolls back by itself",
+            }  # fmt: skip
+        allowed = mon.allows_student()
+        return {
+            "enabled": True,
+            "state": mon.state.value,
+            "allows_student": allowed,
+            "reason": None if allowed else mon.reason(),
+            "detector": mon.last_detector,
+            "params": mon.params.to_json(),
+            "cert_sha256": mon.cert_sha256,
+            "rolled_back_cert_sha256": list(mon.rolled_back_shas),
+            "window": mon.window_stats(),
+            "audits": stats,
+            "events": events,
+            "note": "window and audit counters are in memory (reset by a restart); the state and "
+            "events are persisted",
+        }
+
+    def recertify(self, cert_sha256: Any, prereg_commit: Any) -> dict[str, Any]:
+        """TEACHER -> CERTIFIED with a NEW certificate. The cert.json in the router dir is re-read
+        (an operator drops the new artifacts there, then calls this); its sha256 must equal
+        ``cert_sha256`` and must not be one this deployment already rolled back from."""
+        mon = self.drift
+        if mon is None:
+            raise GatewayError(404, "drift_disabled", "the drift guard is not configured")
+        with self._drift_lock:
+            if mon.state is not DriftState.TEACHER:
+                raise GatewayError(
+                    409, "not_rolled_back", f"state is {mon.state.value}, not TEACHER"
+                )
+            if not isinstance(cert_sha256, str) or not re.fullmatch(r"[0-9a-f]{64}", cert_sha256):
+                raise GatewayError(
+                    422, "invalid_request", "cert_sha256 must be 64 lowercase hex characters"
+                )
+            if not isinstance(prereg_commit, str) or not prereg_commit.strip():
+                raise GatewayError(422, "invalid_request", "prereg_commit is required")
+            if cert_sha256 in mon.rolled_back_shas:
+                raise GatewayError(
+                    409, "same_certificate",
+                    "that certificate was already rolled back: a NEW certificate is required",
+                )  # fmt: skip
+            new = load_router(self.g.router_dir)
+            if new.cert_sha256 != cert_sha256:
+                raise GatewayError(
+                    409, "cert_mismatch",
+                    f"cert.json in the router dir has sha256 {new.cert_sha256}, not the one given",
+                )  # fmt: skip
+            if not new.certified:
+                raise GatewayError(409, "not_certified", new.error or "the certificate is empty")
+            # swap the artifacts first: nothing is served by the student until the state flips
+            self.router, self.index = new, load_index(new)
+            try:
+                events = mon.recertify(cert_sha256, prereg_commit)
+            except DriftError as exc:
+                raise GatewayError(409, "recertify_refused", str(exc)) from None
+            self._persist_drift(events)
+            try:
+                self.store.add_audit(
+                    "admin", "drift_recertify", None,
+                    {"cert_sha256": cert_sha256, "prereg_commit": prereg_commit.strip()},
+                )  # fmt: skip
+            except Exception:  # noqa: BLE001
+                log.exception("gateway: could not audit-log the recertify")
+        return {
+            "state": mon.state.value,
+            "cert_sha256": cert_sha256,
+            "prereg_commit": prereg_commit.strip(),
+            "lambda": new.lambda_hat,
+            "event": events[0].to_row(),
+        }
 
     def _default_upstream(self) -> Upstream | None:
         key, url = self.cfg.nebius_api_key, self.cfg.nebius_base_url
@@ -563,6 +780,8 @@ class Gateway:
             body, headers = await self._serve(request, lg, t0)
             lg.status = "ok"
             resp = JSONResponse(body, headers=headers)
+            if lg.drift_work is not None:  # the audit + monitor run after the client has its answer
+                resp.background = BackgroundTask(self._drift_after, lg.drift_work)
         except GatewayError as exc:
             lg.status = "refused" if exc.status < 500 else "error"
             lg.error = exc.code
@@ -746,6 +965,19 @@ class Gateway:
         lg.counterfactual_usd = routed.counterfactual_usd
         lg.counterfactual_basis = routed.counterfactual_basis
         lg.latency_ms = round((time.monotonic() - t0) * 1000, 3)
+        if (
+            self.drift is not None
+            and routed.decided
+            and self.router.certified
+            and routed.served_by in ("student", "teacher")
+        ):
+            lg.drift_work = _DriftWork(
+                lg.request_id,
+                "student" if routed.served_by == "student" else "teacher",
+                req,
+                routed.outcome if routed.served_by == "student" else None,
+                ddl_known,
+            )
         out = routed.outcome
         verified = bool(out is not None and out.ok and len(out.rows) >= 1)
         info: dict[str, Any] = {
@@ -781,6 +1013,11 @@ class Gateway:
                 decision_reason = decide(st.model, None, {}).reason
             return await self._via_teacher(req, ddl_known, lg, decision_reason, None, None, False)
         model = st.model
+        if self.drift is not None and not self.drift.allows_student():
+            # before any embedding or student spend: a rolled-back gateway is teacher-only
+            return await self._via_teacher(
+                req, ddl_known, lg, self.drift.reason(), None, lam, False
+            )
         if "nn_sim" in model.feature_names:
             try:
                 nn = await self._nn_sim(skill.question, lg)
@@ -788,7 +1025,9 @@ class Gateway:
                 return await self._via_teacher(req, ddl_known, lg, str(exc), None, lam, False)
         pre = precheck(model, lam, nn if nn is not None else 0.0)
         if pre is not None:
-            return await self._via_teacher(req, ddl_known, lg, pre.reason, None, lam, True)
+            return await self._via_teacher(
+                req, ddl_known, lg, pre.reason, None, lam, True, decided=True
+            )
         state, why, server = self.pg.local_status("student")
         if server is None:
             return await self._via_teacher(
@@ -836,6 +1075,11 @@ class Gateway:
             )
         score, decision_reason, short = dec.score, dec.reason, False
         if dec.served_by == "student" and sql is not None:
+            if self.drift is not None and not self.drift.allows_student():
+                # another request rolled the gateway back while this one was in flight
+                return await self._via_teacher(
+                    req, ddl_known, lg, self.drift.reason(), score, lam, False
+                )
             return self._student_routed(
                 req, out.n_answer_tokens, sql, outcome, dec.score, lam, dec.reason
             )
@@ -843,7 +1087,9 @@ class Gateway:
             dec.served_by == "student"
         ):  # cannot happen with exec_ok in the model; never serve nothing
             decision_reason = "no SQL extracted from the student output → teacher"
-        return await self._via_teacher(req, ddl_known, lg, decision_reason, score, lam, short)
+        return await self._via_teacher(
+            req, ddl_known, lg, decision_reason, score, lam, short, decided=True
+        )
 
     def _student_routed(
         self, req: ChatRequest, n_answer_tokens: int | None, sql: str, outcome: ExecOutcome | None,
@@ -857,6 +1103,7 @@ class Gateway:
             False,
             "student: completion tokens measured by the student server, prompt tokens estimated "
             "(characters / 3); cost_usd excludes unpriced sandbox compute",
+            decided=True,
         )  # fmt: skip
 
     def _counterfactual(self, in_est: int) -> tuple[float | None, str]:
@@ -891,7 +1138,7 @@ class Gateway:
 
     async def _via_teacher(
         self, req: ChatRequest, ddl_known: bool, lg: CallLog, reason: str,
-        score: float | None, lam: float | None, short: bool,
+        score: float | None, lam: float | None, short: bool, *, decided: bool = False,
     ) -> _Routed:  # fmt: skip
         assert self.teacher_model is not None  # noqa: S101 - detect_skill needs it
         params = dict(req.params)
@@ -905,6 +1152,7 @@ class Gateway:
         return _Routed(
             "teacher", text, sql, outcome, (res.input_tokens, res.output_tokens), usd, usd,
             BASIS_ACTUAL_TEACHER, score, lam, reason, short, "measured by the provider",
+            decided=decided,
         )  # fmt: skip
 
     # ---- response shaping -------------------------------------------------------------------
@@ -968,6 +1216,10 @@ class Gateway:
             "passthrough_models": sorted(self.allowlist),
             "passthrough_max_tokens": self.g.passthrough_max_tokens,
             "student": self.pg.local_status("student")[0],
+            "drift": {
+                "enabled": self.drift is not None,
+                "state": None if self.drift is None else self.drift.state.value,
+            },
             "today": {
                 "day": day,
                 "served_by": self.store.gateway_served_by(day),
@@ -1048,6 +1300,33 @@ def install(app: FastAPI, playground: Playground, ip_of: Callable[[Request], str
     @app.get("/api/gateway/savings")
     def gateway_savings() -> dict[str, Any]:
         return gw.savings()
+
+    @app.get("/api/gateway/drift")
+    def gateway_drift() -> dict[str, Any]:
+        return gw.drift_status()
+
+    @app.post("/api/gateway/drift/recertify")
+    async def gateway_drift_recertify(request: Request) -> JSONResponse:
+        def err(status: int, code: str, message: str) -> JSONResponse:
+            return JSONResponse({"error": code, "message": message}, status_code=status)
+
+        token = request.headers.get("x-admin-token")
+        if not token:
+            return err(401, "admin_token_required", "X-Admin-Token header required")
+        if not gw.cfg.verify_admin_token(token):
+            return err(403, "forbidden", "invalid admin token")
+        try:
+            body = await gw._read_json(request)  # noqa: SLF001 - same size cap and parsing
+            if not isinstance(body, dict) or set(body) - {"cert_sha256", "prereg_commit"}:
+                raise GatewayError(
+                    422, "invalid_request", "body must be {cert_sha256, prereg_commit}"
+                )
+            out = await run_in_threadpool(
+                gw.recertify, body.get("cert_sha256"), body.get("prereg_commit")
+            )
+        except GatewayError as exc:
+            return err(exc.status, exc.code, exc.message)
+        return JSONResponse(out)
 
     app.state.gateway = gw
     return gw

@@ -40,10 +40,10 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from enum import StrEnum
 from fractions import Fraction
-from typing import Any, Literal
+from typing import Any, Final, Literal
 
-AUDIT_AGREE = "agree"
-AUDIT_DISAGREE = "disagree"
+AUDIT_AGREE: Final = "agree"
+AUDIT_DISAGREE: Final = "disagree"
 AuditResult = Literal["agree", "disagree"]
 
 DETECTOR_DEFERRAL = "deferral_rate"
@@ -281,7 +281,12 @@ class DriftMonitor:
     def _rollback(self, fired: list[str], numbers: dict[str, Any]) -> list[DriftEvent]:
         detector = fired[0]
         self.last_detector = "+".join(fired)
-        base = {"cert_sha256": self.cert_sha256, "fired": fired, **numbers}
+        base = {
+            "cert_sha256": self.cert_sha256,
+            "fired": fired,
+            "params": self.params.to_json(),
+            **numbers,
+        }
         if self.cert_sha256 and self.cert_sha256 not in self._rolled_back:
             self._rolled_back.append(self.cert_sha256)
         self._clear_windows()

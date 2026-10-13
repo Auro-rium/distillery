@@ -8,6 +8,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol
 
+from distillery.drift import DriftParams
+
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 SERVING_PRICE_FILE = _REPO_ROOT / "deploy" / "serving_price.json"
 
@@ -57,6 +59,9 @@ class GatewaySettings:
     nn_sim: Callable[[str], float] | None = None
     serving_price_file: Path | None = SERVING_PRICE_FILE
     ip_salt: str | None = None  # None = random per process
+    # drift guard (see distillery.drift). None = read ``drift.json`` from router_dir; if that is
+    # absent too, the guard is DISABLED (the gateway then never rolls back by itself)
+    drift: DriftParams | None = None
 
 
 def _int(env: Mapping[str, str], name: str, default: int, minimum: int = 0) -> int:
@@ -70,6 +75,24 @@ def _int(env: Mapping[str, str], name: str, default: int, minimum: int = 0) -> i
     if v < minimum:
         raise ValueError(f"{name} must be >= {minimum}, got {raw!r}")
     return v
+
+
+DRIFT_ENV = {
+    "DISTILLERY_DRIFT_WINDOW": "window_w",
+    "DISTILLERY_DRIFT_TAU": "tau",
+    "DISTILLERY_DRIFT_AUDIT_RATE": "audit_rate",
+    "DISTILLERY_DRIFT_AUDIT_WINDOW": "audit_window_m",
+    "DISTILLERY_DRIFT_AUDIT_K": "audit_k",
+    "DISTILLERY_DRIFT_MIN_REQUESTS": "min_requests",
+}
+
+
+def drift_from_env(env: Mapping[str, str]) -> DriftParams | None:
+    """``DISTILLERY_DRIFT_{WINDOW,TAU,AUDIT_RATE,AUDIT_WINDOW,AUDIT_K,MIN_REQUESTS}``. None if none
+    is set; if any is set, WINDOW and TAU are required and a bad value raises (a half-configured
+    guard must stop the server, not silently run unguarded). Env wins over ``drift.json``."""
+    given = {key: v for var, key in DRIFT_ENV.items() if (v := (env.get(var) or "").strip())}
+    return DriftParams.from_mapping(given) if given else None
 
 
 def gateway_from_env(env: Mapping[str, str]) -> GatewaySettings:
@@ -90,4 +113,5 @@ def gateway_from_env(env: Mapping[str, str]) -> GatewaySettings:
         ),
         serving_price_file=Path(price) if price else SERVING_PRICE_FILE,
         ip_salt=(env.get("DISTILLERY_GATEWAY_IP_SALT") or None),
+        drift=drift_from_env(env),
     )
