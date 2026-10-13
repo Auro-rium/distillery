@@ -48,9 +48,9 @@ describe("focus and title on route change", () => {
     await waitFor(() => expect(document.activeElement).toBe(document.querySelector("main")));
     expect(document.title).toMatch(/^New run/);
     expect(document.title).toMatch(/Distillery$/);
-    fireEvent.click(screen.getByRole("link", { name: "Playground" }));
-    await screen.findByRole("heading", { name: "Playground" });
-    expect(document.title).toMatch(/^Playground/);
+    fireEvent.click(screen.getByRole("link", { name: "Acme analyst" }));
+    await screen.findByRole("heading", { name: "Acme analyst" });
+    expect(document.title).toMatch(/^Acme analyst/);
   });
   it("announces the new page politely without adding a status role", async () => {
     renderApp("/");
@@ -70,7 +70,7 @@ describe("phone menu", () => {
     fireEvent.click(btn);
     const dlg = await screen.findByRole("dialog", { name: "Menu" }); // dialog code is lazy-loaded
     // The contract replay list holds only a dry run, so no featured run: Evidence and Live are left out.
-    expect(within(dlg).getAllByRole("link").map((l) => l.textContent)).toEqual(["Mission", "Playground", "New run", "GitHub"]);
+    expect(within(dlg).getAllByRole("link").map((l) => l.textContent)).toEqual(["Mission", "Acme analyst", "New run", "GitHub"]);
     expect(within(dlg).getByRole("link", { name: "Mission" }).getAttribute("aria-current")).toBe("page");
     fireEvent.click(within(dlg).getByRole("link", { name: "New run" }));
     await screen.findByRole("heading", { name: "New run" });
@@ -102,7 +102,7 @@ describe("featured-run nav", () => {
     const ev = await within(nav).findByRole("link", { name: "Evidence" });
     expect(ev.getAttribute("href")).toBe("/runs/new-promote/report");
     expect(within(nav).getByRole("link", { name: "Live" }).getAttribute("href")).toBe("/runs/new-promote");
-    expect(within(nav).getAllByRole("link").map((l) => l.textContent)).toEqual(["Mission", "Evidence", "Live", "Playground", "New run"]);
+    expect(within(nav).getAllByRole("link").map((l) => l.textContent)).toEqual(["Mission", "Evidence", "Live", "Acme analyst", "New run"]);
   });
   it("leaves Evidence and Live out when the replay list fails", async () => {
     stubFetch((u) => (u.endsWith("/replay") ? new Response("{}", { status: 500 }) : contractFetch()(u)));

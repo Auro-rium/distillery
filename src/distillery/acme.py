@@ -103,20 +103,24 @@ class AcmeAnalyst:
     def _summarize(
         self, question: str, columns: Sequence[str], rows: Sequence[Sequence[Any]]
     ) -> tuple[str, tuple[int, int]]:
-        shown = [list(r) for r in rows[:SUMMARY_ROWS]]
-        user = (
-            f"Question: {question}\nColumns: {list(columns)}\n"
-            f"Rows (first {len(shown)} of {len(rows)}): {shown}"
-        )
         resp = self.client.chat.completions.create(
             model=self.summary_model,
-            messages=[
-                {"role": "system", "content": SUMMARY_SYSTEM},
-                {"role": "user", "content": user},
-            ],
+            messages=summary_messages(question, columns, rows),
             max_tokens=SUMMARY_MAX_TOKENS,
         )
         return _content(resp).strip(), _usage(resp)
+
+
+def summary_messages(
+    question: str, columns: Sequence[str], rows: Sequence[Sequence[Any]]
+) -> list[dict[str, str]]:
+    """The one-line-summary request (shared with the server-side ``/api/acme/ask`` flow)."""
+    shown = [list(r) for r in rows[:SUMMARY_ROWS]]
+    user = (
+        f"Question: {question}\nColumns: {list(columns)}\n"
+        f"Rows (first {len(shown)} of {len(rows)}): {shown}"
+    )
+    return [{"role": "system", "content": SUMMARY_SYSTEM}, {"role": "user", "content": user}]
 
 
 def database_ref(path: str | None) -> DbRef | None:

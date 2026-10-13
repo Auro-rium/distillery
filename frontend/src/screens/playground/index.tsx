@@ -1,111 +1,124 @@
 import { useState, type FormEvent, type KeyboardEvent } from "react";
-import { Link } from "react-router-dom";
 import { api } from "../../api/client";
-import { fmtUsd } from "../../api/format";
-import type { PlaygroundResponse } from "../../api/types";
+import type { AcmeAskResponse } from "../../api/types";
 import { ApiErrorState } from "../../components";
-import { Badge, Button, Card, Field, Spinner, Textarea } from "../../ui";
-import { Allowance } from "./Allowance";
+import { Button, Card, Field, Spinner, Textarea } from "../../ui";
+import { AnswerCard } from "./AnswerCard";
 import { Failure } from "./Failure";
-import { Pane } from "./Pane";
-import { useLimits } from "./useLimits";
+import { Savings } from "./Savings";
+import { StatusStrip } from "./StatusStrip";
+import { useGateway } from "./useGateway";
 import "./playground.css";
 
-export { Pane, RowsPreview } from "./Pane";
+export { RowsPreview } from "./Pane";
 export { Failure } from "./Failure";
 
 /** The API's own limit on the question (docs/API_CONTRACT.md: question <= 500 chars); the input enforces it. */
 const MAX = 500;
-const MODELS = [
-  ["teacher", "Teacher"],
-  ["base", "Base"],
-  ["student", "Student"],
+
+/**
+ * Questions to start from. They are plain text to put in the box: some are phrased the way people talk, and the last
+ * one asks about something the demo database does not contain, so the specialist should hand it back.
+ */
+const EXAMPLES = [
+  "How many accounts are there?",
+  "Which industry has the most active accounts?",
+  "how many ppl are on the enterprise plan rn",
+  "gimme the overdue invoices by currency, biggest first",
+  "users who never logged in, newest signups on top",
+  "What is our net revenue retention by customer cohort?",
 ] as const;
 
 /**
- * Ask one question of the served models. Everything shown is what the API returned: the caps and today's
- * spend (GET /api/config), each model's availability with its own reason, its SQL, whether it was verified,
- * its rows, the request's cost and note. Nothing is generated here, and a request that failed is never drawn
- * as an empty answer.
+ * The Acme analyst. A question goes to POST /api/acme/ask, which sends it through this site's own gateway: the
+ * certified specialist answers when it can guarantee the answer, and the request is handed back to the teacher
+ * when it cannot. Everything shown is what the API returned: who answered and why, the SQL, the verified rows,
+ * the cost, and the gateway's certificate and savings. Nothing is generated or calculated here, and a request
+ * that failed is never drawn as an empty answer.
  */
 export default function Playground() {
   const [q, setQ] = useState("");
   const [busy, setBusy] = useState(false);
-  const [out, setOut] = useState<PlaygroundResponse | null>(null);
+  const [out, setOut] = useState<AcmeAskResponse | null>(null);
   const [err, setErr] = useState<unknown>(null);
-  const [limits, refreshLimits] = useLimits();
-  const pg = limits.state === "ok" ? limits.pg : null;
-  const disabled = pg !== null && !pg.enabled;
+  const { status, savings, refresh } = useGateway();
 
   async function submit(ev?: FormEvent) {
     ev?.preventDefault();
-    if (busy || disabled || q.trim() === "") return;
+    if (busy || q.trim() === "") return;
     setBusy(true);
     setErr(null);
     setOut(null);
     try {
-      setOut(await api.playground(q.trim()));
+      setOut(await api.acmeAsk(q.trim()));
     } catch (e) {
       setErr(e);
     } finally {
       setBusy(false);
-      refreshLimits(); // the day's spend has moved, or the limit was hit: show the server's current figures
+      refresh(); // the call log has moved (or the limit was hit): show the server's current figures
     }
   }
   const onKey = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); void submit(); }
   };
-  const nobody = out !== null && MODELS.every(([k]) => !out.results[k].available);
 
   return (
     <div className="pg">
       <header className="pg-head">
-        <h1>Playground</h1>
-        <p className="muted pg-lead">Ask one question. Each model that can be served answers; the rest say why not.</p>
+        <h1>Acme analyst</h1>
+        <p className="muted pg-lead">
+          Change one base URL. Distillery replaces your big model with a certified specialist and hands back every
+          request it can't guarantee. Ask the Acme analyst a question about its billing database and see who answered.
+        </p>
       </header>
 
       <div className="pg-top">
-        <Card className="pg-ask">
-          <h2 className="pg-h">Ask a question</h2>
-          {disabled && (
-            <div role="status" className="pg-off">
-              <Badge tone="warn">playground disabled</Badge>
-              <p>The server reports the playground as disabled, so no question can be sent. <Link to="/">See replay</Link></p>
+        <div className="pg-main">
+          <Card className="pg-ask">
+            <h2 className="pg-h">Ask a question</h2>
+            <form onSubmit={submit} className="pg-form">
+              <Field label="Question" help="One question about the Acme billing database, in your own words.">
+                <Textarea rows={3} maxLength={MAX} value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={onKey} />
+              </Field>
+              <div className="pg-actions">
+                <Button type="submit" variant="primary" disabled={q.trim() === ""} loading={busy}>Ask</Button>
+                <span className="muted pg-count">{q.length} / {MAX}</span>
+                <span className="muted pg-hint">Ctrl+Enter also sends</span>
+              </div>
+            </form>
+            <div className="pg-examples">
+              <h3 className="pg-sub" id="pg-ex-h">Examples</h3>
+              <ul aria-labelledby="pg-ex-h" className="pg-chips">
+                {EXAMPLES.map((ex) => (
+                  <li key={ex}>
+                    <button type="button" className="pg-chip" disabled={busy} onClick={() => setQ(ex)}>{ex}</button>
+                  </li>
+                ))}
+              </ul>
+              <p className="muted pg-break">
+                Try to break it: misspell things, use slang, change the word order, or ask for something the database
+                has never held. When the specialist is not sure, the request goes to the teacher and the answer says why.
+              </p>
             </div>
-          )}
-          <form onSubmit={submit} className="pg-form">
-            <Field label="Question" help="One question about the demo database, in plain English.">
-              <Textarea rows={4} maxLength={MAX} value={q} disabled={disabled} onChange={(e) => setQ(e.target.value)} onKeyDown={onKey} />
-            </Field>
-            <div className="pg-actions">
-              <Button type="submit" variant="primary" disabled={disabled || q.trim() === ""} loading={busy}>Ask</Button>
-              <span className="muted pg-count">{q.length} / {MAX}</span>
-              <span className="muted pg-hint">Ctrl+Enter also sends</span>
-            </div>
-          </form>
-        </Card>
+          </Card>
+
+          <section className="pg-out" aria-label="Result">
+            <span className="sr-only" role="status">{out && !busy ? "Answer is ready." : ""}</span>
+            {busy && <Spinner label="Asking the Acme analyst" />}
+            {err !== null && <Failure e={err} />}
+            {out && !busy && <AnswerCard r={out} />}
+          </section>
+        </div>
+
         <div className="pg-side">
-          {limits.state === "loading" && <Spinner lines={2} label="Loading the playground limits" />}
-          {limits.state === "error" && <ApiErrorState title="Could not load the playground limits" error={limits.error} />}
-          {pg && <Allowance pg={pg} />}
+          {status.state === "loading" && <Spinner lines={3} label="Loading the gateway status" />}
+          {status.state === "error" && <ApiErrorState title="Could not load the gateway status" error={status.error} />}
+          {status.state === "ok" && <StatusStrip s={status.data} />}
+          {savings.state === "loading" && <Spinner lines={3} label="Loading the savings" />}
+          {savings.state === "error" && <ApiErrorState title="Could not load the savings" error={savings.error} />}
+          {savings.state === "ok" && <Savings s={savings.data} />}
         </div>
       </div>
-
-      <section className="pg-out">
-        <span className="sr-only" role="status">{out && !busy ? "Answers are ready." : ""}</span>
-        {busy && <Spinner label="Asking the models" />}
-        {err !== null && <Failure e={err} />}
-        {out && !busy && (
-          <div className="pg-answers" role="region" aria-label="Answers">
-            <h2 className="pg-h">Answers</h2>
-            {nobody && <p className="pg-none">None of the models could answer this request.</p>}
-            <div className="pg-panes">
-              {MODELS.map(([k, label]) => <Pane key={k} name={label} r={out.results[k]} />)}
-            </div>
-            <p className="muted pg-cost">Cost of this request: {fmtUsd(out.cost_usd, 6)} · {out.note}</p>
-          </div>
-        )}
-      </section>
     </div>
   );
 }

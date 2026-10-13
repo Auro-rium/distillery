@@ -1,0 +1,28 @@
+{
+  "alpha": 0.1,
+  "certified": true,
+  "coverage": 0.62,
+  "delta": 0.05,
+  "lambda": 0.8,
+  "model_sha256": "59e08bc0f0ad2b917578b9dcf0cf2c2d85c3dc0534e32d671204d45a42785090",
+  "passthrough_max_tokens": 256,
+  "passthrough_models": [
+    "fake-n"
+  ],
+  "prereg_commit": "abc123",
+  "reason": null,
+  "selective_risk": 0.07,
+  "similarity_index": true,
+  "student": "ok",
+  "teacher_model": "fake-t",
+  "today": {
+    "day": "2026-10-13",
+    "refused": 0,
+    "served_by": {
+      "passthrough": 1,
+      "student": 1
+    },
+    "student_calls": 1,
+    "student_daily_max": 200
+  }
+}

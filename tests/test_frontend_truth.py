@@ -17,8 +17,10 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 from server_helpers import make_settings, scripted_executor, seed_finished_run
+from test_gateway import FakeUpstream, student_for, write_router
 
 from distillery.server import create_app
+from distillery.server.gateway_config import GatewaySettings
 
 CONTRACT_DIR = Path(__file__).resolve().parents[1] / "frontend" / "src" / "testutil" / "contract"
 UPDATE = os.environ.get("UPDATE_CONTRACT") == "1"
@@ -62,6 +64,12 @@ NULLABLE: dict[str, set[str]] = {
     "examples_headers": {"totals.fixed", "totals.still_wrong", "totals.regressed"},
     "health": set(),
     "config": set(),
+    # certified gateway: no reason; the cert may or may not carry each figure
+    "gateway_status": {"reason"},
+    # student serving cost is "pending H1" until deploy/serving_price.json exists
+    "gateway_savings": {"saved_pct", "saved_pct_display", "student_usd_per_1k", "student_cost_usd"},
+    # a student-served answer: no gateway error, no summary failure
+    "acme_ask": {"answer.error", "summary_error", "distillery.error"},
 }
 
 
@@ -140,11 +148,19 @@ def _example(i: int, kind: str, base: bool, student: bool) -> dict[str, Any]:
 @pytest.fixture(scope="module")
 def responses(tmp_path_factory: pytest.TempPathFactory) -> dict[str, Any]:
     tmp = tmp_path_factory.mktemp("contract")
-    s = make_settings(tmp)
+    student, nn = student_for()
+    s = make_settings(
+        tmp,
+        gateway=GatewaySettings(
+            router_dir=write_router(tmp / "router"), upstream=FakeUpstream(), nn_sim=nn,
+            serving_price_file=None, ip_salt="s",
+        ),
+    )  # fmt: skip
     gate = threading.Event()
     s.executor = scripted_executor(s.root, gate)
     out: dict[str, Any] = {}
-    with TestClient(create_app(s)) as c:
+    app = create_app(s)
+    with TestClient(app) as c:
         rid = c.post("/api/runs", json={"scale": "tiny", "dry_run": True}).json()["run_id"]
         gate.set()
         _wait_complete(c, rid)
@@ -181,6 +197,19 @@ def responses(tmp_path_factory: pytest.TempPathFactory) -> dict[str, Any]:
                     "cap_per_kind": int(h["x-examples-cap-per-kind"]),
                     "totals": json.loads(h["x-examples-totals"]),
                 }
+        # the Acme analyst, served by the certified student; then the gateway's own read endpoints
+        app.state.playground.local_status = lambda role: ("ok", None, student)
+        app.state.reader.real.record_llm_call("sql-run", "fake-t", 1000, 40, 0.1)  # measured length
+        ask = c.post("/api/acme/ask", json={"question": "How many accounts are there?"})
+        assert ask.status_code == 200, ask.text
+        out["acme_ask"] = ask.json()
+        for name, path in {
+            "gateway_status": "/api/gateway/status",
+            "gateway_savings": "/api/gateway/savings",
+        }.items():
+            r = c.get(path)
+            assert r.status_code == 200, (name, r.text)
+            out[name] = r.json()
     return out
 
 
@@ -196,6 +225,9 @@ ENDPOINTS = [
     "replay",
     "evidence",
     "experiments",
+    "gateway_status",
+    "gateway_savings",
+    "acme_ask",
 ]
 
 

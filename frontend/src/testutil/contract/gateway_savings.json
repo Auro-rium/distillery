@@ -1,0 +1,31 @@
+{
+  "actual_display": "$0.0000",
+  "actual_usd": 0.0,
+  "basis": {
+    "actual": "provider-billed teacher $ (measured tokens x configured price) plus the router's own embedding $; student serving cost NOT included (pending H1)",
+    "saved": "teacher_only - actual over requests_in_savings; an upper bound while the student cost is pending H1",
+    "teacher_only": "per request: the teacher's actual cost when it answered; else the teacher price x (estimated prompt tokens + the mean teacher output length: this gateway's logged teacher answers, else measured pipeline teacher calls). A request with no measured length is EXCLUDED from actual/teacher_only/saved and counted in requests_excluded; the basis of each row is in gateway_calls.counterfactual_basis"
+  },
+  "passthrough_requests": 1,
+  "passthrough_usd": 0.00126,
+  "refused": 0,
+  "requests": 1,
+  "requests_excluded": 0,
+  "requests_in_savings": 1,
+  "saved_display": "$0.0014",
+  "saved_pct": 100.0,
+  "saved_pct_display": "100.0%",
+  "saved_usd": 0.001408,
+  "served_by": {
+    "student": 1,
+    "teacher": 0
+  },
+  "student_calls": 1,
+  "student_cost_basis": "pending H1",
+  "student_cost_usd": null,
+  "student_usd_per_1k": null,
+  "teacher_only_display": "$0.0014",
+  "teacher_only_usd": 0.001408,
+  "total_spent_usd": 0.0,
+  "window": "all logged skill requests since this gateway's call log began"
+}

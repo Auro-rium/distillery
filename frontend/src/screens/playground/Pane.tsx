@@ -1,16 +1,13 @@
 import { fmtInt } from "../../api/format";
-import type { PlaygroundResult } from "../../api/types";
-import { Badge, Card } from "../../ui";
-import { CodeBlock } from "../report/CodeBlock";
 import { cellText, normalizeRows } from "./rows";
 
-/** Longest preview drawn; the server itself only previews a few rows. */
+/** Longest preview drawn; the gateway itself returns at most twenty rows. */
 const DRAWN_ROWS = 10;
 
-/** `rows` is whatever the API sent as rows_preview (see rows.ts for the accepted shapes). */
+/** `rows` is whatever the API sent (see rows.ts for the accepted shapes): a table of the rows the SQL returned. */
 export function RowsPreview({ rows }: { rows: unknown }) {
   const r = normalizeRows(rows);
-  if (r === null) return <p className="muted">The rows preview came back in a format that could not be shown.</p>;
+  if (r === null) return <p className="muted">The rows came back in a format that could not be shown.</p>;
   if (r.rows.length === 0) return <p className="muted">Query returned no rows.</p>;
   const shown = r.rows.slice(0, DRAWN_ROWS);
   return (
@@ -34,30 +31,5 @@ export function RowsPreview({ rows }: { rows: unknown }) {
         {r.total === null ? `${shown.length} rows` : `showing ${shown.length} of ${fmtInt(r.total)} rows`}
       </p>
     </div>
-  );
-}
-
-/** One model's answer, exactly as the API returned it: availability with its reason, the SQL, whether it was verified, the rows. */
-export function Pane({ name, r }: { name: string; r: PlaygroundResult }) {
-  return (
-    <Card title={name} className="pg-pane">
-      {!r.available ? (
-        <div className="pg-na">
-          <Badge tone="warn">not available</Badge>
-          <p>{r.reason ?? "No reason was given."}</p>
-        </div>
-      ) : (
-        <div className="pg-body">
-          <div className="pg-tags">
-            {r.verified === true && <Badge tone="ok">verified: matches the known answer</Badge>}
-            {r.verified === false && <Badge tone="bad">verified: wrong result</Badge>}
-            {r.verified === null && <Badge>not verified (question is not a known task)</Badge>}
-          </div>
-          {r.sql ? <CodeBlock label="SQL" language="sql" code={r.sql} /> : <p className="muted">No SQL returned.</p>}
-          {r.error && <p role="alert" className="pg-err">Error: {r.error}</p>}
-          {r.rows_preview !== null && r.rows_preview !== undefined && <RowsPreview rows={r.rows_preview} />}
-        </div>
-      )}
-    </Card>
   );
 }

@@ -1,6 +1,6 @@
 import type {
-  Config, Evidence, ExampleKind, ExperimentsResult, ExamplesResult, Health, HumansetDrafts, NewRunBody, PlaygroundResponse, Report,
-  RunDetail, RunSummary, Tree,
+  AcmeAskResponse, Config, Evidence, ExampleKind, ExperimentsResult, ExamplesResult, GatewaySavings, GatewayStatus, Health,
+  HumansetDrafts, NewRunBody, PlaygroundResponse, Report, RunDetail, RunSummary, Tree,
 } from "./types";
 
 export class ApiError extends Error {
@@ -112,4 +112,8 @@ export const api = {
     request<{ decision: string; tally: HumansetDrafts["tally"] }>("/humanset/decide", post(body), true),
   playground: (question: string) =>
     request<PlaygroundResponse>("/playground", post({ question })),
+  gatewayStatus: () => request<GatewayStatus>("/gateway/status"),
+  gatewaySavings: () => request<GatewaySavings>("/gateway/savings"),
+  /** The Acme analyst: the server runs the question through its own gateway (certified specialist or teacher). */
+  acmeAsk: (question: string) => request<AcmeAskResponse>("/acme/ask", post({ question })),
 };

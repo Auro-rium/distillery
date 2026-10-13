@@ -111,11 +111,27 @@ export function mockApi(): Plugin {
         if (req.method === "POST") {
           if (p === "/runs") return send(res, 202, { run_id: "live-mock" });
           if (m?.[2] === "cancel") return send(res, 200, { status: "failed" });
+          if (p === "/acme/ask") return send(res, 503, { error: "mock_mode", message: NOTE });
           if (p === "/playground")
             return send(res, 200, { results: { teacher: unavailable, base: unavailable, student: unavailable }, cost_usd: 0, note: NOTE });
           return next();
         }
         if (p === "/health") return send(res, 200, { ok: true, mode: "replay-only", version: "mock" });
+        if (p === "/gateway/status")
+          return send(res, 200, {
+            certified: false, reason: NOTE, lambda: null, coverage: null, selective_risk: null, alpha: null, delta: null,
+            model_sha256: null, prereg_commit: null, similarity_index: false, teacher_model: null, passthrough_models: [],
+            passthrough_max_tokens: 256, student: "disabled",
+            today: { day: "mock", served_by: {}, refused: 0, student_calls: 0, student_daily_max: 0 },
+          });
+        if (p === "/gateway/savings")
+          return send(res, 200, {
+            window: NOTE, requests: 0, served_by: { student: 0, teacher: 0 }, student_calls: 0, refused: 0,
+            requests_in_savings: 0, requests_excluded: 0, total_spent_usd: 0, actual_usd: 0, teacher_only_usd: 0, saved_usd: 0,
+            saved_pct: null, actual_display: "$0.0000", teacher_only_display: "$0.0000", saved_display: "$0.0000",
+            saved_pct_display: null, student_cost_basis: "pending H1", student_usd_per_1k: null, student_cost_usd: null,
+            basis: { actual: NOTE, teacher_only: NOTE, saved: NOTE }, passthrough_requests: 0, passthrough_usd: 0,
+          });
         if (p === "/config")
           return send(res, 200, {
             models: { planner: "fake-planner", teacher: "fake-teacher", triage: "fake-triage", student: "fake-student-base" },

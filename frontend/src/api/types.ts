@@ -390,6 +390,101 @@ export interface PlaygroundResponse {
   note: string;
 }
 
+// ---- OpenAI-compatible gateway + Acme analyst (docs/API_CONTRACT.md) ----------------------------------
+export interface GatewayStatus {
+  certified: boolean;
+  /** Why nothing is certified; null when certified. */
+  reason: string | null;
+  lambda: number | null;
+  coverage: number | null;
+  selective_risk: number | null;
+  alpha: number | null;
+  delta: number | null;
+  model_sha256: string | null;
+  prereg_commit: string | null;
+  similarity_index: boolean;
+  teacher_model: string | null;
+  passthrough_models: string[];
+  passthrough_max_tokens: number;
+  student: string;
+  today: {
+    day: string;
+    served_by: Record<string, number>;
+    refused: number;
+    student_calls: number;
+    student_daily_max: number;
+  };
+}
+
+/** GET /api/gateway/savings: every figure is computed by the server; `*_display` strings are shown as they are. */
+export interface GatewaySavings {
+  window: string;
+  requests: number;
+  served_by: { student: number; teacher: number };
+  student_calls: number;
+  refused: number;
+  requests_in_savings: number;
+  requests_excluded: number;
+  total_spent_usd: number;
+  actual_usd: number;
+  teacher_only_usd: number;
+  saved_usd: number;
+  saved_pct: number | null;
+  actual_display: string;
+  teacher_only_display: string;
+  saved_display: string;
+  saved_pct_display: string | null;
+  /** "pending H1" until the student's serving cost has been measured. */
+  student_cost_basis: string;
+  student_usd_per_1k: number | null;
+  student_cost_usd: number | null;
+  basis: { actual: string; teacher_only: string; saved: string };
+  passthrough_requests: number;
+  passthrough_usd: number;
+}
+
+/** The `distillery` object the gateway puts on every skill response (`served_by` is the truth). */
+export interface GatewayInfo {
+  served_by: "student" | "teacher" | "passthrough" | string;
+  skill: string | null;
+  score: number | null;
+  lambda: number | null;
+  reason: string;
+  short_circuit: boolean;
+  sql: string | null;
+  verified: boolean;
+  columns: string[];
+  rows: unknown[][];
+  row_count: number;
+  error: string | null;
+  cost_usd: number;
+  embed_cost_usd: number;
+  teacher_cost_usd_counterfactual: number | null;
+  counterfactual_basis: string;
+  latency_ms: number;
+  request_id: string;
+  usage_basis: string;
+}
+
+export interface AcmeAskResponse {
+  question: string;
+  answer: {
+    sql: string | null;
+    columns: string[];
+    rows: unknown[][];
+    row_count: number;
+    verified: boolean;
+    error: string | null;
+  };
+  /** One sentence from the cheap summary model; null when it could not be written (see summary_error). */
+  summary: string | null;
+  summary_error: { code: string; message: string; status: number; retry_after?: string | null } | null;
+  summary_cost_usd: number | null;
+  distillery: GatewayInfo;
+  /** Gateway request ids of the calls made for this question, in order (rows of gateway_calls). */
+  calls: string[];
+}
+
 export type ProofVerdict = "PASS" | "FAIL" | "PARTIAL";
 export interface ProofMetric { label: string; value: string | number }
 export interface ProofSeriesPoint { step: number; train_loss: number; valid_loss: number }

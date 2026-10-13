@@ -1,0 +1,51 @@
+{
+  "answer": {
+    "columns": [
+      "COUNT(*)"
+    ],
+    "error": null,
+    "row_count": 1,
+    "rows": [
+      [
+        160
+      ]
+    ],
+    "sql": "SELECT COUNT(*) FROM accounts",
+    "verified": true
+  },
+  "calls": [
+    "req_6d0f504a84d54e6ba9888a9b",
+    "req_94db6ed4bc2b42a3ab8fc778"
+  ],
+  "distillery": {
+    "columns": [
+      "COUNT(*)"
+    ],
+    "cost_usd": 0.0,
+    "counterfactual_basis": "teacher price x (estimated 1328 prompt tokens [characters / 3] + 40.0 mean output tokens over 1 measured teacher calls in pipeline runs (llm_calls))",
+    "embed_cost_usd": 0.0,
+    "error": null,
+    "lambda": 0.8,
+    "latency_ms": 31.96,
+    "reason": "certified: confidence 0.98 \u2265 0.80",
+    "request_id": "req_6d0f504a84d54e6ba9888a9b",
+    "row_count": 1,
+    "rows": [
+      [
+        160
+      ]
+    ],
+    "score": 0.9820137900379085,
+    "served_by": "student",
+    "short_circuit": false,
+    "skill": "acme-sql",
+    "sql": "SELECT COUNT(*) FROM accounts",
+    "teacher_cost_usd_counterfactual": 0.001408,
+    "usage_basis": "student: completion tokens measured by the student server, prompt tokens estimated (characters / 3); cost_usd excludes unpriced sandbox compute",
+    "verified": true
+  },
+  "question": "How many accounts are there?",
+  "summary": "There are some accounts.",
+  "summary_cost_usd": 0.00126,
+  "summary_error": null
+}

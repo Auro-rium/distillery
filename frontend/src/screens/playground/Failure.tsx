@@ -3,11 +3,12 @@ import { ApiError } from "../../api/client";
 import { ApiErrorState } from "../../components";
 
 /**
- * A failed request, told apart by what the API said: the daily demo budget being used up, this client
- * being rate limited, or any other failure (shown with its code and message). None of them is an empty result.
+ * A failed request, told apart by what the API said: a daily budget used up, this client being rate limited
+ * (the gateway's per-address limit, the same one a customer's requests count against), or any other failure
+ * (shown with its code and message). None of them is an empty result.
  */
 export function Failure({ e }: { e: unknown }) {
-  if (e instanceof ApiError && e.code === "demo_budget_exhausted") {
+  if (e instanceof ApiError && (e.code === "demo_budget_exhausted" || e.code === "daily_budget_exhausted")) {
     return (
       <div className="state" role="alert">
         <h3>Demo budget exhausted</h3>
