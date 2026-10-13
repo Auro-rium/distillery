@@ -136,7 +136,11 @@ def add_router_parser(sub: Any) -> None:
 
     sg = rs.add_parser("signals", help="compute per-item signals for a split (PAID)")
     common(sg)
-    sg.add_argument("--split", required=True, choices=["fit", "cal", "test"])
+    sg.add_argument("--split", required=True, choices=["fit", "cal", "test", "burst"])
+    sg.add_argument(
+        "--burst-dir", type=Path, default=None, metavar="DIR",
+        help="(burst) dir with questions.txt, reference.jsonl, db and extension.sql",
+    )  # fmt: skip
     sg.add_argument(
         "--human-file",
         action="append",
@@ -144,7 +148,7 @@ def add_router_parser(sub: Any) -> None:
         metavar="FILE",
         help="(fit) extra confirmed human file(s) in the FIT split, e.g. Gate B",
     )
-    sg.add_argument("--prereg-commit", default=None, help="required for cal/test")
+    sg.add_argument("--prereg-commit", default=None, help="required for cal/test/burst")
     sg.add_argument("--embed-model", default=DEFAULT_EMBED_MODEL)
     sg.add_argument("--embed-dims", type=int, default=DEFAULT_DIMS)
     sg.add_argument("--round-dir", action="append", default=None, metavar="DIR")
@@ -341,10 +345,15 @@ def _signals(
         raise Refused("signals_fit.json is already used (model/test artifacts exist); not replaced")
     if split != "fit" and args.human_file:
         raise Refused("--human-file only applies to --split fit (cal/test are sealed)")
+    if (split == "burst") != (args.burst_dir is not None):
+        raise Refused("--burst-dir is required with --split burst and only applies to it")
+    burst = _burst_files(args.burst_dir) if split == "burst" else None
     prereg: dict[str, Any] | None = None
     if split != "fit":
         prereg = re_.verify_prereg(
-            args.repo, args.prereg_commit, {split: store.router_split_sha(run_id, split)}
+            args.repo,
+            args.prereg_commit,
+            burst.shas if burst is not None else {split: store.router_split_sha(run_id, split)},
         )
         out(
             f"pre-registration {prereg['commit'][:12]} ({prereg['committed_at']}) contains the "
@@ -361,20 +370,23 @@ def _signals(
         config = config.model_copy(update={"run_cap_usd": args.budget_usd})
 
     # sealed/fit items: only the evaluator reads them
-    items = (
-        evaluator.router_fit_items(store, run_id, args.human_file, db_sha=db_sha)
-        if split == "fit"
-        else evaluator.router_split_items(store, run_id, split)
-    )
+    if burst is not None:
+        items = burst.items
+    elif split == "fit":
+        items = evaluator.router_fit_items(store, run_id, args.human_file, db_sha=db_sha)
+    else:
+        items = evaluator.router_split_items(store, run_id, split)
     train = rd.training_questions(store, run_id, round_dirs=args.round_dir)
     key = cache_key(args.embed_model, args.embed_dims, train.train)
     cache = rdir / f"embed_index_{key[:16]}.bin"
     pk = get_pack("sql")
     ddl = sql_schema.schema_ddl(_db_seed(store, run_id))
-    want_teacher = split == "test"
+    if burst is not None:  # the burst runs on the extended DB with the extension in the prompt
+        ddl = f"{ddl.rstrip()}\n\n{burst.extension_ddl.strip()}\n"
+    want_teacher = split in ("test", "burst")  # burst: the teacher answers feed drift audits
     teacher_model = config.model_ids.get("teacher") if want_teacher else None
     if want_teacher and teacher_model is None:
-        raise Refused("no teacher model configured; test signals need teacher_correct")
+        raise Refused(f"no teacher model configured; {split} signals need teacher_correct")
     # ONE ledger for the whole command (global ledger + project cap), preflighted BEFORE the paid
     # runtime (sandbox images, student serving) is built; the runtime reuses it.
     ledger = Ledger.from_config(run_id, config, store, env=env)
@@ -421,8 +433,8 @@ def _signals(
             rt.student,
             rt.executor,
             IndexSimilarity(index, rt.embed_many),
-            rt.db_ref,
-            schema_ddl=rt.schema_ddl or ddl,
+            str(burst.db) if burst is not None else rt.db_ref,
+            schema_ddl=ddl if burst is not None else (rt.schema_ddl or ddl),
             teacher=rt.teacher,
             pack=pk,
             split=split,
@@ -432,7 +444,10 @@ def _signals(
     finally:
         rt.close()  # bills the sandbox seconds of the student
     spent = ledger.spent() - spent0
-    split_sha = store.router_split_sha(run_id, split) if split != "fit" else None
+    if burst is not None:
+        split_sha: str | None = burst.shas["burst_questions"]
+    else:
+        split_sha = store.router_split_sha(run_id, split) if split != "fit" else None
     extra: dict[str, Any] = {
         "run_id": run_id,
         "prereg": prereg,
@@ -448,6 +463,7 @@ def _signals(
         "estimate_usd": est["total_usd"],
         "spend_usd_this_command": spent,
         "fit_sources": sorted({str(i.get("source")) for i in items}) if split == "fit" else None,
+        "burst": None if burst is None else {"dir": str(args.burst_dir), "sha256": burst.shas},
     }
     sha = rd.write_signal_rows(path, split=split, split_sha256=split_sha, rows=rows, extra=extra)
     out(
@@ -456,6 +472,55 @@ def _signals(
     )
     out(f"wrote {path} sha256 {sha}")
     return EXIT_OK
+
+
+@dataclass(frozen=True)
+class BurstFiles:
+    """The pre-registered drift burst: questions + blind reference SQL over an extended DB."""
+
+    items: list[dict[str, Any]]
+    db: Path
+    extension_ddl: str
+    shas: dict[str, str]
+
+
+BURST_FILES = ("questions.txt", "reference.jsonl", "db", "extension.sql")
+
+
+def _burst_files(burst_dir: Path) -> BurstFiles:
+    """Load the burst set. Every question line must match its reference row (same order), so the
+    questions file hashed in the pre-registration is exactly what is scored."""
+    _need_files([str(burst_dir / f) for f in BURST_FILES])
+    questions = (burst_dir / "questions.txt").read_text(encoding="utf-8").splitlines()
+    refs = [
+        json.loads(line)
+        for line in (burst_dir / "reference.jsonl").read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    if len(questions) != len(refs) or any(
+        q != r.get("question") for q, r in zip(questions, refs, strict=False)
+    ):
+        raise Refused("burst questions.txt and reference.jsonl do not match line by line")
+    items = [
+        {
+            "task_id": f"burst-{i:03d}",
+            "question": r["question"],
+            "gold_sql": r["reference_sql"],
+            "kind": "burst",
+            "family": "credit_grants",
+        }
+        for i, r in enumerate(refs, start=1)
+    ]
+    return BurstFiles(
+        items=items,
+        db=burst_dir / "db",
+        extension_ddl=(burst_dir / "extension.sql").read_text(encoding="utf-8"),
+        shas={
+            "burst_questions": _file_sha(burst_dir / "questions.txt"),
+            "burst_reference": _file_sha(burst_dir / "reference.jsonl"),
+            "burst_db": _file_sha(burst_dir / "db"),
+        },
+    )
 
 
 def _db_seed(store: Store, run_id: str) -> int:

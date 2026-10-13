@@ -428,3 +428,87 @@ def test_fit_cannot_be_replaced_after_test_signals(h: Harness) -> None:
     assert code == EXIT_REFUSED and "cannot be replaced" in out[-1]
     code, out = h.signals("fit", "--overwrite")
     assert code == EXIT_REFUSED and "already used" in out[-1]
+
+
+BURST_DDL = "CREATE TABLE credit_grants (id INTEGER PRIMARY KEY, amount_cents INTEGER);"
+BURST = [
+    ("How many credit grants exist?", "SELECT COUNT(*) FROM credit_grants"),
+    ("What is the largest credit grant in cents?", "SELECT MAX(amount_cents) FROM credit_grants"),
+    ("What is the total credit granted in cents?", "SELECT SUM(amount_cents) FROM credit_grants"),
+]
+
+
+def make_burst(h: Harness) -> tuple[Path, dict[str, str]]:
+    """A burst dir like .distillery/router_burst: the run's DB plus one new table."""
+    import shutil
+    import sqlite3
+
+    d = h.tmp / "burst"
+    d.mkdir()
+    shutil.copyfile(h.run.db_ref, d / "db")
+    con = sqlite3.connect(d / "db")
+    con.execute(BURST_DDL)
+    con.executemany("INSERT INTO credit_grants VALUES (?, ?)", [(i, 100 * i) for i in range(1, 6)])
+    con.commit()
+    con.close()
+    (d / "extension.sql").write_text(BURST_DDL + "\n")
+    (d / "questions.txt").write_text("".join(q + "\n" for q, _ in BURST))
+    (d / "reference.jsonl").write_text(
+        "".join(json.dumps({"i": i, "question": q, "reference_sql": s}) + "\n"
+                for i, (q, s) in enumerate(BURST, start=1))
+    )  # fmt: skip
+    shas = {
+        f: hashlib.sha256((d / f).read_bytes()).hexdigest()
+        for f in ("questions.txt", "reference.jsonl", "db")
+    }
+    return d, shas
+
+
+def test_burst_signals_need_all_three_hashes_preregistered(h: Harness) -> None:
+    d, shas = make_burst(h)
+    code, out = h.signals("burst")
+    assert code == EXIT_REFUSED and "--burst-dir" in out[-1], out
+    code, out = h.signals("cal", "--burst-dir", str(d))
+    assert code == EXIT_REFUSED and "--burst-dir" in out[-1], out
+    partial = h.prereg({}, text=f"q {shas['questions.txt']}\nref {shas['reference.jsonl']}\n")
+    code, out = h.signals("burst", "--burst-dir", str(d), "--prereg-commit", partial)
+    assert code == EXIT_REFUSED and "burst_db" in out[-1], out
+    assert h.factory_calls == []  # refused before any runtime (spend) exists
+
+
+def test_burst_signals_score_on_the_extended_db_with_the_extension_in_the_prompt(
+    h: Harness,
+) -> None:
+    d, shas = make_burst(h)
+    h.gold_map().update(dict(BURST))
+    prompts: list[str] = []
+
+    def runtime(ctx: RuntimeContext) -> RouterRuntime:
+        rt = h.runtime(ctx)
+        inner = rt.student
+
+        class Recording(FakeStudent):
+            def generate_detailed(self, batch: Any) -> list[StudentOutput]:
+                prompts.extend("".join(m["content"] for m in msgs) for msgs in batch)
+                return inner.generate_detailed(batch)
+
+        rt.student = Recording(h.gold)
+        return rt
+
+    prereg = h.prereg({}, text="".join(f"{k} {v}\n" for k, v in shas.items()))
+    code, out = h.cli(
+        "signals", "--split", "burst", "--burst-dir", str(d), "--embed-dims", "8",
+        "--prereg-commit", prereg, "--i-approve-spend", factory=runtime,
+    )  # fmt: skip
+    assert code == EXIT_OK, out
+    doc = json.loads((h.rdir() / "signals_burst.json").read_text())
+    assert doc["split"] == "burst" and doc["split_sha256"] == shas["questions.txt"]
+    assert doc["burst"]["sha256"]["burst_db"] == shas["db"]
+    assert doc["prereg"]["commit"] == prereg
+    rows = doc["rows"]
+    assert len(rows) == len(BURST) and {r["kind"] for r in rows} == {"burst"}
+    # gold runs on the EXTENDED db (the base db has no credit_grants table), and the teacher
+    # (gold-perfect fake) is right on every burst item
+    assert all(r["teacher_correct"] is True for r in rows)
+    assert all(r["exec_ok"] == r["correct"] for r in rows)
+    assert prompts and all("credit_grants" in p for p in prompts)
