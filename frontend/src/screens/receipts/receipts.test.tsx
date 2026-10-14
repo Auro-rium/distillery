@@ -74,17 +74,17 @@ describe("a verified row", () => {
 describe("a pending row", () => {
   it("says Pending: pre-registered, not yet scored; no number, no link, only where the result will be written", async () => {
     await open();
-    const r = row("W-C1");
-    const c = card("W-C1");
+    const r = row("W-$");
+    const c = card("W-$");
     expect(c.getByText("PENDING")).toBeTruthy();
     expect(c.getByText("Pending: pre-registered, not yet scored")).toBeTruthy();
     expect(c.queryAllByRole("link")).toEqual([]);
     expect(c.getByText("will be written to")).toBeTruthy();
     expect(c.getByText(r.artifact)).toBeTruthy();
-    const text = document.getElementById("W-C1")!.textContent!.replace("W-C1", "").replace(r.artifact, "");
+    const text = document.getElementById("W-$")!.textContent!.replace("W-$", "").replace(r.artifact, "").replace(r.claim, ""); // the claim names "1k"; no result number may appear
     expect(text).not.toMatch(/\d/);
     expect(text).not.toContain("not measured");
-    expect(document.getElementById("W-C1")!.querySelector("details")).toBeNull();
+    expect(document.getElementById("W-$")!.querySelector("details")).toBeNull();
   });
   it("every pending receipt in the payload renders as pending", async () => {
     await open();

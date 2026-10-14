@@ -40,7 +40,7 @@ FIELDS = {
     "id", "claim", "status", "verdict", "value_display", "artifact", "permalink", "prereg",
     "sealed_sha256", "adapter_sha256", "gate_inputs", "ledger_total_usd",
 }  # fmt: skip
-PENDING = ["W-D", "W-$", "W-E2E"]  # W-C1/W-C2 scored 2026-10-14
+PENDING = ["W-$", "W-E2E"]  # W-C1/W-C2/W-D scored 2026-10-14
 EVIDENCE = Path(be.EVIDENCE_DIR)
 
 

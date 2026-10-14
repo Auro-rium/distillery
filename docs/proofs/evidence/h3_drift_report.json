@@ -1,0 +1,49 @@
+{
+  "family_burst": {
+    "false_alarm_before_burst": 5,
+    "family": "date_math",
+    "latency_max": 30,
+    "latency_median": 16,
+    "latency_p95": 19,
+    "missed_within_burst": 1,
+    "n_rows": 72,
+    "seeds": 300,
+    "verdict_pass": 293,
+    "wrong_during_burst_max": 3,
+    "wrong_during_burst_median": 0
+  },
+  "format": "distillery-h3-drift-report-v1",
+  "inputs": {
+    "cert.json": "ebacbc2e416de19f8750561ec2fdbb09d5c2ba31fb674da0a10700315771d4fb",
+    "model.json": "b3a895f230e21a8fc75c077ab250aa766c807c078b3b71a4ed1e61031f4fc577",
+    "signals_burst.json": "f162436171ef29d3a0000da322dec1ea38cbce957737a02073fbd8e1a0163a4f",
+    "signals_test.json": "0187648e3482b20e77f67cff546e797bdc9dc94fa68eee649b9541815ed34d3c"
+  },
+  "lambda_hat": 0.9172253676263808,
+  "no_burst_stream": {
+    "detector": null,
+    "requests": 1000,
+    "rollback_index": null,
+    "rolled_back": false,
+    "seed": 20261013
+  },
+  "params": {
+    "audit_k": 10,
+    "audit_rate": 0.1,
+    "audit_window_m": 50,
+    "min_requests": 20,
+    "tau": 0.9,
+    "window_w": 20
+  },
+  "preregistered_burst_over_seeds": {
+    "false_alarm_before_burst": 5,
+    "latency_max": 18,
+    "latency_median": 15,
+    "latency_p95": 18,
+    "missed_within_burst": 0,
+    "seeds": 300,
+    "verdict_pass": 295,
+    "wrong_during_burst_max": 0,
+    "wrong_during_burst_median": 0
+  }
+}

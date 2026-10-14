@@ -55,12 +55,12 @@ Student is `Qwen/Qwen3-1.7B` + LoRA, teacher is Nemotron 3 Super. All values are
 | N1 | Natural-phrasing training, fresh agent-authored set (n=98): base 0.296, student 0.571, teacher 0.959; ratio lower bound 0.495; McNemar p 4.6e-07 | REJECT (above base, below the bar) | `docs/proofs/evidence/n1_natural_round.json` |
 | W-C1 | Certified router on the sealed test split (n=490): student served 240 (coverage 0.490, minimum 0.30) with 10 wrong (selective error 0.042, 95% upper bound 0.070, alpha 0.08); system accuracy 0.951 vs teacher-only 0.935 | PASS | `docs/proofs/evidence/router_eval_test.json` |
 | W-C2 | Natural + stress test items: 115 of 117 wrong student answers deferred (0.983, lower 95% bound 0.947, minimum 0.80); 113 of 123 right answers deferred too (0.919), so the router mostly defers this traffic | PASS (small separation) | `docs/proofs/evidence/router_eval_test.json` |
-| W-D | Drift burst trips the guard and rolls back to the teacher | `⟨PENDING:W-D⟩` not yet measured | `drift_burst.json` (not yet written) |
+| W-D | Burst of 30 off-distribution questions (new `credit_grants` table) after 200 test requests: rollback on burst request 13 (limit 25), 0 false alarms, 0 wrong student answers during the burst; all 30 burst questions deferred. 295 of 300 seeds pass | PASS | `docs/proofs/evidence/drift_burst.json`, `docs/proofs/evidence/h3_drift_report.json` |
 | W-$ | Student cost per 1k requests on an AI Cloud L40S vLLM endpoint | `⟨PENDING:W-$⟩` not yet measured | `h1_endpoint.json` (not yet written) |
 | W-G | An unchanged agent works against the gateway after one base-URL change | verified as a test | `tests/test_acme_wg.py` |
 | W-E2E | Live end to end: certified router, student, deferral, drift guard | `⟨PENDING:W-E2E⟩` not yet measured | `w_e2e.json` (not yet written) |
 
-Spend to date is $14.1952 of the 19.50 cap (`STATUS.md`; sandbox is recorded at $0, so it is a lower bound).
+Spend to date is $15.2245 of the 19.50 cap, plus $1.50 reserved for hosting (global ledger, `STATUS.md`; sandbox is recorded at $0, so it is a lower bound).
 
 ## How we built it
 

@@ -1,0 +1,133 @@
+{
+  "audit_check": {
+    "note": "P(Binomial(M, error rate) >= k): the chance one in-distribution audit window already holds k disagreements; keep it small",
+    "p_window_trips_in_distribution": 6.478683794611394e-06,
+    "served_student_error_rate_fit": 0.03424657534246575
+  },
+  "burst": {
+    "audit_disagreements": 0,
+    "audits": 8,
+    "burst_start_index": 200,
+    "detection_latency_requests": 13,
+    "detector": "deferral_rate",
+    "events": [
+      {
+        "details": {
+          "audit": {
+            "audited": 8,
+            "disagreements": 0,
+            "k": 10,
+            "window_m": 50
+          },
+          "cert_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+          "deferral": {
+            "deferred": 18,
+            "min_requests": 20,
+            "share": 0.9,
+            "tau": 0.9,
+            "window_requests": 20,
+            "window_w": 20
+          },
+          "fired": [
+            "deferral_rate"
+          ],
+          "params": {
+            "audit_k": 10,
+            "audit_rate": 0.1,
+            "audit_window_m": 50,
+            "min_requests": 20,
+            "tau": 0.9,
+            "window_w": 20
+          },
+          "request_id": "sim-20261013-212",
+          "requests_seen": 213
+        },
+        "detector": "deferral_rate",
+        "index": 212,
+        "kind": "rollback",
+        "source": "burst",
+        "state_from": "CERTIFIED",
+        "state_to": "ROLLBACK"
+      },
+      {
+        "details": {
+          "cert_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "detector": "deferral_rate",
+        "index": 212,
+        "kind": "teacher_only",
+        "source": "burst",
+        "state_from": "ROLLBACK",
+        "state_to": "TEACHER"
+      },
+      {
+        "details": {
+          "cert_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+          "note": "queued only: nothing re-distils automatically",
+          "queued": true
+        },
+        "detector": "deferral_rate",
+        "index": 212,
+        "kind": "redistill_queued",
+        "source": "burst",
+        "state_from": "TEACHER",
+        "state_to": "TEACHER"
+      }
+    ],
+    "false_alarms_before_burst": 0,
+    "latency_note": "requests from the first burst request to the rollback, counting both (1 = caught on the very first burst request); null = no rollback during the burst",
+    "n_burst": 30,
+    "n_in_dist": 200,
+    "n_requests": 230,
+    "params": {
+      "audit_k": 10,
+      "audit_rate": 0.1,
+      "audit_window_m": 50,
+      "min_requests": 20,
+      "tau": 0.9,
+      "window_w": 20
+    },
+    "rollback_index": 212,
+    "rolled_back": true,
+    "seed": 20261013,
+    "student_answers_blocked_by_rollback": 0,
+    "student_answers_served": 92,
+    "student_answers_served_after_rollback": 0,
+    "wrong_student_answers_served_before_burst": 4,
+    "wrong_student_answers_served_before_rollback": 4,
+    "wrong_student_answers_served_during_burst": 0
+  },
+  "calibration": null,
+  "format": "distillery-drift-sim-v1",
+  "inputs": {
+    "burst_rows": {
+      "n": 30,
+      "path": ".distillery/n1live/runs/sql-gated-20261004T155134Z-66ff347c/router/signals_burst.json",
+      "sha256": "f162436171ef29d3a0000da322dec1ea38cbce957737a02073fbd8e1a0163a4f"
+    },
+    "fit_rows": {
+      "n": 584,
+      "path": ".distillery/n1live/runs/sql-gated-20261004T155134Z-66ff347c/router/signals_fit.json",
+      "sha256": "fe9cf67142f37c5c4f759b5c3b8faccc68dba4649655f12609c55d5665722247"
+    },
+    "in_dist_rows": ".distillery/n1live/runs/sql-gated-20261004T155134Z-66ff347c/router/signals_test.json",
+    "lambda": 0.9172253676263808
+  },
+  "params": {
+    "audit_k": 10,
+    "audit_rate": 0.1,
+    "audit_window_m": 50,
+    "min_requests": 20,
+    "tau": 0.9,
+    "window_w": 20
+  },
+  "tau_source": "given on the command line",
+  "verdict": {
+    "max_wrong_during_burst": 3,
+    "n": 25,
+    "no_false_alarm": true,
+    "pass": true,
+    "rolled_back_within_n": true,
+    "wrong_during_burst_ok": true
+  }
+}
