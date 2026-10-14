@@ -326,6 +326,8 @@ def n1(commit: str) -> dict[str, Any]:
 # Sources of the key names (the code that WRITES the file), so they can be reconciled:
 #   router_eval_test  `distillery router evaluate` body (router_cmd.py), router/eval_test.json
 #   drift_burst       `scripts/drift_sim.py --out` document (distillery.drift_sim)
+#   h3_burst_counts   `scripts/h3_burst_counts.py` (W-D's prereg, burst hashes, adapter)
+#   extras_from       stem of a companion file the prereg/sealed/adapter paths are read from
 #   h1_endpoint       `scripts/h1_endpoint.py` evidence (write_evidence)
 #   w_e2e             PLACEHOLDER: no writer exists yet; path and keys are NOT decided
 _GATE_P4 = {
@@ -504,7 +506,16 @@ KEYS: dict[str, dict[str, Any]] = {
             "after": "burst.student_answers_served_after_rollback",
             "false": "burst.false_alarms_before_burst",
         },
-        "sealed": {"fit_rows": "inputs.fit_rows.sha256", "burst_rows": "inputs.burst_rows.sha256"},
+        # the burst was scored under the pre-registration; its sealed hashes are the committed
+        # burst questions, references and DB (h3_burst_counts.json copies them from the signals)
+        "extras_from": "h3_burst_counts",
+        "prereg": ("prereg.commit", "prereg.committed_at"),
+        "sealed": {
+            "burst_questions": "burst_sha256.burst_questions",
+            "burst_reference": "burst_sha256.burst_reference",
+            "burst_db": "burst_sha256.burst_db",
+        },
+        "adapter": "adapter_sha256",
         "gate": "params",
     },
     "W-$": {
@@ -582,9 +593,14 @@ def _extras(
 ) -> dict[str, Any]:
     """prereg, sealed hashes, adapter hash, gate inputs and ledger total, read by KEYS paths."""
     where = f"{stem}.json"
+    src = spec.get("extras_from")  # prereg, sealed and adapter recorded in a companion file
+    xdoc, xwhere = (doc, where) if src is None else (_load(src, root), f"{src}.json")
 
     def dig(path: str) -> Any:
         return _dig(doc, path, where)
+
+    def xdig(path: str) -> Any:
+        return _dig(xdoc, path, xwhere)
 
     prereg, gate, ledger = spec.get("prereg"), spec.get("gate"), spec.get("ledger")
     usd = None
@@ -599,9 +615,9 @@ def _extras(
     return {
         "prereg": None
         if prereg is None
-        else {"commit": dig(prereg[0]), "committed_at": dig(prereg[1])},
-        "sealed_sha256": {k: dig(v) for k, v in spec.get("sealed", {}).items()},
-        "adapter_sha256": dig(spec["adapter"]) if "adapter" in spec else None,
+        else {"commit": xdig(prereg[0]), "committed_at": xdig(prereg[1])},
+        "sealed_sha256": {k: xdig(v) for k, v in spec.get("sealed", {}).items()},
+        "adapter_sha256": xdig(spec["adapter"]) if "adapter" in spec else None,
         "gate_inputs": gate_inputs,
         "ledger_total_usd": usd,
     }

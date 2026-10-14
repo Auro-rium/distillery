@@ -1,0 +1,27 @@
+{
+  "adapter_sha256": "7d6ce813882bf3a211c84bfab7f8109b3bcdd6ca4617349a03bff58076b85193",
+  "burst_sha256": {
+    "burst_db": "e50f7b39e1a39065c0fd1922f9bc4b6c1aa719dca72b48d2d89d980ed15a50cd",
+    "burst_questions": "447103a535175859a3e9cee591e7cdcac438f11f89f06ca75161c3534b2878b2",
+    "burst_reference": "cfe2526a3bba767697c563caeb30aaf4de03d6689919d74b48e11b687aa6fb0c"
+  },
+  "deferred": 30,
+  "exec_ok": 19,
+  "format": "distillery-h3-burst-counts-v1",
+  "inputs": {
+    "cert": "ebacbc2e416de19f8750561ec2fdbb09d5c2ba31fb674da0a10700315771d4fb",
+    "model": "b3a895f230e21a8fc75c077ab250aa766c807c078b3b71a4ed1e61031f4fc577",
+    "signals_burst": "f162436171ef29d3a0000da322dec1ea38cbce957737a02073fbd8e1a0163a4f"
+  },
+  "lambda_hat": 0.9172253676263808,
+  "n": 30,
+  "prereg": {
+    "commit": "6b370253a96059d20d009e839304e0e84d2d1a5b",
+    "committed_at": "2026-10-13T13:27:35+05:30"
+  },
+  "run_id": "sql-gated-20261004T155134Z-66ff347c",
+  "served_by_student": 0,
+  "served_wrong": 0,
+  "student_correct": 11,
+  "teacher_correct": 27
+}

@@ -111,7 +111,7 @@ def test_n1_is_failed_in_the_evidence_own_words() -> None:
 
 def test_only_n1_and_the_router_record_a_preregistration_and_no_gate_input_is_null() -> None:
     got = by_id()
-    assert [i for i, r in got.items() if r["prereg"] is not None] == ["N1", "W-C1", "W-C2"]
+    assert [i for i, r in got.items() if r["prereg"] is not None] == ["N1", "W-C1", "W-C2", "W-D"]
     for r in got.values():
         if r["gate_inputs"] is not None:
             assert all(v is not None for v in r["gate_inputs"].values()), r["id"]
@@ -247,9 +247,24 @@ def test_drift_burst_keys_match_the_simulator(sandbox: Path) -> None:
         "verdict": drift_script.verdict(rep, 25, 3),
     }
     put(sandbox, "drift_burst", doc)
+    counts = {  # the keys scripts/h3_burst_counts.py writes
+        "prereg": {"commit": "c" * 40, "committed_at": "2026-10-13T13:27:35+05:30"},
+        "burst_sha256": {
+            "burst_questions": "1" * 64,
+            "burst_reference": "2" * 64,
+            "burst_db": "3" * 64,
+        },
+        "adapter_sha256": "a" * 64,
+    }
+    put(sandbox, "h3_burst_counts", counts)
     r = by_id(sandbox)["W-D"]
     assert rep["rolled_back"] and r["status"] == "verified"
-    assert r["sealed_sha256"] == {"fit_rows": "e" * 64, "burst_rows": "f" * 64}
+    assert r["prereg"] == counts["prereg"] and r["adapter_sha256"] == "a" * 64
+    assert r["sealed_sha256"] == {
+        "burst_questions": "1" * 64,
+        "burst_reference": "2" * 64,
+        "burst_db": "3" * 64,
+    }
     assert r["gate_inputs"] == p.to_json()
     assert str(rep["detection_latency_requests"]) in r["value_display"]
     doc["verdict"] = drift_script.verdict({**rep, "detection_latency_requests": 26}, 25, 3)
