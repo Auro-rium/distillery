@@ -746,7 +746,7 @@ def live_runtime(ctx: RuntimeContext, deps_builder: DepsBuilder) -> RouterRuntim
     global ledger and the project cap apply to students, teacher and embeddings alike.
     UNVERIFIED live until its first real run."""
     from distillery.humanscore import HumanScoreRefusal, _outputs, load_report
-    from distillery.llm import LLMClient
+    from distillery.llm import LLMClient, RetryPolicy
     from distillery.orchestrator import (
         LedgerSink,
         LLMGenerator,
@@ -776,6 +776,9 @@ def live_runtime(ctx: RuntimeContext, deps_builder: DepsBuilder) -> RouterRuntim
                 config.model_ids,
                 sink=pipe.sink,
                 pricing=ledger.estimate_llm_cost,
+                # one scoring pass runs for hours and is not resumable: outlast a network outage
+                # of several minutes (live, name resolution failed long enough to end a run)
+                retry=RetryPolicy(max_attempts=10, max_delay_s=120.0),
                 **kw,
             )
             pipe.runner = LLMRunner(pipe.llm, ledger, bridge, pcfg)

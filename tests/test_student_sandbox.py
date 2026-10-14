@@ -18,6 +18,7 @@ from distillery.sandbox import FakeExecution, FakeSandbox, Job, SandboxError
 from distillery.sandbox_executor import AsyncBridge
 from distillery.sandbox_student import (
     ADAPTER_DIR,
+    LOST_JOB_RETRY_WAITS_S,
     SandboxCpuStudent,
     ServingImages,
     prepare_adapter,
@@ -493,8 +494,11 @@ def test_adapter_is_merged_only_after_the_strict_load_check() -> None:
 class FlakyJobs(FakeSandbox):
     """Loses the first N generation jobs the way the live sandbox once did (timed out, idle)."""
 
-    def __init__(self, inner: FakeSandbox, lose: int, *, exit_code: int = -1) -> None:
+    def __init__(
+        self, inner: FakeSandbox, lose: int, *, exit_code: int = -1, timed_out: bool | None = None
+    ) -> None:
         self._inner, self._lose, self._exit = inner, lose, exit_code
+        self._timed_out = exit_code == -1 if timed_out is None else timed_out
         self.batches = 0
 
     def __getattr__(self, name: str):  # type: ignore[no-untyped-def]
@@ -510,7 +514,7 @@ class FlakyJobs(FakeSandbox):
             if self._lose > 0:
                 self._lose -= 1
                 out.append(
-                    RunResult("", "", self._exit, None, timed_out=self._exit == -1, error="lost")
+                    RunResult("", "", self._exit, None, timed_out=self._timed_out, error="lost")
                 )
             else:
                 out.append(r)
@@ -542,6 +546,27 @@ def test_retries_are_bounded(stubs: Path, tmp_path: Path, bridge: AsyncBridge) -
     with pytest.raises(StudentServingError):
         s.generate(msgs(2))
     assert flaky.batches == 3  # one attempt plus GENERATION_JOB_RETRIES
+
+
+def test_a_job_lost_without_a_timeout_waits_before_each_resubmission(
+    stubs: Path, tmp_path: Path, bridge: AsyncBridge
+) -> None:
+    # live: name resolution failed for minutes, which immediate re-submissions could not outlast
+    flaky = FlakyJobs(make_sandbox(stubs, tmp_path, Log()), lose=3, timed_out=False)
+    waited: list[float] = []
+    s = SandboxCpuStudent(flaky, "img", bridge, base_model=MODEL, batch_size=2, sleep=waited.append)
+    assert s.generate(msgs(2)) == ["base|q0", "base|q1"]
+    assert waited == list(LOST_JOB_RETRY_WAITS_S[:3]) and flaky.batches == 4
+
+
+def test_lost_job_waits_are_bounded(stubs: Path, tmp_path: Path, bridge: AsyncBridge) -> None:
+    flaky = FlakyJobs(make_sandbox(stubs, tmp_path, Log()), lose=99, timed_out=False)
+    waited: list[float] = []
+    s = SandboxCpuStudent(flaky, "img", bridge, base_model=MODEL, batch_size=2, sleep=waited.append)
+    with pytest.raises(StudentServingError):
+        s.generate(msgs(2))
+    assert waited == list(LOST_JOB_RETRY_WAITS_S)
+    assert flaky.batches == 1 + len(LOST_JOB_RETRY_WAITS_S)
 
 
 def test_a_timed_out_job_is_retried_with_a_doubled_timeout(

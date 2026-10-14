@@ -30,6 +30,7 @@ import json
 import math
 import shlex
 import threading
+import time
 from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -46,7 +47,10 @@ BASE_DIR = "/models/base"
 ADAPTER_DIR = "/work/adapter"
 SCRIPT_PATH = "/work/gen.py"
 DEFAULT_MAX_NEW_TOKENS = 160  # what the S4 spike measured
-GENERATION_JOB_RETRIES = 2  # re-submissions of a generation job that hit a sandbox-level failure
+GENERATION_JOB_RETRIES = 2  # re-submissions of a generation job that timed out
+# waits before re-submitting a job the sandbox lost without a timeout (exit -1: an idle operation,
+# or the API unreachable; live, a DNS outage outlasted the old immediate re-submissions)
+LOST_JOB_RETRY_WAITS_S = (30.0, 60.0, 120.0, 240.0, 300.0)
 ADAPTER_CONFIG = "adapter_config.json"
 ADAPTER_WEIGHTS = ("adapter_model.safetensors", "adapter_model.bin")  # the names peft loads
 
@@ -587,6 +591,7 @@ class SandboxCpuStudent:
         max_sample_failure_fraction: float = 0.25,
         images: ServingImages | None = None,
         prebuilt_adapter_image: str | None = None,
+        sleep: Callable[[float], None] = time.sleep,
     ) -> None:
         if batch_size < 1:
             raise ValueError("batch_size must be >= 1")
@@ -607,6 +612,7 @@ class SandboxCpuStudent:
         self._job_base_s = job_base_timeout_s
         self._job_per_sample_s = job_per_sample_timeout_s
         self._max_fail = max_sample_failure_fraction
+        self._sleep = sleep
         self._images = images or ServingImages(
             sandbox, base_image, bridge, base_model=base_model, setup_timeout_s=timeout_s
         )
@@ -680,10 +686,20 @@ class SandboxCpuStudent:
         # exit -1 with no script error: seen live, an operation that sat idle until its timeout)
         # is re-submitted a bounded number of times instead of killing a multi-hour run. A job
         # that really ran and failed (script error, OOM exit code) is never retried here.
-        for _ in range(GENERATION_JOB_RETRIES):
-            redo = [i for i, r in enumerate(results) if _transient_job_failure(r)]
-            if not redo:
-                break
+        # Timed-out jobs re-run at once (GENERATION_JOB_RETRIES times); a job lost without a
+        # timeout re-runs after each of LOST_JOB_RETRY_WAITS_S, so a network outage can pass.
+        timeouts_left = GENERATION_JOB_RETRIES
+        waits = iter(LOST_JOB_RETRY_WAITS_S)
+        while redo := [i for i, r in enumerate(results) if _transient_job_failure(r)]:
+            if any(results[i].timed_out for i in redo):
+                if timeouts_left == 0:
+                    break
+                timeouts_left -= 1
+            if not all(results[i].timed_out for i in redo):
+                wait = next(waits, None)
+                if wait is None:
+                    break
+                self._sleep(wait)
             self.job_retries += len(redo)
             # Greedy decoding makes a slow batch slow every time (P1.11: the same 2 batches timed
             # out 3x, then ran fine with more time), so a timed-out job retries with 2x its timeout.
