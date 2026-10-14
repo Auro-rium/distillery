@@ -53,8 +53,8 @@ Student is `Qwen/Qwen3-1.7B` + LoRA, teacher is Nemotron 3 Super. All values are
 | B2 | Student 0.9233 vs a fair 8-shot Super teacher 0.9333; ratio lower bound 0.957 (a claim needs > 1.0) | no beat-the-teacher claim | `docs/proofs/evidence/b2_fair_teacher_s0_s1.json` |
 | Gate B | 86 natural, agent-authored questions: base 0.384, student 0.407; ratio lower bound 0.306; McNemar p 0.84 | REJECT | `docs/proofs/evidence/gateb_agent_authored.json` |
 | N1 | Natural-phrasing training, fresh agent-authored set (n=98): base 0.296, student 0.571, teacher 0.959; ratio lower bound 0.495; McNemar p 4.6e-07 | REJECT (above base, below the bar) | `docs/proofs/evidence/n1_natural_round.json` |
-| W-C1 | Certified router on the sealed test split: selective error, coverage, system accuracy vs teacher-only | `⟨PENDING:W-C1⟩` pre-registered, not yet scored | `router_eval_test.json` (not yet written) |
-| W-C2 | Share of wrong student answers the router defers | `⟨PENDING:W-C2⟩` pre-registered, not yet scored | `router_eval_test.json` (not yet written) |
+| W-C1 | Certified router on the sealed test split (n=490): student served 240 (coverage 0.490, minimum 0.30) with 10 wrong (selective error 0.042, 95% upper bound 0.070, alpha 0.08); system accuracy 0.951 vs teacher-only 0.935 | PASS | `docs/proofs/evidence/router_eval_test.json` |
+| W-C2 | Natural + stress test items: 115 of 117 wrong student answers deferred (0.983, lower 95% bound 0.947, minimum 0.80); 113 of 123 right answers deferred too (0.919), so the router mostly defers this traffic | PASS (small separation) | `docs/proofs/evidence/router_eval_test.json` |
 | W-D | Drift burst trips the guard and rolls back to the teacher | `⟨PENDING:W-D⟩` not yet measured | `drift_burst.json` (not yet written) |
 | W-$ | Student cost per 1k requests on an AI Cloud L40S vLLM endpoint | `⟨PENDING:W-$⟩` not yet measured | `h1_endpoint.json` (not yet written) |
 | W-G | An unchanged agent works against the gateway after one base-URL change | verified as a test | `tests/test_acme_wg.py` |

@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-13T07:58:12+05:30",
-  "commit": "1459bf7afa222d35cf79be7321a61785609c98c5",
+  "generated_at": "2026-10-14T13:59:51+05:30",
+  "commit": "a9b65a16b1050e481afd0ed580db091f6f0c836f",
   "repo_url": "https://github.com/Auro-rium/distillery",
   "proofs": [
     {
@@ -86,7 +86,7 @@
         }
       ],
       "evidence_path": "docs/proofs/evidence/p1_11_overfit.json",
-      "evidence_url": "https://github.com/Auro-rium/distillery/blob/1459bf7afa222d35cf79be7321a61785609c98c5/docs/proofs/evidence/p1_11_overfit.json"
+      "evidence_url": "https://github.com/Auro-rium/distillery/blob/a9b65a16b1050e481afd0ed580db091f6f0c836f/docs/proofs/evidence/p1_11_overfit.json"
     },
     {
       "id": "W1-P1.12",
@@ -119,7 +119,7 @@
         }
       ],
       "evidence_path": "docs/proofs/evidence/p1_12_decision.json",
-      "evidence_url": "https://github.com/Auro-rium/distillery/blob/1459bf7afa222d35cf79be7321a61785609c98c5/docs/proofs/evidence/p1_12_decision.json"
+      "evidence_url": "https://github.com/Auro-rium/distillery/blob/a9b65a16b1050e481afd0ed580db091f6f0c836f/docs/proofs/evidence/p1_12_decision.json"
     },
     {
       "id": "W2",
@@ -144,7 +144,7 @@
         }
       ],
       "evidence_path": "docs/proofs/evidence/p2_data.json",
-      "evidence_url": "https://github.com/Auro-rium/distillery/blob/1459bf7afa222d35cf79be7321a61785609c98c5/docs/proofs/evidence/p2_data.json"
+      "evidence_url": "https://github.com/Auro-rium/distillery/blob/a9b65a16b1050e481afd0ed580db091f6f0c836f/docs/proofs/evidence/p2_data.json"
     },
     {
       "id": "W3",
@@ -173,7 +173,7 @@
         }
       ],
       "evidence_path": "docs/proofs/evidence/p3_calibrate.json",
-      "evidence_url": "https://github.com/Auro-rium/distillery/blob/1459bf7afa222d35cf79be7321a61785609c98c5/docs/proofs/evidence/p3_calibrate.json"
+      "evidence_url": "https://github.com/Auro-rium/distillery/blob/a9b65a16b1050e481afd0ed580db091f6f0c836f/docs/proofs/evidence/p3_calibrate.json"
     },
     {
       "id": "W4",
@@ -210,7 +210,7 @@
         }
       ],
       "evidence_path": "docs/proofs/evidence/p4_run_summary.json",
-      "evidence_url": "https://github.com/Auro-rium/distillery/blob/1459bf7afa222d35cf79be7321a61785609c98c5/docs/proofs/evidence/p4_run_summary.json"
+      "evidence_url": "https://github.com/Auro-rium/distillery/blob/a9b65a16b1050e481afd0ed580db091f6f0c836f/docs/proofs/evidence/p4_run_summary.json"
     },
     {
       "id": "W5",
@@ -243,7 +243,7 @@
         }
       ],
       "evidence_path": "docs/proofs/evidence/p5_live.json",
-      "evidence_url": "https://github.com/Auro-rium/distillery/blob/1459bf7afa222d35cf79be7321a61785609c98c5/docs/proofs/evidence/p5_live.json"
+      "evidence_url": "https://github.com/Auro-rium/distillery/blob/a9b65a16b1050e481afd0ed580db091f6f0c836f/docs/proofs/evidence/p5_live.json"
     },
     {
       "id": "A5",
@@ -276,7 +276,7 @@
         }
       ],
       "evidence_path": "docs/proofs/evidence/a5_chaos.json",
-      "evidence_url": "https://github.com/Auro-rium/distillery/blob/1459bf7afa222d35cf79be7321a61785609c98c5/docs/proofs/evidence/a5_chaos.json"
+      "evidence_url": "https://github.com/Auro-rium/distillery/blob/a9b65a16b1050e481afd0ed580db091f6f0c836f/docs/proofs/evidence/a5_chaos.json"
     },
     {
       "id": "B2",
@@ -309,7 +309,7 @@
         }
       ],
       "evidence_path": "docs/proofs/evidence/b2_fair_teacher_s0_s1.json",
-      "evidence_url": "https://github.com/Auro-rium/distillery/blob/1459bf7afa222d35cf79be7321a61785609c98c5/docs/proofs/evidence/b2_fair_teacher_s0_s1.json"
+      "evidence_url": "https://github.com/Auro-rium/distillery/blob/a9b65a16b1050e481afd0ed580db091f6f0c836f/docs/proofs/evidence/b2_fair_teacher_s0_s1.json"
     },
     {
       "id": "Gate B",
@@ -346,7 +346,7 @@
         }
       ],
       "evidence_path": "docs/proofs/evidence/gateb_agent_authored.json",
-      "evidence_url": "https://github.com/Auro-rium/distillery/blob/1459bf7afa222d35cf79be7321a61785609c98c5/docs/proofs/evidence/gateb_agent_authored.json"
+      "evidence_url": "https://github.com/Auro-rium/distillery/blob/a9b65a16b1050e481afd0ed580db091f6f0c836f/docs/proofs/evidence/gateb_agent_authored.json"
     },
     {
       "id": "N1",
@@ -387,7 +387,7 @@
         }
       ],
       "evidence_path": "docs/proofs/evidence/n1_natural_round.json",
-      "evidence_url": "https://github.com/Auro-rium/distillery/blob/1459bf7afa222d35cf79be7321a61785609c98c5/docs/proofs/evidence/n1_natural_round.json"
+      "evidence_url": "https://github.com/Auro-rium/distillery/blob/a9b65a16b1050e481afd0ed580db091f6f0c836f/docs/proofs/evidence/n1_natural_round.json"
     }
   ],
   "receipts": [
@@ -398,7 +398,7 @@
       "verdict": "PASS",
       "value_display": "adapter on train set: 64/64",
       "artifact": "docs/proofs/evidence/p1_11_overfit.json",
-      "permalink": "https://github.com/Auro-rium/distillery/blob/1459bf7afa222d35cf79be7321a61785609c98c5/docs/proofs/evidence/p1_11_overfit.json",
+      "permalink": "https://github.com/Auro-rium/distillery/blob/a9b65a16b1050e481afd0ed580db091f6f0c836f/docs/proofs/evidence/p1_11_overfit.json",
       "prereg": null,
       "sealed_sha256": {},
       "adapter_sha256": "6a4df564f20ef8b3242b496dfae41fe044e7b47b991c94d298212c3fe2cccf65",
@@ -412,7 +412,7 @@
       "verdict": "PASS",
       "value_display": "arm A dev accuracy: 142/150",
       "artifact": "docs/proofs/evidence/p1_12_decision.json",
-      "permalink": "https://github.com/Auro-rium/distillery/blob/1459bf7afa222d35cf79be7321a61785609c98c5/docs/proofs/evidence/p1_12_decision.json",
+      "permalink": "https://github.com/Auro-rium/distillery/blob/a9b65a16b1050e481afd0ed580db091f6f0c836f/docs/proofs/evidence/p1_12_decision.json",
       "prereg": null,
       "sealed_sha256": {},
       "adapter_sha256": null,
@@ -426,7 +426,7 @@
       "verdict": "PARTIAL",
       "value_display": "labels verified correct: 276/276; filter recall on true misses: 85/86",
       "artifact": "docs/proofs/evidence/p2_data.json",
-      "permalink": "https://github.com/Auro-rium/distillery/blob/1459bf7afa222d35cf79be7321a61785609c98c5/docs/proofs/evidence/p2_data.json",
+      "permalink": "https://github.com/Auro-rium/distillery/blob/a9b65a16b1050e481afd0ed580db091f6f0c836f/docs/proofs/evidence/p2_data.json",
       "prereg": null,
       "sealed_sha256": {},
       "adapter_sha256": null,
@@ -440,7 +440,7 @@
       "verdict": "PASS",
       "value_display": "verifier gold vs gold: 1321/1321",
       "artifact": "docs/proofs/evidence/p3_calibrate.json",
-      "permalink": "https://github.com/Auro-rium/distillery/blob/1459bf7afa222d35cf79be7321a61785609c98c5/docs/proofs/evidence/p3_calibrate.json",
+      "permalink": "https://github.com/Auro-rium/distillery/blob/a9b65a16b1050e481afd0ed580db091f6f0c836f/docs/proofs/evidence/p3_calibrate.json",
       "prereg": null,
       "sealed_sha256": {},
       "adapter_sha256": null,
@@ -454,7 +454,7 @@
       "verdict": "PASS",
       "value_display": "decision: PROMOTE",
       "artifact": "docs/proofs/evidence/p4_run_summary.json",
-      "permalink": "https://github.com/Auro-rium/distillery/blob/1459bf7afa222d35cf79be7321a61785609c98c5/docs/proofs/evidence/p4_run_summary.json",
+      "permalink": "https://github.com/Auro-rium/distillery/blob/a9b65a16b1050e481afd0ed580db091f6f0c836f/docs/proofs/evidence/p4_run_summary.json",
       "prereg": null,
       "sealed_sha256": {
         "heldout": "cf92bf60e3c734f63035273395e629f3dafe0afab8397c4b01e2976f683dd878",
@@ -482,7 +482,7 @@
       "verdict": "PARTIAL",
       "value_display": "B3 job adopted, not recreated: PASS; kill-resume checks passed: 3/8",
       "artifact": "docs/proofs/evidence/p5_live.json",
-      "permalink": "https://github.com/Auro-rium/distillery/blob/1459bf7afa222d35cf79be7321a61785609c98c5/docs/proofs/evidence/p5_live.json",
+      "permalink": "https://github.com/Auro-rium/distillery/blob/a9b65a16b1050e481afd0ed580db091f6f0c836f/docs/proofs/evidence/p5_live.json",
       "prereg": null,
       "sealed_sha256": {},
       "adapter_sha256": null,
@@ -496,7 +496,7 @@
       "verdict": "PASS",
       "value_display": "chaos criteria met: 5/5",
       "artifact": "docs/proofs/evidence/a5_chaos.json",
-      "permalink": "https://github.com/Auro-rium/distillery/blob/1459bf7afa222d35cf79be7321a61785609c98c5/docs/proofs/evidence/a5_chaos.json",
+      "permalink": "https://github.com/Auro-rium/distillery/blob/a9b65a16b1050e481afd0ed580db091f6f0c836f/docs/proofs/evidence/a5_chaos.json",
       "prereg": null,
       "sealed_sha256": {},
       "adapter_sha256": null,
@@ -516,7 +516,7 @@
       "verdict": "PARTIAL",
       "value_display": "student/teacher ratio, lower bound: 0.957; beat-the-teacher claim: not made",
       "artifact": "docs/proofs/evidence/b2_fair_teacher_s0_s1.json",
-      "permalink": "https://github.com/Auro-rium/distillery/blob/1459bf7afa222d35cf79be7321a61785609c98c5/docs/proofs/evidence/b2_fair_teacher_s0_s1.json",
+      "permalink": "https://github.com/Auro-rium/distillery/blob/a9b65a16b1050e481afd0ed580db091f6f0c836f/docs/proofs/evidence/b2_fair_teacher_s0_s1.json",
       "prereg": null,
       "sealed_sha256": {
         "heldout": "cf92bf60e3c734f63035273395e629f3dafe0afab8397c4b01e2976f683dd878"
@@ -540,7 +540,7 @@
       "verdict": "FAIL",
       "value_display": "REJECT: ratio lower bound 0.306 < 0.85 (point 0.412)",
       "artifact": "docs/proofs/evidence/gateb_agent_authored.json",
-      "permalink": "https://github.com/Auro-rium/distillery/blob/1459bf7afa222d35cf79be7321a61785609c98c5/docs/proofs/evidence/gateb_agent_authored.json",
+      "permalink": "https://github.com/Auro-rium/distillery/blob/a9b65a16b1050e481afd0ed580db091f6f0c836f/docs/proofs/evidence/gateb_agent_authored.json",
       "prereg": null,
       "sealed_sha256": {
         "questions": "f791e32967f0e59aad7da28f8e53c4e183f5b99134662fc738b888d80c24da0a",
@@ -568,7 +568,7 @@
       "verdict": "FAIL",
       "value_display": "REJECT: ratio lower bound 0.495 < 0.85 (point 0.596)",
       "artifact": "docs/proofs/evidence/n1_natural_round.json",
-      "permalink": "https://github.com/Auro-rium/distillery/blob/1459bf7afa222d35cf79be7321a61785609c98c5/docs/proofs/evidence/n1_natural_round.json",
+      "permalink": "https://github.com/Auro-rium/distillery/blob/a9b65a16b1050e481afd0ed580db091f6f0c836f/docs/proofs/evidence/n1_natural_round.json",
       "prereg": {
         "commit": "bcd5f2df9388a9c31be5972530a3d5d20744ee5d",
         "committed_at": "2026-10-07T15:06:42+05:30"
@@ -596,29 +596,60 @@
     {
       "id": "W-C1",
       "claim": "The router lets the student answer only where its selective error stays within alpha, at the minimum coverage, without losing system accuracy.",
-      "status": "pending",
-      "verdict": null,
-      "value_display": null,
+      "status": "verified",
+      "verdict": "PASS",
+      "value_display": "selective error 0.04167 at coverage 0.4898 (alpha 0.08); system accuracy 0.951 vs teacher-only 0.9347",
       "artifact": "docs/proofs/evidence/router_eval_test.json",
-      "permalink": "https://github.com/Auro-rium/distillery/blob/1459bf7afa222d35cf79be7321a61785609c98c5/docs/proofs/evidence/router_eval_test.json",
-      "prereg": null,
-      "sealed_sha256": {},
+      "permalink": "https://github.com/Auro-rium/distillery/blob/a9b65a16b1050e481afd0ed580db091f6f0c836f/docs/proofs/evidence/router_eval_test.json",
+      "prereg": {
+        "commit": "6b370253a96059d20d009e839304e0e84d2d1a5b",
+        "committed_at": "2026-10-13T13:27:35+05:30"
+      },
+      "sealed_sha256": {
+        "test_split": "abc6e2943d3b68b0b4e513e7050de9690abf16d05a19a8bfbfe8860ab68de75d"
+      },
       "adapter_sha256": null,
-      "gate_inputs": null,
+      "gate_inputs": {
+        "n_test": 490,
+        "alpha": 0.08,
+        "delta": 0.05,
+        "lambda_hat": 0.9172253676263808,
+        "coverage": 0.4897959183673469,
+        "min_coverage": 0.3,
+        "selective_error": 0.041666666666666664,
+        "cp_upper_95": 0.06965094427644997,
+        "system_accuracy": 0.9510204081632653,
+        "teacher_only_accuracy": 0.9346938775510204,
+        "tolerance": 0.01
+      },
       "ledger_total_usd": null
     },
     {
       "id": "W-C2",
       "claim": "The router defers most of the answers the student gets wrong, and fewer of the ones it gets right.",
-      "status": "pending",
-      "verdict": null,
-      "value_display": null,
+      "status": "verified",
+      "verdict": "PASS",
+      "value_display": "115 of 117 wrong answers deferred (share 0.9829, lower 95% bound 0.9472, minimum 0.8); 113 of 123 right answers deferred",
       "artifact": "docs/proofs/evidence/router_eval_test.json",
-      "permalink": "https://github.com/Auro-rium/distillery/blob/1459bf7afa222d35cf79be7321a61785609c98c5/docs/proofs/evidence/router_eval_test.json",
-      "prereg": null,
-      "sealed_sha256": {},
+      "permalink": "https://github.com/Auro-rium/distillery/blob/a9b65a16b1050e481afd0ed580db091f6f0c836f/docs/proofs/evidence/router_eval_test.json",
+      "prereg": {
+        "commit": "6b370253a96059d20d009e839304e0e84d2d1a5b",
+        "committed_at": "2026-10-13T13:27:35+05:30"
+      },
+      "sealed_sha256": {
+        "test_split": "abc6e2943d3b68b0b4e513e7050de9690abf16d05a19a8bfbfe8860ab68de75d"
+      },
       "adapter_sha256": null,
-      "gate_inputs": null,
+      "gate_inputs": {
+        "n_error_items": 117,
+        "n_error_deferred": 115,
+        "deferred_share": 0.9829059829059829,
+        "deferred_share_min": 0.8,
+        "deferred_share_lower_95": 0.9471691890212635,
+        "n_correct_items": 123,
+        "n_correct_deferred": 113,
+        "deferral_rate_on_correct": 0.9186991869918699
+      },
       "ledger_total_usd": null
     },
     {
@@ -628,7 +659,7 @@
       "verdict": null,
       "value_display": null,
       "artifact": "docs/proofs/evidence/drift_burst.json",
-      "permalink": "https://github.com/Auro-rium/distillery/blob/1459bf7afa222d35cf79be7321a61785609c98c5/docs/proofs/evidence/drift_burst.json",
+      "permalink": "https://github.com/Auro-rium/distillery/blob/a9b65a16b1050e481afd0ed580db091f6f0c836f/docs/proofs/evidence/drift_burst.json",
       "prereg": null,
       "sealed_sha256": {},
       "adapter_sha256": null,
@@ -642,7 +673,7 @@
       "verdict": null,
       "value_display": null,
       "artifact": "docs/proofs/evidence/h1_endpoint.json",
-      "permalink": "https://github.com/Auro-rium/distillery/blob/1459bf7afa222d35cf79be7321a61785609c98c5/docs/proofs/evidence/h1_endpoint.json",
+      "permalink": "https://github.com/Auro-rium/distillery/blob/a9b65a16b1050e481afd0ed580db091f6f0c836f/docs/proofs/evidence/h1_endpoint.json",
       "prereg": null,
       "sealed_sha256": {},
       "adapter_sha256": null,
@@ -656,7 +687,7 @@
       "verdict": null,
       "value_display": "same agent code, base URL swapped; test passes",
       "artifact": "tests/test_acme_wg.py",
-      "permalink": "https://github.com/Auro-rium/distillery/blob/1459bf7afa222d35cf79be7321a61785609c98c5/tests/test_acme_wg.py",
+      "permalink": "https://github.com/Auro-rium/distillery/blob/a9b65a16b1050e481afd0ed580db091f6f0c836f/tests/test_acme_wg.py",
       "prereg": null,
       "sealed_sha256": {},
       "adapter_sha256": null,
@@ -670,7 +701,7 @@
       "verdict": null,
       "value_display": null,
       "artifact": "docs/proofs/evidence/w_e2e.json",
-      "permalink": "https://github.com/Auro-rium/distillery/blob/1459bf7afa222d35cf79be7321a61785609c98c5/docs/proofs/evidence/w_e2e.json",
+      "permalink": "https://github.com/Auro-rium/distillery/blob/a9b65a16b1050e481afd0ed580db091f6f0c836f/docs/proofs/evidence/w_e2e.json",
       "prereg": null,
       "sealed_sha256": {},
       "adapter_sha256": null,

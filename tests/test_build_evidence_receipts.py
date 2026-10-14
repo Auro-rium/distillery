@@ -40,7 +40,7 @@ FIELDS = {
     "id", "claim", "status", "verdict", "value_display", "artifact", "permalink", "prereg",
     "sealed_sha256", "adapter_sha256", "gate_inputs", "ledger_total_usd",
 }  # fmt: skip
-PENDING = ["W-C1", "W-C2", "W-D", "W-$", "W-E2E"]
+PENDING = ["W-D", "W-$", "W-E2E"]  # W-C1/W-C2 scored 2026-10-14
 EVIDENCE = Path(be.EVIDENCE_DIR)
 
 
@@ -109,9 +109,9 @@ def test_n1_is_failed_in_the_evidence_own_words() -> None:
     assert n1["ledger_total_usd"] == pytest.approx(3.828866)
 
 
-def test_only_n1_records_a_preregistration_and_no_gate_input_is_null() -> None:
+def test_only_n1_and_the_router_record_a_preregistration_and_no_gate_input_is_null() -> None:
     got = by_id()
-    assert [i for i, r in got.items() if r["prereg"] is not None] == ["N1"]
+    assert [i for i, r in got.items() if r["prereg"] is not None] == ["N1", "W-C1", "W-C2"]
     for r in got.values():
         if r["gate_inputs"] is not None:
             assert all(v is not None for v in r["gate_inputs"].values()), r["id"]
@@ -212,7 +212,7 @@ def test_router_keys_match_the_code_that_writes_them(sandbox: Path) -> None:
         assert r["sealed_sha256"] == {"test_split": "d" * 64}
         assert r["prereg"] == {"commit": "c" * 40, "committed_at": "2026-10-20T10:00:00+05:30"}
         assert r["adapter_sha256"] is None and r["ledger_total_usd"] is None
-    assert str(c1["selective_error"]) in got["W-C1"]["value_display"]
+    assert f"selective error {c1['selective_error']:.4g} " in got["W-C1"]["value_display"]
     assert got["W-C1"]["gate_inputs"]["coverage"] == c1["coverage"]
     assert (
         f"{c2['n_error_deferred']} of {c2['n_error_items']} wrong answers"
@@ -266,7 +266,7 @@ def test_h1_keys_match_the_measurement_code(sandbox: Path) -> None:
     put(sandbox, "h1_endpoint", doc)
     r = by_id(sandbox)["W-$"]
     assert r["status"] == "verified"
-    assert str(doc["costs"]["student"]["usd_per_1k"]) in r["value_display"]
+    assert f"student USD {doc['costs']['student']['usd_per_1k']:.4g} " in r["value_display"]
     assert r["ledger_total_usd"] == 0.75
     assert r["gate_inputs"]["hourly_usd"] == 2.5
     doc["error"] = "endpoint never became ready"

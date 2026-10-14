@@ -562,8 +562,14 @@ def _dig(doc: Any, path: str, where: str) -> Any:
 
 
 def _shown(v: Any) -> str:
-    """A value as text in value_display: numbers and strings exactly as the evidence has them."""
-    return "none" if v is None else str(v)
+    """A value as text in value_display: numbers and strings as the evidence has them, except a
+    computed ratio with a long binary tail (0.041666666666666664), shown to 4 significant digits;
+    the exact value stays in gate_inputs."""
+    if v is None:
+        return "none"
+    if isinstance(v, float) and len(str(v)) > 10:
+        return f"{v:.4g}"
+    return str(v)
 
 
 def _read(root: Path | None, stem: str) -> dict[str, Any] | None:
