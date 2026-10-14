@@ -1,6 +1,6 @@
 # STATUS
 
-**Date:** 2026-10-14 · **Phase:** final build (WIN PLAN H1-H6) toward the Nebius x NVIDIA Global AI Hackathon; **Devpost deadline 2026-10-30 10:00 PT** (our internal submit date is 2026-10-27; judging runs 2026-12-01 to 12-15 and the site must stay up). Baseline of proven and broken claims: `GROUND_TRUTH.md` (25 claims). Pre-registrations and results: `DECISIONS.md`. Older status detail is in git history.
+**Date:** 2026-10-14 · **Phase:** final build (WIN PLAN H1-H6) toward the Nebius x NVIDIA Global AI Hackathon; **Devpost deadline 2026-10-30 10:00 PT** (our internal submit date is 2026-10-27; judging runs 2026-12-01 to 12-15 and the site must stay up). Baseline of proven and broken claims: `GROUND_TRUTH.md` (28 claims). Pre-registrations and results: `DECISIONS.md`. Older status detail is in git history.
 
 ## Results (all evidence in `docs/proofs/evidence/`)
 | Round | Decision | Key numbers | Evidence |

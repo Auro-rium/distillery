@@ -46,7 +46,7 @@ Every number is copied from the file in the Source column. Student is `Qwen/Qwen
 | W-G | An unchanged agent works against the gateway after one base-URL change | same agent code, base URL swapped; test passes | verified as a test | [tests/test_acme_wg.py](tests/test_acme_wg.py) |
 | W-E2E | Live end to end: certified router, student, deferral, drift guard | `⟨PENDING:W-E2E⟩` | pending: not yet measured | `w_e2e.json` (does not exist yet) |
 
-Spend to date (global ledger; sandbox is recorded at $0, so this is a lower bound): $15.2245 of the 19.50 cap, plus $1.50 reserved for hosting the demo ([STATUS.md](STATUS.md)). Claims, procedures and pre-registrations: [DECISIONS.md](DECISIONS.md); the 25-claim audit: [GROUND_TRUTH.md](GROUND_TRUTH.md). Cost per 1k tasks for the student is not reported until W-$ exists.
+Spend to date (global ledger; sandbox is recorded at $0, so this is a lower bound): $15.2245 of the 19.50 cap, plus $1.50 reserved for hosting the demo ([STATUS.md](STATUS.md)). Claims, procedures and pre-registrations: [DECISIONS.md](DECISIONS.md); the 28-claim audit: [GROUND_TRUTH.md](GROUND_TRUTH.md). Cost per 1k tasks for the student is not reported until W-$ exists.
 
 ## Nebius and NVIDIA usage
 
