@@ -155,3 +155,37 @@ def test_status_and_savings_see_the_calls(tmp_path: Path) -> None:
     ask(env)
     assert env.client.get("/api/gateway/savings").json()["requests"] == 1
     assert env.client.get("/api/gateway/status").json()["today"]["served_by"]["student"] == 1
+
+
+def test_the_drift_audit_runs_after_the_visitors_answer_not_inside_it(tmp_path: Path) -> None:
+    # httpx.ASGITransport awaits an app's background tasks, so a gateway BackgroundTask would make
+    # the visitor wait for the audit's teacher call. The work is handed to /api/acme/ask, which
+    # runs it after its own response: by then the summary call is in the call log too.
+    from test_gateway_drift import drift
+
+    env = certified(tmp_path, gateway={"drift": drift(audit_rate=1.0)})
+    gw = env.app.state.gateway
+    seen: list[int] = []
+    inner = gw._drift_after
+
+    async def spy(work: Any) -> None:
+        seen.append(len(env.rows()))
+        await inner(work)
+
+    gw._drift_after = spy
+    d = ask(env).json()
+    assert d["distillery"]["served_by"] == "student" and len(d["calls"]) == 2
+    assert seen == [2]  # skill + summary were both answered before the audit started
+    assert gw.drift_status()["audits"]["audits"] == 1
+    assert not gw._handoff  # nothing left behind
+
+
+def test_a_forged_internal_header_changes_nothing(tmp_path: Path) -> None:
+    from test_gateway import skill_body
+    from test_gateway_drift import drift
+
+    env = certified(tmp_path, gateway={"drift": drift(audit_rate=1.0)})
+    gw = env.app.state.gateway
+    r = env.post(skill_body(), **{"x-distillery-internal": "guess"})
+    assert r.status_code == 200 and not gw._handoff
+    assert gw.drift_status()["audits"]["audits"] == 1  # ran as the response's own background

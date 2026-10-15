@@ -18,13 +18,14 @@ from collections.abc import Callable
 from typing import Any
 
 import httpx
-from fastapi import FastAPI, Request
+from fastapi import BackgroundTasks, FastAPI, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from starlette.concurrency import run_in_threadpool
 
 from distillery.acme import SUMMARY_MAX_TOKENS, summary_messages
 from distillery.prompts import build_messages, extract_sql
+from distillery.server.gateway import INTERNAL_HEADER
 from distillery.server.playground import DEMO_DB_REF, MAX_QUESTION_CHARS, _cell
 from distillery.taskpacks.sql import schema as sql_schema
 from distillery.taskpacks.sql.runner import ExecOutcome, run_select
@@ -123,8 +124,21 @@ def install(app: FastAPI, ip_of: Callable[[Request], str]) -> None:
             return _err(503, "teacher_unavailable", "no teacher model is configured")
         ip = ip_of(request)
 
+        followups = BackgroundTasks()
+        resp = await _ask(app, gw, ip, question, teacher, request, followups)
+        if followups.tasks:  # the drift audit runs after the visitor has the answer
+            resp.background = followups
+        return resp
+
+    async def _ask(
+        app: FastAPI, gw: Any, ip: str, question: str, teacher: str, request: Request,
+        followups: BackgroundTasks,
+    ) -> JSONResponse:  # fmt: skip
         transport = httpx.ASGITransport(app=app, client=(ip, 0), raise_app_exceptions=False)
-        async with httpx.AsyncClient(transport=transport, base_url="http://acme.internal") as http:
+        headers = {INTERNAL_HEADER: gw.internal_token}
+        async with httpx.AsyncClient(
+            transport=transport, base_url="http://acme.internal", headers=headers
+        ) as http:
             calls: list[str] = []
 
             async def post(payload: dict[str, Any]) -> httpx.Response:
@@ -132,6 +146,9 @@ def install(app: FastAPI, ip_of: Callable[[Request], str]) -> None:
                 rid = res.headers.get("x-distillery-request-id")
                 if rid:
                     calls.append(rid)
+                    task = gw.take_drift_work(rid)
+                    if task is not None:
+                        followups.tasks.append(task)
                 return res
 
             # 1. the SQL skill: byte-for-byte the request the Acme agent sends

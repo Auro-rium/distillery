@@ -23,6 +23,7 @@ import secrets
 import threading
 import time
 import uuid
+from collections import OrderedDict
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta
@@ -76,6 +77,8 @@ UNKNOWN_SCHEMA_REASON = (
     "unknown database schema: the student is certified on the demo schema only → teacher"
 )
 STUDENT_DAILY_LIMIT_REASON = "student daily limit reached → teacher"
+INTERNAL_HEADER = "x-distillery-internal"
+MAX_HANDOFF = 256
 ROUTER_MODEL_FILES = ("model.json", "router_model.json")
 SUPPORTED_PARAMS = ("temperature", "top_p", "stop", "seed")
 UNSUPPORTED_FIELDS = ("tools", "tool_choice", "functions", "function_call")
@@ -476,6 +479,10 @@ class Gateway:
         self._ddl_ok = {DDL_SHA256}
         self._student_lock = threading.Lock()
         self._student_day: tuple[str, int] | None = None
+        # in-process callers (/api/acme/ask) prove themselves with this token and take the drift
+        # work off the gateway response, so their visitor does not wait for the audit
+        self.internal_token = secrets.token_hex(16)
+        self._handoff: OrderedDict[str, _DriftWork] = OrderedDict()
         self.nn_sim: Callable[[str], float] | None = self.g.nn_sim
         self.index = load_index(self.router) if self.router.certified else None
         self._drift_lock = threading.Lock()
@@ -523,6 +530,22 @@ class Gateway:
                 log.exception("gateway: could not persist the drift event %s", e.kind)
             if e.kind == "rollback":
                 log.warning("drift guard: ROLLBACK to teacher-only (%s): %s", e.detector, e.details)
+
+    def _internal(self, request: Request) -> bool:
+        got = request.headers.get(INTERNAL_HEADER)
+        return got is not None and hmac.compare_digest(got, self.internal_token)
+
+    def _stash(self, request_id: str, work: _DriftWork) -> None:
+        self._handoff[request_id] = work
+        while len(self._handoff) > MAX_HANDOFF:
+            lost, _ = self._handoff.popitem(last=False)
+            log.warning("gateway: drift work for %s was never collected; dropped", lost)
+
+    def take_drift_work(self, request_id: str) -> BackgroundTask | None:
+        """The audit + monitor update of an in-process call, for the caller to run after ITS
+        response (``httpx.ASGITransport`` would otherwise await it inside the call)."""
+        work = self._handoff.pop(request_id, None)
+        return None if work is None else BackgroundTask(self._drift_after, work)
 
     async def _drift_after(self, work: _DriftWork) -> None:
         """Runs after the response is sent: the optional audit, then feed the monitor."""
@@ -785,7 +808,10 @@ class Gateway:
             lg.status = "ok"
             resp = JSONResponse(body, headers=headers)
             if lg.drift_work is not None:  # the audit + monitor run after the client has its answer
-                resp.background = BackgroundTask(self._drift_after, lg.drift_work)
+                if self._internal(request):
+                    self._stash(lg.request_id, lg.drift_work)
+                else:
+                    resp.background = BackgroundTask(self._drift_after, lg.drift_work)
         except GatewayError as exc:
             lg.status = "refused" if exc.status < 500 else "error"
             lg.error = exc.code
