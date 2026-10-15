@@ -72,6 +72,10 @@ log = logging.getLogger("distillery.gateway")
 SKILL = "acme-sql"
 MAX_ROWS = 20
 NOT_CERTIFIED_REASON = "not certified: all traffic goes to the teacher"
+UNKNOWN_SCHEMA_REASON = (
+    "unknown database schema: the student is certified on the demo schema only → teacher"
+)
+STUDENT_DAILY_LIMIT_REASON = "student daily limit reached → teacher"
 ROUTER_MODEL_FILES = ("model.json", "router_model.json")
 SUPPORTED_PARAMS = ("temperature", "top_p", "stop", "seed")
 UNSUPPORTED_FIELDS = ("tools", "tool_choice", "functions", "function_call")
@@ -1018,6 +1022,12 @@ class Gateway:
             return await self._via_teacher(
                 req, ddl_known, lg, self.drift.reason(), None, lam, False
             )
+        if not ddl_known:
+            # certified on the demo schema only; no embedding or student slot is spent on a
+            # request it can never serve, and it stays out of the drift monitor (not decided)
+            return await self._via_teacher(
+                req, ddl_known, lg, UNKNOWN_SCHEMA_REASON, None, lam, False
+            )
         if "nn_sim" in model.feature_names:
             try:
                 nn = await self._nn_sim(skill.question, lg)
@@ -1034,12 +1044,10 @@ class Gateway:
                 req, ddl_known, lg, f"student unavailable ({why}) → teacher", None, lam, False
             )
         if not self._take_student_slot():
-            raise GatewayError(
-                429, "student_daily_cap",
-                f"daily cap of {self.g.student_daily_max} student (sandbox) calls reached; "
-                "resets at 00:00 UTC",
-                {"Retry-After": str(self._until_midnight())},
-            )  # fmt: skip
+            # a capacity limit, not a router decision: the teacher answers, outside the monitor
+            return await self._via_teacher(
+                req, ddl_known, lg, STUDENT_DAILY_LIMIT_REASON, None, lam, False
+            )
         lg.student_called = True
         try:
             outs = await run_in_threadpool(generate_detailed, server, [list(req.messages)])

@@ -305,13 +305,24 @@ def test_low_confidence_defers(tmp_path: Path) -> None:
     assert d["served_by"] == "teacher" and d["reason"] == "low student confidence → teacher"
 
 
-def test_unknown_schema_means_exec_ok_zero(tmp_path: Path) -> None:
-    student, nn = student_for()
-    env = Env(tmp_path, router=write_router(tmp_path / "r"), student=student, nn_sim=nn)
+def test_unknown_schema_goes_to_the_teacher_before_any_student_or_embedding_spend(
+    tmp_path: Path,
+) -> None:
+    # the student is certified on the demo schema only: another schema can never be served by it,
+    # so it must not use a paid embedding or one of the day's student slots on the way
+    student, _ = student_for()
+    looked_up: list[str] = []
+    env = Env(
+        tmp_path, router=write_router(tmp_path / "r"), student=student,
+        nn_sim=lambda q: looked_up.append(q) or 0.9,
+    )  # fmt: skip
     msgs = build_messages(QUESTION, "CREATE TABLE other(x INTEGER)", role="eval_teacher")
     d = env.post({"model": TEACHER, "messages": msgs}).json()["distillery"]
-    assert d["served_by"] == "teacher" and d["reason"] == "student SQL failed to run → teacher"
+    assert d["served_by"] == "teacher" and d["reason"].startswith("unknown database schema")
+    assert d["score"] is None and d["embed_cost_usd"] == 0
     assert d["verified"] is False and d["rows"] == []
+    assert student.calls == 0 and looked_up == []
+    assert env.rows()[-1]["student_called"] == 0
 
 
 def test_student_failure_and_unmeasured_confidence_defer(tmp_path: Path) -> None:
@@ -457,17 +468,19 @@ def test_per_ip_limit_429_and_logged(tmp_path: Path) -> None:
     assert [r["status"] for r in env.rows()] == ["ok", "ok", "refused", "ok"]
 
 
-def test_student_daily_cap(tmp_path: Path) -> None:
+def test_student_daily_cap_hands_the_rest_of_the_day_to_the_teacher(tmp_path: Path) -> None:
     student, nn = student_for()
     env = Env(
         tmp_path, router=write_router(tmp_path / "r"), student=student, nn_sim=nn,
         gateway={"student_daily_max": 2},
     )  # fmt: skip
-    assert [env.post(skill_body()).status_code for _ in range(2)] == [200, 200]
+    served = [env.post(skill_body()).json()["distillery"]["served_by"] for _ in range(2)]
+    assert served == ["student", "student"]
     r = env.post(skill_body())
-    assert r.status_code == 429 and r.json()["error"]["code"] == "student_daily_cap"
-    assert "retry-after" in r.headers and student.calls == 2
-    assert env.rows()[-1]["status"] == "refused"
+    assert r.status_code == 200 and "retry-after" not in r.headers
+    d = r.json()["distillery"]
+    assert d["served_by"] == "teacher" and d["reason"] == "student daily limit reached → teacher"
+    assert student.calls == 2 and env.rows()[-1]["status"] == "ok"
     # the cap does not stop calls that never touch the student sandbox
     assert env.post(_chat(NANO)).status_code == 200
 
