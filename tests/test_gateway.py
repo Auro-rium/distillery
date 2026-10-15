@@ -485,6 +485,32 @@ def test_student_daily_cap_hands_the_rest_of_the_day_to_the_teacher(tmp_path: Pa
     assert env.post(_chat(NANO)).status_code == 200
 
 
+def test_a_global_ledger_failure_keeps_the_paid_answer_and_stops_further_spend(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    # the call was billed: discarding the answer would make the client retry and pay twice; but
+    # with the shared ledger blind, no later call may spend until a restart
+    from distillery.global_ledger import GlobalLedgerError
+
+    class Blind:
+        def total_committed(self) -> float:
+            return 0.0
+
+        def record(self, *a: Any, **kw: Any) -> None:
+            raise GlobalLedgerError("database is locked")
+
+    env = Env(tmp_path)
+    env.app.state.gateway.ledger.global_ledger = Blind()
+    r = env.post(_chat(NANO))
+    assert r.status_code == 200 and r.json()["choices"][0]["message"]["content"]
+    assert "global ledger write failed" in caplog.text
+    assert env.app.state.reader.real.spend_on_day(env.rows()[-1]["day"], "playground") > 0
+    before = len(env.upstream.calls)
+    r = env.post(_chat(NANO))
+    assert r.status_code == 503 and r.json()["error"]["code"] == "ledger_unavailable"
+    assert len(env.upstream.calls) == before  # nothing was spent
+
+
 def test_daily_dollar_cap_shared_with_the_playground(tmp_path: Path) -> None:
     # reservation = input estimate + the output cap the call may reach (2048 tokens), at 1/2 $ per M
     in_est = sum(len(m["content"]) for m in skill_body()["messages"]) // 3

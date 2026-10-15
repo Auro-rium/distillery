@@ -47,6 +47,7 @@ from distillery.drift import (
     DriftState,
     RouteEvent,
 )
+from distillery.global_ledger import GlobalLedgerError
 from distillery.prompts import SYSTEM_PROMPT, extract_sql, parse_user_content, strip_thinking
 from distillery.router import RouterModel, decide, precheck
 from distillery.server.gateway_config import (
@@ -479,6 +480,7 @@ class Gateway:
         self._ddl_ok = {DDL_SHA256}
         self._student_lock = threading.Lock()
         self._student_day: tuple[str, int] | None = None
+        self._ledger_blind = False  # set when a paid call could not reach the global ledger
         # in-process callers (/api/acme/ask) prove themselves with this token and take the drift
         # work off the gateway response, so their visitor does not wait for the audit
         self.internal_token = secrets.token_hex(16)
@@ -746,6 +748,7 @@ class Gateway:
     async def _upstream_call(
         self, model: str, messages: Sequence[Mapping[str, str]], params: dict[str, Any], lg: CallLog
     ) -> tuple[UpstreamResult, float]:
+        self._refuse_if_ledger_blind()
         if self.upstream is None:
             raise GatewayError(
                 503, "upstream_unavailable", "no upstream model provider is configured"
@@ -786,12 +789,40 @@ class Gateway:
                 usd,
             )
             # recorded BEFORE the reservation is released, so spend is never invisible
-            self.ledger.record(
-                PLAYGROUND, model, usd, res.input_tokens, res.output_tokens, latency_s=latency
+            await self._record(
+                lg, model, usd, res.input_tokens, res.output_tokens, latency_s=latency
             )
         finally:
             self.pg._release(estimate)  # noqa: SLF001
         return res, usd
+
+    async def _record(
+        self, lg: CallLog, model: str, usd: float, input_tokens: int, output_tokens: int,
+        *, latency_s: float,
+    ) -> None:  # fmt: skip
+        """Record paid spend off the event loop. A global-ledger failure (the local store already
+        has the row) must not discard an answer that was paid for, so it is logged and the gateway
+        latches: every later paid call is refused until a restart, so the shared cap check is
+        never bypassed while it cannot see this spend."""
+        try:
+            await run_in_threadpool(
+                self.ledger.record, PLAYGROUND, model, usd, input_tokens, output_tokens,
+                latency_s=latency_s,
+            )  # fmt: skip
+        except GlobalLedgerError:
+            self._ledger_blind = True
+            log.exception(
+                "gateway: global ledger write failed for %s; refusing paid calls until restart",
+                lg.request_id,
+            )
+
+    def _refuse_if_ledger_blind(self) -> None:
+        if self._ledger_blind:
+            raise GatewayError(
+                503, "ledger_unavailable",
+                "spend could not be written to the global ledger; paid calls are off until the "
+                "server restarts",
+            )  # fmt: skip
 
     # ---- entry point ------------------------------------------------------------------------
     async def handle(self, request: Request) -> JSONResponse:
@@ -943,6 +974,7 @@ class Gateway:
         from distillery.embed_index import EmbedIndexError
 
         assert self.index is not None and self.upstream is not None  # noqa: S101
+        self._refuse_if_ledger_blind()
         model = self.index.model
         in_est = len(question) // 3 + 8
         try:
@@ -969,9 +1001,7 @@ class Gateway:
             tokens = res.prompt_tokens or in_est
             usd = self.ledger.estimate_llm_cost(model, tokens, 0)
             lg.embed_usd += usd
-            self.ledger.record(
-                PLAYGROUND, model, usd, tokens, 0, latency_s=time.monotonic() - started
-            )
+            await self._record(lg, model, usd, tokens, 0, latency_s=time.monotonic() - started)
         finally:
             self.pg._release(estimate)  # noqa: SLF001
         try:
