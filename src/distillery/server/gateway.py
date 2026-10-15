@@ -789,26 +789,24 @@ class Gateway:
                 usd,
             )
             # recorded BEFORE the reservation is released, so spend is never invisible
-            await self._record(
-                lg, model, usd, res.input_tokens, res.output_tokens, latency_s=latency
-            )
+            self._record(lg, model, usd, res.input_tokens, res.output_tokens, latency_s=latency)
         finally:
             self.pg._release(estimate)  # noqa: SLF001
         return res, usd
 
-    async def _record(
+    def _record(
         self, lg: CallLog, model: str, usd: float, input_tokens: int, output_tokens: int,
         *, latency_s: float,
     ) -> None:  # fmt: skip
-        """Record paid spend off the event loop. A global-ledger failure (the local store already
-        has the row) must not discard an answer that was paid for, so it is logged and the gateway
-        latches: every later paid call is refused until a restart, so the shared cap check is
-        never bypassed while it cannot see this spend."""
+        """Record paid spend (on the event loop, like the playground: records never overlap). A
+        global-ledger failure (the local store already has the row) must not discard an answer
+        that was paid for, so it is logged and the gateway latches: every later gateway paid call
+        is refused until a restart, so it never spends while the shared cap check cannot see this
+        spend."""
         try:
-            await run_in_threadpool(
-                self.ledger.record, PLAYGROUND, model, usd, input_tokens, output_tokens,
-                latency_s=latency_s,
-            )  # fmt: skip
+            self.ledger.record(
+                PLAYGROUND, model, usd, input_tokens, output_tokens, latency_s=latency_s
+            )
         except GlobalLedgerError:
             self._ledger_blind = True
             log.exception(
@@ -1001,7 +999,7 @@ class Gateway:
             tokens = res.prompt_tokens or in_est
             usd = self.ledger.estimate_llm_cost(model, tokens, 0)
             lg.embed_usd += usd
-            await self._record(lg, model, usd, tokens, 0, latency_s=time.monotonic() - started)
+            self._record(lg, model, usd, tokens, 0, latency_s=time.monotonic() - started)
         finally:
             self.pg._release(estimate)  # noqa: SLF001
         try:
