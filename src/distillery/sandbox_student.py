@@ -592,6 +592,8 @@ class SandboxCpuStudent:
         images: ServingImages | None = None,
         prebuilt_adapter_image: str | None = None,
         sleep: Callable[[float], None] = time.sleep,
+        lost_job_waits: Sequence[float] = LOST_JOB_RETRY_WAITS_S,
+        timeout_retries: int = GENERATION_JOB_RETRIES,
     ) -> None:
         if batch_size < 1:
             raise ValueError("batch_size must be >= 1")
@@ -613,6 +615,9 @@ class SandboxCpuStudent:
         self._job_per_sample_s = job_per_sample_timeout_s
         self._max_fail = max_sample_failure_fraction
         self._sleep = sleep
+        # batch scoring outlasts outages; a live server (local_models) passes short settings
+        self._lost_job_waits = tuple(lost_job_waits)
+        self._timeout_retries = timeout_retries
         self._images = images or ServingImages(
             sandbox, base_image, bridge, base_model=base_model, setup_timeout_s=timeout_s
         )
@@ -686,10 +691,10 @@ class SandboxCpuStudent:
         # exit -1 with no script error: seen live, an operation that sat idle until its timeout)
         # is re-submitted a bounded number of times instead of killing a multi-hour run. A job
         # that really ran and failed (script error, OOM exit code) is never retried here.
-        # Timed-out jobs re-run at once (GENERATION_JOB_RETRIES times); a job lost without a
-        # timeout re-runs after each of LOST_JOB_RETRY_WAITS_S, so a network outage can pass.
-        timeouts_left = GENERATION_JOB_RETRIES
-        waits = iter(LOST_JOB_RETRY_WAITS_S)
+        # Timed-out jobs re-run at once (timeout_retries times); a job lost without a timeout
+        # re-runs after each of lost_job_waits, so a network outage can pass.
+        timeouts_left = self._timeout_retries
+        waits = iter(self._lost_job_waits)
         while redo := [i for i, r in enumerate(results) if _transient_job_failure(r)]:
             if any(results[i].timed_out for i in redo):
                 if timeouts_left == 0:

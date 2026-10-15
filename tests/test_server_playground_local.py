@@ -237,3 +237,44 @@ def test_from_env_with_credentials_builds_nothing_until_used() -> None:
     assert lm.base is not None and lm.base_reason is None and lm.student_run == RUN
     assert lm.student_factory is not None and lm.executor is not None
     lm.close()  # closing a never-used lazy server touches nothing
+
+
+def test_the_served_student_does_not_wait_like_a_batch_run(monkeypatch: Any) -> None:
+    # a person is waiting on the gateway: one short retry of a lost job, no timeout re-runs; the
+    # long LOST_JOB_RETRY_WAITS_S stay for batch scoring (built in the orchestrator, with defaults)
+    from pydantic import SecretStr
+
+    import distillery.sandbox as sandbox_mod
+    import distillery.sandbox_student as ss
+    from distillery.server.local_models import from_env
+
+    class Sandbox:
+        def __init__(self, *_: Any, **__: Any) -> None:
+            pass
+
+        async def ensure_image(self, ref: str) -> str:
+            return "img"
+
+    built: list[dict[str, Any]] = []
+
+    class Student:
+        def __init__(self, *_: Any, **kw: Any) -> None:
+            built.append(kw)
+
+        def generate(self, batch: Sequence[ChatMessages]) -> list[str]:
+            return ["x" for _ in batch]
+
+        def close(self) -> None:
+            pass
+
+    monkeypatch.setattr(sandbox_mod, "ContreeSandbox", Sandbox)
+    monkeypatch.setattr(ss, "SandboxCpuStudent", Student)
+    cfg = make_config(nebius_project_id=SecretStr("proj-x"))
+    lm = from_env(cfg, {"DISTILLERY_PLAYGROUND_SANDBOX_MODELS": "1"}, demo_db=lambda: b"")
+    try:
+        assert lm.base is not None
+        lm.base.generate([[{"role": "user", "content": "q"}]])
+    finally:
+        lm.close()
+    assert len(built) == 1
+    assert built[0]["lost_job_waits"] == (2.0,) and built[0]["timeout_retries"] == 0

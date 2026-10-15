@@ -569,6 +569,31 @@ def test_lost_job_waits_are_bounded(stubs: Path, tmp_path: Path, bridge: AsyncBr
     assert flaky.batches == 1 + len(LOST_JOB_RETRY_WAITS_S)
 
 
+def test_a_live_serving_student_can_skip_the_batch_waits(
+    stubs: Path, tmp_path: Path, bridge: AsyncBridge
+) -> None:
+    # the gateway answers a person who is waiting: one short retry, then the teacher takes over
+    flaky = FlakyJobs(make_sandbox(stubs, tmp_path, Log()), lose=99, timed_out=False)
+    waited: list[float] = []
+    s = SandboxCpuStudent(
+        flaky, "img", bridge, base_model=MODEL, batch_size=2, sleep=waited.append,
+        lost_job_waits=(2.0,),
+    )  # fmt: skip
+    with pytest.raises(StudentServingError):
+        s.generate(msgs(2))
+    assert waited == [2.0] and flaky.batches == 2
+
+
+def test_a_live_serving_student_can_skip_timeout_retries(
+    stubs: Path, tmp_path: Path, bridge: AsyncBridge
+) -> None:
+    flaky = FlakyJobs(make_sandbox(stubs, tmp_path, Log()), lose=1)
+    s = SandboxCpuStudent(flaky, "img", bridge, base_model=MODEL, batch_size=2, timeout_retries=0)
+    with pytest.raises(StudentServingError):
+        s.generate(msgs(2))
+    assert flaky.batches == 1 and s.job_retries == 0
+
+
 def test_a_timed_out_job_is_retried_with_a_doubled_timeout(
     stubs: Path, tmp_path: Path, bridge: AsyncBridge
 ) -> None:

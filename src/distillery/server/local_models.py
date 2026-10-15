@@ -146,9 +146,11 @@ def from_env(
 
     def make(files: Sequence[Path]) -> StudentServer:
         sandbox, bridge, image, images = parts()
+        # a person is waiting: one short retry of a lost job and no timeout re-runs; a failure
+        # becomes an error output, which the gateway and playground hand to the teacher
         return SandboxCpuStudent(
             sandbox, image, bridge, base_model=base_model, adapter_files=files, images=images,
-            batch_size=1,
+            batch_size=1, lost_job_waits=(2.0,), timeout_retries=0,
         )  # fmt: skip
 
     def student_factory(files: Sequence[Path]) -> StudentServer:
