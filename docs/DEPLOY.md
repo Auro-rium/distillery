@@ -10,6 +10,19 @@ Why Render and not Nebius: the hackathon credit is for Token Factory only. Nebiu
 3. **Do not set `DISTILLERY_ADMIN_TOKEN`.** Without it every New run attempt is refused (401), which is what a public demo wants. Live runs are started from a trusted machine with the CLI (`python -m distillery run ...`), not from the website.
 4. Check `https://<service>.onrender.com/api/health` (`"mode":"live"`), `/api/runs` (both recorded runs listed, `recorded: true`) and `/api/config` (models set, playground teacher `ok`).
 
+## Dashboard checklist: the certified router (2026-10-16)
+The live service `distillery` takes its environment from the dashboard, which overrides both `render.yaml` and the image defaults. Before the Manual Deploy that ships `deploy/router` and `deploy/student`, check Settings -> Environment (names and values only, no secret is read here):
+
+| Variable | Set to | Why |
+|---|---|---|
+| `DISTILLERY_PLAYGROUND_DAILY_CAP_USD` | `0.02` (or delete it: the image default is `0.02`) | the live service reported `0.5`, which over the judged window could spend far more than the $1.50 hosted reservation |
+| `DISTILLERY_MODEL_STUDENT` | `Qwen/Qwen3-1.7B` (or delete it) | the live service reported `Qwen/Qwen3-0.6B`; the shipped checkpoint fixes its own base either way, but the dashboard should not disagree |
+| `DISTILLERY_PLAYGROUND_SANDBOX_MODELS` | delete it, or `1` | the image default `1` turns the student on; a dashboard `0` would keep it off |
+| `DISTILLERY_ROUTER_DIR`, `DISTILLERY_PLAYGROUND_STUDENT_DIR`, `DISTILLERY_GATEWAY_STUDENT_DAILY_MAX` | delete them if present | image defaults: `/app/deploy/router`, `/app/deploy/student`, `60` |
+| `DISTILLERY_GLOBAL_LEDGER` | `none` | unchanged |
+
+Then Manual Deploy -> "Deploy latest commit", and `uv run python scripts/smoke_live.py https://distillery.onrender.com --no-run`: it fails if the student model, the daily cap, the certificate or the checkpoint pin is wrong.
+
 ## Settings (all in `render.yaml` except the two secrets)
 | Variable | Value |
 |---|---|
