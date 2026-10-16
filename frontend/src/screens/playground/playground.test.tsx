@@ -96,6 +96,15 @@ describe("the question box", () => {
     fireEvent.click(items[1]);
     expect((screen.getByLabelText("Question") as HTMLTextAreaElement).value).toBe(items[1].textContent);
   });
+  it("also offers questions in the style the specialist is certified on, which fill the box", async () => {
+    stub();
+    open();
+    const list = await screen.findByRole("list", { name: "The specialist's home ground" });
+    const items = within(list).getAllByRole("button");
+    expect(items.length).toBe(3);
+    fireEvent.click(items[0]);
+    expect((screen.getByLabelText("Question") as HTMLTextAreaElement).value).toBe(items[0].textContent);
+  });
   it("sends the trimmed question to POST /api/acme/ask; Ctrl+Enter also sends", async () => {
     const f = stub();
     open();

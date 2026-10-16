@@ -32,6 +32,17 @@ const EXAMPLES = [
 ] as const;
 
 /**
+ * Questions in the style the specialist was trained and certified on (templated). In the live end-to-end run
+ * (docs/proofs/evidence/w_e2e.json) the student served questions like these, while it handed every one of the
+ * examples above to the teacher.
+ */
+const CERTIFIED_EXAMPLES = [
+  "Show the name of every account in country GB whose status is suspended.",
+  "How many closed high-priority tickets have no CSAT score?",
+  "Which users in education accounts have never logged in? Return their emails.",
+] as const;
+
+/**
  * The Acme analyst. A question goes to POST /api/acme/ask, which sends it through this site's own gateway: the
  * certified specialist answers when it can guarantee the answer, and the request is handed back to the teacher
  * when it cannot. Everything shown is what the API returned: who answered and why, the SQL, the verified rows,
@@ -89,6 +100,18 @@ export default function Playground() {
               </div>
             </form>
             <div className="pg-examples">
+              <h3 className="pg-sub" id="pg-cert-h">The specialist's home ground</h3>
+              <ul aria-labelledby="pg-cert-h" className="pg-chips">
+                {CERTIFIED_EXAMPLES.map((ex) => (
+                  <li key={ex}>
+                    <button type="button" className="pg-chip pg-chip-cert" disabled={busy} onClick={() => setQ(ex)}>{ex}</button>
+                  </li>
+                ))}
+              </ul>
+              <p className="muted pg-break">
+                Precise questions like these are what the specialist was certified on: it usually answers them itself, in
+                about a minute on a CPU sandbox.
+              </p>
               <h3 className="pg-sub" id="pg-ex-h">Examples</h3>
               <ul aria-labelledby="pg-ex-h" className="pg-chips">
                 {EXAMPLES.map((ex) => (
