@@ -1,0 +1,4 @@
+{
+  "adapter_sha256": "7d6ce813882bf3a211c84bfab7f8109b3bcdd6ca4617349a03bff58076b85193",
+  "from": "signals_cal.json models.adapter_sha256 (cert.json cal_signals_sha256 875cfdcb4a3562539502b5610b2ca7a40d88466d13b1f7fcbe848eb0c60dd358)"
+}

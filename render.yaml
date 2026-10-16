@@ -39,3 +39,11 @@ services:
       # it relies on the playground caps above; the laptop ledger holds a $1.50 hosted-demo reservation.
       - key: DISTILLERY_GLOBAL_LEDGER
         value: none
+      # The certified router and the N1 checkpoint it was certified on, both shipped in the image.
+      # The checkpoint fixes the student's base model (Qwen/Qwen3-1.7B) whatever the model id says.
+      - key: DISTILLERY_ROUTER_DIR
+        value: /app/deploy/router
+      - key: DISTILLERY_PLAYGROUND_STUDENT_DIR
+        value: /app/deploy/student
+      - key: DISTILLERY_PLAYGROUND_SANDBOX_MODELS
+        value: "1"

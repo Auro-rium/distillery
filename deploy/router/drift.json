@@ -1,0 +1,8 @@
+{
+  "window_w": 20,
+  "tau": 0.9,
+  "audit_rate": 0.1,
+  "audit_window_m": 50,
+  "audit_k": 10,
+  "min_requests": 20
+}

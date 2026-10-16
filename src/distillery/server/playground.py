@@ -127,7 +127,12 @@ class Playground:
                 return cached[0], cached[1]
             server: StudentServer | None = None
             reason: str | None = None
-            if loc.student_run is None:
+            if loc.served is not None and loc.student_factory is not None:
+                try:
+                    server = loc.student_factory(list(loc.served.files))
+                except (StudentServingError, ValueError) as exc:
+                    reason = f"adapter rejected: {str(exc)[:300]}"
+            elif loc.student_run is None:
                 reason = loc.student_unset_reason
             elif loc.student_factory is None:
                 reason = "student serving is not wired on this server"

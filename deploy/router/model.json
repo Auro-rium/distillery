@@ -1,0 +1,35 @@
+{
+  "fit_signals_sha256": "fe9cf67142f37c5c4f759b5c3b8faccc68dba4649655f12609c55d5665722247",
+  "fit_split": "fit (sealed held-out + stress + human sets of the run, plus human files)",
+  "format": "distillery-router-model-v1",
+  "model": {
+    "bias": 1.2858228999643635,
+    "feature_names": [
+      "exec_ok",
+      "mean_logprob",
+      "nn_sim"
+    ],
+    "fit_sha256": "da94b23d8e6c4d80f2ae03b4a37c084856ac88624a9811135a33e426bb3870fd",
+    "l2": 0.01,
+    "means": [
+      0.9058219178082192,
+      -0.032795341961406675,
+      0.9073247233275494
+    ],
+    "n_fit": 584,
+    "stds": [
+      0.29207631027945247,
+      0.024512965847883258,
+      0.06654526617128427
+    ],
+    "weights": [
+      2.973743543080284,
+      0.7096236961646513,
+      0.6033781511160246
+    ]
+  },
+  "model_sha256": "5592a87b02131075dfd5a21c516604784e8c438a7dd7c3b73adf0ce6ccfb364c",
+  "n_fit": 584,
+  "run_id": "sql-gated-20261004T155134Z-66ff347c",
+  "student_accuracy_fit": 0.7945205479452054
+}

@@ -10,6 +10,8 @@ image and the connection are created lazily), so starting the server stays free 
 
 from __future__ import annotations
 
+import hashlib
+import json
 import threading
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
@@ -17,6 +19,7 @@ from pathlib import Path
 from typing import Any
 
 from distillery.config import Config
+from distillery.finetune import sha256_file
 from distillery.student import (
     ChatMessages,
     StudentOutput,
@@ -28,10 +31,51 @@ from distillery.taskpacks.sql.executor import Executor
 
 ENV_ENABLE = "DISTILLERY_PLAYGROUND_SANDBOX_MODELS"
 ENV_STUDENT_RUN = "DISTILLERY_PLAYGROUND_STUDENT_RUN"
+ENV_STUDENT_DIR = "DISTILLERY_PLAYGROUND_STUDENT_DIR"
+SERVED_MANIFEST = "served.json"
 DISABLED_REASON = (
     f"sandbox-served base/student are switched off on this server (set {ENV_ENABLE}=1 to enable; "
     "sandbox CPU price is not known, so this is opt-in and rate limited)"
 )
+
+
+@dataclass(frozen=True)
+class ServedAdapter:
+    """A trained checkpoint shipped with the server (``deploy/student/``): every file, the digest
+    over all of them (``TrainedArtifact.adapter_sha256``'s formula) and the base it was trained on.
+    """
+
+    files: tuple[Path, ...]
+    adapter_sha256: str
+    base_model: str
+
+
+def load_served_adapter(directory: Path) -> ServedAdapter:
+    """Read ``served.json`` and check the directory against it. Raises ``ValueError`` with the
+    reason when a file is missing, extra or changed, or the base model disagrees: a student whose
+    bytes are not the certified ones must never be served under that certificate."""
+    d = Path(directory)
+    try:
+        doc = json.loads((d / SERVED_MANIFEST).read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise ValueError(f"cannot read {SERVED_MANIFEST} in {d}: {exc}") from None
+    want, base = doc.get("adapter_sha256"), doc.get("base_model")
+    if not (isinstance(want, str) and want and isinstance(base, str) and base):
+        raise ValueError(f"{SERVED_MANIFEST} needs adapter_sha256 and base_model")
+    files = tuple(sorted(p for p in d.iterdir() if p.is_file() and p.name != SERVED_MANIFEST))
+    h = hashlib.sha256()
+    for f in files:  # sorted by name, as TrainedArtifact.adapter_sha256 does
+        digest = sha256_file(f)
+        h.update(f"{f.name}:{digest}\n".encode())
+    if h.hexdigest() != want:
+        raise ValueError(f"the files in {d} do not hash to the adapter_sha256 in {SERVED_MANIFEST}")
+    try:
+        cfg = json.loads((d / "adapter_config.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise ValueError(f"cannot read adapter_config.json in {d}: {exc}") from None
+    if not isinstance(cfg, dict) or cfg.get("base_model_name_or_path") != base:
+        raise ValueError(f"adapter_config.json was not trained on {base!r}")
+    return ServedAdapter(files, want, base)
 
 
 @dataclass
@@ -47,6 +91,8 @@ class LocalModels:
     student_factory: Callable[[Sequence[Path]], StudentServer] | None = None
     student_run: str | None = None
     student_unset_reason: str = f"no student run configured (set {ENV_STUDENT_RUN}=<run id>)"
+    # a checkpoint shipped with the server; when set it is served instead of ``student_run``
+    served: ServedAdapter | None = None
     # runs the model-written SQL (sandbox); None = the in-process read-only runner
     executor: Executor | None = None
 
@@ -112,6 +158,14 @@ def from_env(
     student_run = (env.get(ENV_STUDENT_RUN) or "").strip() or None
     key, project = config.nebius_api_key, config.nebius_project_id
     base_model = config.model_ids.get("student")
+    served: ServedAdapter | None = None
+    if student_dir := (env.get(ENV_STUDENT_DIR) or "").strip():
+        try:
+            served = load_served_adapter(Path(student_dir))
+        except ValueError as exc:
+            why = f"shipped student rejected: {exc}"[:300]
+            return LocalModels(base_reason=why, student_unset_reason=why)
+        base_model = served.base_model  # the adapter fixes its base, not DISTILLERY_MODEL_STUDENT
     if key is None or project is None or not base_model:
         why = (
             "the sandbox is not configured on this server (needs NEBIUS_API_KEY, "
@@ -168,5 +222,6 @@ def from_env(
         base_reason=None,
         student_factory=student_factory,
         student_run=student_run,
+        served=served,
         executor=_LazyExecutor(executor),
     )

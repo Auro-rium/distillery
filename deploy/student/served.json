@@ -1,0 +1,6 @@
+{
+  "format": "distillery-served-student-v1",
+  "adapter_sha256": "7d6ce813882bf3a211c84bfab7f8109b3bcdd6ca4617349a03bff58076b85193",
+  "base_model": "Qwen/Qwen3-1.7B",
+  "source": "N1 round (round1-nbd327eec), checkpoint ftckpt_4a9eba83-171b-4d95-bfdc-b90ec77f3deb of run sql-gated-20261004T155134Z-66ff347c: the adapter the H3 router was certified on"
+}

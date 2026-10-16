@@ -76,7 +76,13 @@ NULLABLE: dict[str, set[str]] = {
     "config": set(),
     # certified gateway: no reason; the cert may or may not carry each figure. drift.state is null
     # while the drift guard is not configured (enabled: false)
-    "gateway_status": {"reason", "drift.state"},
+    # the adapter digests are null unless a checkpoint is shipped and the router pins one
+    "gateway_status": {
+        "reason",
+        "drift.state",
+        "student_adapter_sha256",
+        "certified_adapter_sha256",
+    },  # fmt: skip
     # student serving cost is "pending H1" until deploy/serving_price.json exists
     "gateway_savings": {"saved_pct", "saved_pct_display", "student_usd_per_1k", "student_cost_usd"},
     # a student-served answer: no gateway error, no summary failure

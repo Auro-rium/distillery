@@ -21,12 +21,18 @@ ENV PYTHONUNBUFFERED=1 \
     DISTILLERY_HOME=/data \
     DISTILLERY_GLOBAL_LEDGER=none \
     DISTILLERY_REPLAY_DIR=/app/replay \
+    DISTILLERY_PLAYGROUND_DAILY_CAP_USD=0.02 \
+    DISTILLERY_ROUTER_DIR=/app/deploy/router \
+    DISTILLERY_PLAYGROUND_STUDENT_DIR=/app/deploy/student \
+    DISTILLERY_PLAYGROUND_SANDBOX_MODELS=1 \
+    DISTILLERY_GATEWAY_STUDENT_DAILY_MAX=60 \
     PORT=8000
 WORKDIR /app
 COPY pyproject.toml README.md LICENSE ./
 COPY src ./src
 COPY docs/fixtures ./docs/fixtures
-# Recorded runs (replay bundles) and deploy-time data (e.g. deploy/prices.json). Both directories
+# Recorded runs (replay bundles) and deploy-time data: prices, the certified router (deploy/router)
+# and the checkpoint it was certified on (deploy/student, checked against its sha256 at start). Both directories
 # always exist in the repo (each holds at least a .gitkeep), so these COPYs cannot fail the build.
 COPY replay/ ./replay/
 COPY deploy/ ./deploy/

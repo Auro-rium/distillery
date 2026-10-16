@@ -407,6 +407,10 @@ export interface GatewayStatus {
   passthrough_models: string[];
   passthrough_max_tokens: number;
   student: string;
+  /** sha256 over the served checkpoint's files (null unless a checkpoint ships with the server). */
+  student_adapter_sha256: string | null;
+  /** The checkpoint the certificate was measured on (null = not pinned). */
+  certified_adapter_sha256: string | null;
   today: {
     day: string;
     served_by: Record<string, number>;

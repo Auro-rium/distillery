@@ -81,6 +81,8 @@ STUDENT_DAILY_LIMIT_REASON = "student daily limit reached → teacher"
 INTERNAL_HEADER = "x-distillery-internal"
 MAX_HANDOFF = 256
 ROUTER_MODEL_FILES = ("model.json", "router_model.json")
+STUDENT_PIN_FILE = "student.json"  # {"adapter_sha256": <the checkpoint the certificate measured>}
+WRONG_STUDENT_REASON = "the served student is not the certified checkpoint → teacher"
 SUPPORTED_PARAMS = ("temperature", "top_p", "stop", "seed")
 UNSUPPORTED_FIELDS = ("tools", "tool_choice", "functions", "function_call")
 SYSTEM_PROMPT_SHA256 = hashlib.sha256(SYSTEM_PROMPT.encode("utf-8")).hexdigest()
@@ -209,6 +211,8 @@ class RouterState:
     cert_sha256: str | None = None  # sha256 of the cert.json bytes (what the drift guard pins)
     prereg_commit: str | None = None
     index_file: Path | None = None
+    # the checkpoint the certificate was measured on (student.json); None = not pinned
+    student_adapter_sha256: str | None = None
     error: str | None = None  # why nothing is certified, when artifacts were configured
 
     @property
@@ -263,6 +267,11 @@ def load_router(router_dir: Path | None) -> RouterState:
         lam_f = float(lam) if isinstance(lam, int | float) and not isinstance(lam, bool) else None
         if lam_f is not None and not math.isfinite(lam_f):
             return replace(base, error="cert.json lambda_hat is not finite")
+        pin: str | None = None
+        if (d / STUDENT_PIN_FILE).is_file():
+            pin = _json_file(d / STUDENT_PIN_FILE).get("adapter_sha256")
+            if not (isinstance(pin, str) and pin):
+                return replace(base, error=f"{STUDENT_PIN_FILE} has no adapter_sha256")
         return RouterState(
             model=model,
             lambda_hat=lam_f,
@@ -274,6 +283,7 @@ def load_router(router_dir: Path | None) -> RouterState:
             cert_sha256=cert_sha,
             prereg_commit=str(commit) if commit else None,
             index_file=index_file,
+            student_adapter_sha256=pin,
             error=None if lam_f is not None else "certificate found no threshold: not certified",
         )
     except (OSError, ValueError, KeyError, TypeError) as exc:
@@ -1082,6 +1092,12 @@ class Gateway:
             return await self._via_teacher(
                 req, ddl_known, lg, UNKNOWN_SCHEMA_REASON, None, lam, False
             )
+        if not self._student_is_certified():
+            # the threshold holds only for the checkpoint it was measured on; checked before
+            # any embedding or student spend, and outside the drift monitor (not decided)
+            return await self._via_teacher(
+                req, ddl_known, lg, WRONG_STUDENT_REASON, None, lam, False
+            )
         if "nn_sim" in model.feature_names:
             try:
                 nn = await self._nn_sim(skill.question, lg)
@@ -1260,9 +1276,21 @@ class Gateway:
         return h
 
     # ---- read-only endpoints ----------------------------------------------------------------
+    def _student_is_certified(self) -> bool:
+        """True unless the router pins a checkpoint and the served one is different (or unknown:
+        a student loaded from a run id carries no digest here)."""
+        pin = self.router.student_adapter_sha256
+        if pin is None:
+            return True
+        loc = self.s.playground_local
+        served = loc.served if loc is not None else None
+        return served is not None and served.adapter_sha256 == pin
+
     def status(self) -> dict[str, Any]:
         st = self.router
         day = self._now().date().isoformat()
+        loc = self.s.playground_local
+        served = loc.served if loc is not None else None
         return {
             "certified": st.certified,
             "reason": None if st.certified else (st.error or NOT_CERTIFIED_REASON),
@@ -1278,6 +1306,8 @@ class Gateway:
             "passthrough_models": sorted(self.allowlist),
             "passthrough_max_tokens": self.g.passthrough_max_tokens,
             "student": self.pg.local_status("student")[0],
+            "student_adapter_sha256": served.adapter_sha256 if served else None,
+            "certified_adapter_sha256": st.student_adapter_sha256,
             "drift": {
                 "enabled": self.drift is not None,
                 "state": None if self.drift is None else self.drift.state.value,

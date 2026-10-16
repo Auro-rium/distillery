@@ -345,10 +345,12 @@ def create_app(settings: ServerSettings) -> FastAPI:
     @app.get("/api/config")
     def config() -> dict[str, Any]:
         g = cfg.gate
+        models = {r: cfg.model_ids.get(r) for r in ("planner", "teacher", "triage", "student")}
+        served = settings.playground_local.served if settings.playground_local else None
+        if served is not None:  # the shipped checkpoint's base is what the student runs on
+            models["student"] = served.base_model
         return {
-            "models": {
-                r: cfg.model_ids.get(r) for r in ("planner", "teacher", "triage", "student")
-            },
+            "models": models,
             "thresholds": {
                 "ratio_lower_bound_min": g.ratio_lower_bound_min,
                 "mcnemar_alpha": g.mcnemar_alpha,
