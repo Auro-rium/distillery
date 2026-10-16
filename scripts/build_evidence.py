@@ -540,10 +540,14 @@ KEYS: dict[str, dict[str, Any]] = {
     "W-E2E": {
         "claim": "The whole path runs end to end on the live gateway: certified router, student, "
         "deferral and the drift guard.",
-        "file": "w_e2e",  # PLACEHOLDER path and keys: nothing writes this file yet
+        "file": "w_e2e",  # scripts/w_e2e.py, local live server (pre-registered 2026-10-16)
         "pass": "pass",
         "value": "{value}",
         "value_keys": {"value": "value_display"},
+        "prereg": ("prereg.commit", "prereg.committed_at"),
+        "adapter": "status_before.student_adapter_sha256",
+        "gate": "counts",
+        "ledger": ("w_e2e", "ledger.delta_usd"),
     },
 }
 W_G_ARTIFACT = "tests/test_acme_wg.py"
