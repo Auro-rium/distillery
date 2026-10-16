@@ -20,6 +20,9 @@ import urllib.error
 import urllib.request
 from typing import Any
 
+N1_BASE = "Qwen/Qwen3-1.7B"
+N1_ADAPTER = "7d6ce813882bf3a211c84bfab7f8109b3bcdd6ca4617349a03bff58076b85193"
+HOSTED_DAILY_CAP = 0.02  # docs/DEPLOY.md: 64 days x 0.02 fits the 1.50 hosted reservation
 SECRET_LIKE = re.compile(r"(eyJ[A-Za-z0-9_-]{20,}|sk-[A-Za-z0-9]{20,}|Bearer\s+\S{12,})")
 
 
@@ -114,6 +117,27 @@ def main() -> int:
     s.check("models configured", len(cfg.get("models", {})) == 4 and all(cfg["models"].values()))
     pg = cfg.get("playground", {})
     s.check(
+        "student is the certified checkpoint's base",
+        cfg.get("models", {}).get("student") == N1_BASE,
+        str(cfg.get("models", {}).get("student")),
+    )
+    cap = pg.get("daily_cap_usd")
+    s.check(
+        "hosted daily cap is at most 0.02 USD",
+        isinstance(cap, int | float) and cap <= HOSTED_DAILY_CAP,
+        f"daily_cap_usd {cap}",
+    )
+    code, _, body = call(base, "/api/gateway/status")
+    gw = json.loads(body) if code == 200 else {}
+    s.check("gateway certified", gw.get("certified") is True, str(gw.get("reason")))
+    s.check(
+        "served checkpoint is the certified N1 adapter",
+        gw.get("student_adapter_sha256") == gw.get("certified_adapter_sha256") == N1_ADAPTER,
+        f"served {gw.get('student_adapter_sha256')}",
+    )
+    s.check("student server ok", gw.get("student") == "ok", str(gw.get("student")))
+    s.check("drift guard on", gw.get("drift", {}).get("enabled") is True, str(gw.get("drift")))
+    s.check(
         "playground teacher usable", pg.get("models", {}).get("teacher", {}).get("state") == "ok"
     )
     code, _, body = call(base, "/api/runs")
@@ -134,7 +158,11 @@ def main() -> int:
     )
     if not a.no_playground:
         code, _, body = call(
-            base, "/api/playground", "POST", {"question": "How many accounts are in each country?"}
+            base,
+            "/api/playground",
+            "POST",
+            {"question": "How many accounts are in each country?"},
+            timeout=600.0,  # base and student run on sandbox CPU too: minutes when cold
         )
         res = json.loads(body).get("results", {}) if code == 200 else {}
         s.check(
