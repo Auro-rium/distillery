@@ -11,7 +11,7 @@ const rid = contract.run.run_id;
 describe("errors are not empty states", () => {
   const EMPTY = /no replay bundles|no sandbox branches|no examples|no runs|no stages/i;
   const screens: [string, string][] = [
-    ["replay", "/"], ["report", `/runs/${rid}/report`], ["live", `/runs/${rid}`],
+    ["replay", "/mission"], ["report", `/runs/${rid}/report`], ["live", `/runs/${rid}`],
     ["tree", `/runs/${rid}/tree`], ["acme analyst status", "/playground"], ["new run config", "/new"],
   ];
   describe.each(screens)("%s", (_n, path) => {
@@ -52,7 +52,7 @@ function withFlags(f: Flags) {
   return contractFetch({ run: strip(contract.run), report: strip(contract.report), replay: contract.replay.map(strip) });
 }
 const ROUTES: [string, string][] = [
-  ["replay", "/"], ["report", `/runs/${rid}/report`], ["live", `/runs/${rid}`], ["tree", `/runs/${rid}/tree`],
+  ["replay", "/mission"], ["report", `/runs/${rid}/report`], ["live", `/runs/${rid}`], ["tree", `/runs/${rid}/tree`],
 ];
 
 describe.each(ROUTES)("label banner: %s", (_n, path) => {

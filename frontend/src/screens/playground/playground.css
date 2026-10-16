@@ -101,3 +101,8 @@
 .pg .pg-dr-time { font-size: .8rem; color: var(--ink-2); }
 .pg .pg-dr-kind { font-weight: 600; }
 .pg .pg-dr-det { font-size: .84rem; }
+
+/* waiting panel: what the server is doing while a question is in flight */
+.pg-wait { display: grid; gap: var(--space-3); }
+.pg-wait-clock { margin: 0; font-size: var(--step-3); color: var(--ink); }
+.pg-wait-steps { margin: 0; padding-left: 1.2em; display: grid; gap: var(--space-2); color: var(--ink-2); font-size: var(--step--1); }

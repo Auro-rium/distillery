@@ -9,6 +9,7 @@ import { Failure } from "./Failure";
 import { Savings } from "./Savings";
 import { StatusStrip } from "./StatusStrip";
 import { useGateway } from "./useGateway";
+import { Waiting } from "./Waiting";
 import "./playground.css";
 
 export { RowsPreview } from "./Pane";
@@ -105,7 +106,7 @@ export default function Playground() {
 
           <section className="pg-out" aria-label="Result">
             <span className="sr-only" role="status">{out && !busy ? "Answer is ready." : ""}</span>
-            {busy && <Spinner label="Asking the Acme analyst" />}
+            {busy && <Waiting />}
             {err !== null && <Failure e={err} />}
             {out && !busy && <AnswerCard r={out} />}
           </section>

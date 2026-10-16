@@ -10,7 +10,7 @@ afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 describe("replay landing", () => {
   it("the stored-run label banners come before the stored list, and the hero comes first on the page", async () => {
     stubFetch(contractFetch());
-    const { container } = renderApp("/");
+    const { container } = renderApp("/mission");
     await waitFor(() => screen.getAllByText("DRY RUN — fake models, numbers are NOT results"));
     const hero = container.querySelector(".hero")!;
     const banner = container.querySelector(".stored .banners")!;
@@ -22,7 +22,7 @@ describe("replay landing", () => {
     const base = contract.replay[0];
     const rec = { ...base, run_id: "rec-1", dry_run: false, recorded: true, recorded_at: "2026-02-03T00:00:00Z" };
     stubFetch(contractFetch({ replay: [base, rec] }));
-    const { container } = renderApp("/");
+    const { container } = renderApp("/mission");
     await waitFor(() => expect(container.querySelector(".hero .m-verdict")).not.toBeNull());
     const b = container.querySelector(".hero .banners .label-banner")!;
     expect(b.textContent).toBe("Recorded run · 2026-02-03T00:00:00Z · real Token Factory jobs");
@@ -30,13 +30,13 @@ describe("replay landing", () => {
   });
   it("reserves the banner slot while loading, so nothing shifts when it arrives", () => {
     vi.stubGlobal("fetch", vi.fn(() => new Promise(() => undefined)));
-    const { container } = renderApp("/");
+    const { container } = renderApp("/mission");
     expect(container.querySelector(".banners .banner-skeleton")).not.toBeNull();
     expect(container.querySelector(".hero")).not.toBeNull();
   });
   it("the pipeline is drawn twice, a wide layout and a tall stepper, both decorative, neither in a horizontal scroller", () => {
     stubFetch(contractFetch());
-    const { container } = renderApp("/");
+    const { container } = renderApp("/mission");
     const pipe = container.querySelector(".pipe")!;
     for (const kind of ["wide", "tall"]) {
       const svg = pipe.querySelector<SVGElement>(`svg.flow-${kind}`)!;
@@ -52,7 +52,7 @@ describe("replay landing", () => {
   });
   it("the diagram shows no number anywhere and its steps are also available as a list for screen readers", () => {
     stubFetch(contractFetch());
-    const { container } = renderApp("/");
+    const { container } = renderApp("/mission");
     const pipe = container.querySelector(".pipe")!;
     expect(pipe.textContent).not.toMatch(/\d/);
     const items = [...pipe.querySelectorAll("ol.sr-only li")].map((li) => li.textContent);
@@ -61,7 +61,7 @@ describe("replay landing", () => {
   });
   it("every route is drawn once per layout, the loop is the only accent route, and only strokes and opacity animate", () => {
     stubFetch(contractFetch());
-    const { container } = renderApp("/");
+    const { container } = renderApp("/mission");
     for (const kind of ["wide", "tall"]) {
       const svg = container.querySelector(`svg.flow-${kind}`)!;
       expect(svg.querySelectorAll("path.flow-edge")).toHaveLength(9);
@@ -80,7 +80,7 @@ describe("replay landing", () => {
   it("shows one banner per distinct label and tags every bundle with its own label", async () => {
     const base = contract.replay[0];
     stubFetch(contractFetch({ runs: [], replay: [base, { ...base, run_id: "rec-1", dry_run: false, recorded: true, recorded_at: "2026-02-03T00:00:00Z" }] }));
-    const { container } = renderApp("/");
+    const { container } = renderApp("/mission");
     await waitFor(() => screen.getByText("rec-1"));
     // the featured (recorded) run's banner is in the hero; the stored list adds the other label only
     expect(container.querySelectorAll(".hero .banners .label-banner")).toHaveLength(1);

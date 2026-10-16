@@ -20,7 +20,8 @@ function useNav(): NavItem[] {
   const { run } = useFeaturedRun();
   const id = run ? encodeURIComponent(run.run_id) : null;
   return [
-    { to: "/", label: "Mission", end: true },
+    { to: "/", label: "Overview", end: true },
+    { to: "/mission", label: "Mission", end: true },
     ...(id ? [{ to: `/runs/${id}/report`, label: "Evidence", end: true }, { to: `/runs/${id}`, label: "Live", end: true }] : []),
     { to: "/playground", label: "Acme analyst", end: false },
     { to: "/receipts", label: "Receipts", end: false },
@@ -41,7 +42,8 @@ function GitHubLink({ className }: { className: string }) {
 
 /** Human name of a route, used for the document title and the page announcement. */
 export function pageTitle(pathname: string): string {
-  if (pathname === "/") return "Mission";
+  if (pathname === "/") return "Overview";
+  if (pathname === "/mission") return "Mission";
   if (pathname === "/new") return "New run";
   if (pathname === "/playground") return "Acme analyst";
   if (pathname === "/receipts") return "Receipts";

@@ -31,7 +31,7 @@ const section = (name: string) => screen.getByRole("heading", { level: 2, name }
 describe("Mission hero verdict (featured run)", () => {
   it("features the recorded PROMOTE run: chip, one sentence without digits, three numerals, CI line, n, McNemar, evidence link", async () => {
     serve();
-    renderApp("/");
+    renderApp("/mission");
     await ready();
     const h = hero();
     expect(within(h).getAllByRole("heading", { level: 1 })).toHaveLength(1);
@@ -53,7 +53,7 @@ describe("Mission hero verdict (featured run)", () => {
   it("a McNemar p below what three decimals can show reads 'far below α', never 0.000", async () => {
     const tiny = { ...report, evaluation: { ...report.evaluation, gate: { ...gate, mcnemar_p: 1.6e-57 } } };
     serve({ report: tiny });
-    renderApp("/");
+    renderApp("/mission");
     await ready();
     expect(hero().textContent).toContain("McNemar vs base: p far below α (α = 0.05)");
     expect(hero().textContent).not.toContain("0.000");
@@ -61,7 +61,7 @@ describe("Mission hero verdict (featured run)", () => {
 
   it("labels the hero from the featured run's own flags, and features nothing when only dry runs exist", async () => {
     serve({ replay: contract.replay });
-    const { container } = renderApp("/");
+    const { container } = renderApp("/mission");
     await waitFor(() => screen.getByText(/no recorded run to feature/));
     expect(container.querySelector(".m-verdict")).toBeNull();
     expect(container.querySelector(".hero .label-banner")).toBeNull();
@@ -72,7 +72,7 @@ describe("Mission hero verdict (featured run)", () => {
   it("a failing report is an error in the hero, and the sections that need it say so instead of looking empty", async () => {
     const ok = contractFetch({ replay });
     stubFetch((u, i) => (u.endsWith("/report") ? json({ error: "report_gone", message: "cannot read report" }, 500) : u.endsWith("/api/evidence") ? json(evidence) : ok(u, i)));
-    renderApp("/");
+    renderApp("/mission");
     await waitFor(() => within(hero()).getByRole("alert"));
     expect(hero().textContent).toContain("report_gone");
     expect(hero().textContent).toContain("cannot read report");
@@ -84,7 +84,7 @@ describe("Mission hero verdict (featured run)", () => {
 describe("Mission sections", () => {
   it("proof ladder: at most six cards, each with its verdict, headline and a link to its evidence file", async () => {
     serve();
-    renderApp("/");
+    renderApp("/mission");
     await waitFor(() => screen.getByRole("list", { name: "Proof ladder" }));
     const cards = [...section("Proof ladder").querySelectorAll<HTMLElement>(".proof-card")];
     const proofs = evidence.proofs.slice(0, MAX_PROOFS);
@@ -105,7 +105,7 @@ describe("Mission sections", () => {
 
   it("proof ladder: an API error is an error, while the hero still shows the verdict", async () => {
     serve({ evidence: json({ error: "evidence_down", message: "no evidence file" }, 503) });
-    renderApp("/");
+    renderApp("/mission");
     await ready();
     await waitFor(() => within(section("Proof ladder")).getByRole("alert"));
     expect(section("Proof ladder").textContent).toContain("evidence_down");
@@ -114,7 +114,7 @@ describe("Mission sections", () => {
 
   it("training: loss chart, trained tokens and steps, config chips, and the interpretation caption has no number", async () => {
     serve();
-    renderApp("/");
+    renderApp("/mission");
     await ready();
     const s = section("Training");
     const ft = contract.report.finetune[0];
@@ -131,7 +131,7 @@ describe("Mission sections", () => {
 
   it("limits & cost: stress bars for unseen families, overlap rate, run total and fine-tune lines with a derived per-million price", async () => {
     serve();
-    renderApp("/");
+    renderApp("/mission");
     await ready();
     const s = section("Limits & cost");
     expect(s.querySelector("figure.stress-bars")).not.toBeNull();
@@ -146,7 +146,7 @@ describe("Mission sections", () => {
 
   it("clutter budget: four content sections between the hero and the calls to action, three charts in all", async () => {
     serve();
-    const { container } = renderApp("/");
+    const { container } = renderApp("/mission");
     await ready();
     const h2 = [...container.querySelectorAll("main h2")].map((h) => h.textContent);
     expect(h2.slice(0, 5)).toEqual(["Proof ladder", "Training", "How it works", "Limits & cost", "Try it"]);
@@ -165,7 +165,7 @@ describe("Mission provenance: every number on the page comes from a payload", ()
   };
   it("with a featured run, the hero, proof ladder, training and limits numbers are all explained", async () => {
     serve();
-    const { container } = renderApp("/");
+    const { container } = renderApp("/mission");
     await ready();
     await waitFor(() => screen.getByRole("list", { name: "Proof ladder" }));
     await new Promise((r) => setTimeout(r, 50));

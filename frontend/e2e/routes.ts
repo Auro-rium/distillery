@@ -7,7 +7,8 @@ export interface RouteSpec {
 }
 
 export const ROUTES: RouteSpec[] = [
-  { name: "replay", path: "/", banner: true },
+  { name: "overview", path: "/", banner: false },
+  { name: "replay", path: "/mission", banner: true },
   { name: "new-run", path: "/new", banner: false },
   { name: "live-running", path: "/runs/live-mock", banner: true },
   { name: "live-complete", path: "/runs/dry-sql-tiny", banner: true },

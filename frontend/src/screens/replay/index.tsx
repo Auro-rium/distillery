@@ -1,4 +1,4 @@
-// Mission (`/`): the featured run's verdict first, then the proof ladder, training, the method, and
+// Mission (`/mission`): the featured run's verdict first, then the proof ladder, training, the method, and
 // limits & cost, then the stored and live run lists. Every number comes from /api/replay, the featured
 // run's /api/runs/:id/report, or /api/evidence, formatted by api/format.ts.
 import { Link } from "react-router-dom";

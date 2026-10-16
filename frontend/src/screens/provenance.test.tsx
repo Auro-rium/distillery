@@ -32,7 +32,18 @@ describe("render provenance: numbers on screen come from the contract payloads",
   });
   it("replay", async () => {
     stubFetch(contractFetch());
-    await check("/", contract.replay[0].run_id, [contract.replay, contract.runs, contract.evidence], [RUNG]);
+    await check("/mission", contract.replay[0].run_id, [contract.replay, contract.runs, contract.evidence], [RUNG]);
+  });
+  it("overview", async () => {
+    stubFetch(contractFetch());
+    await check("/", /This server, right now/, [contract.config, contract.gatewayStatus, contract.gatewayDrift, contract.evidence], [
+      RUNG,
+      { pattern: /\/v1\/?/g, why: "the API path segment in the base-URL example" },
+      { pattern: /\/\/[a-z0-9.-]+:\d+/g, why: "the page's own origin (window.location) in the base-URL example" },
+      { pattern: /(?<![\d.])[1-4](?=\s*\n|Familiar|Student|Router|Drift)/g, why: "step numbers of the request diagram" },
+      { pattern: /1 − /g, why: "'1 −' in 'confidence 1 − delta', the complement of the payload's delta" },
+      { pattern: /W-C\d|W-\$|W-E2E/g, why: "claim ids from the evidence payload" },
+    ]);
   });
   it("report", async () => {
     stubFetch(contractFetch());
