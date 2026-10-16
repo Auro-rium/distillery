@@ -40,7 +40,7 @@ FIELDS = {
     "id", "claim", "status", "verdict", "value_display", "artifact", "permalink", "prereg",
     "sealed_sha256", "adapter_sha256", "gate_inputs", "ledger_total_usd",
 }  # fmt: skip
-PENDING = ["W-$", "W-E2E"]  # W-C1/W-C2/W-D scored 2026-10-14
+PENDING = ["W-$"]  # W-C1/W-C2/W-D scored 2026-10-14, W-E2E 2026-10-16
 EVIDENCE = Path(be.EVIDENCE_DIR)
 
 
@@ -109,9 +109,9 @@ def test_n1_is_failed_in_the_evidence_own_words() -> None:
     assert n1["ledger_total_usd"] == pytest.approx(3.828866)
 
 
-def test_only_n1_and_the_router_record_a_preregistration_and_no_gate_input_is_null() -> None:
+def test_only_n1_the_router_and_w_e2e_record_a_preregistration_and_no_gate_input_is_null() -> None:
     got = by_id()
-    assert [i for i, r in got.items() if r["prereg"] is not None] == ["N1", "W-C1", "W-C2", "W-D"]
+    assert [i for i, r in got.items() if r["prereg"] is not None] == ["N1", "W-C1", "W-C2", "W-D", "W-E2E"]
     for r in got.values():
         if r["gate_inputs"] is not None:
             assert all(v is not None for v in r["gate_inputs"].values()), r["id"]

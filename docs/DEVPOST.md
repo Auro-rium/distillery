@@ -58,9 +58,9 @@ Student is `Qwen/Qwen3-1.7B` + LoRA, teacher is Nemotron 3 Super. All values are
 | W-D | Burst of 30 off-distribution questions (new `credit_grants` table) after 200 test requests: rollback on burst request 13 (limit 25), 0 false alarms, 0 wrong student answers during the burst; each of the 30 distinct burst questions is deferred. 295 of 300 seeds pass | PASS | `docs/proofs/evidence/drift_burst.json`, `docs/proofs/evidence/h3_drift_report.json`, `docs/proofs/evidence/h3_burst_counts.json` |
 | W-$ | Student cost per 1k requests on an AI Cloud L40S vLLM endpoint | `⟨PENDING:W-$⟩` not yet measured | `h1_endpoint.json` (not yet written) |
 | W-G | An unchanged agent works against the gateway after one base-URL change | verified as a test | `tests/test_acme_wg.py` |
-| W-E2E | Live end to end: certified router, student, deferral, drift guard | `⟨PENDING:W-E2E⟩` not yet measured | `w_e2e.json` (not yet written) |
+| W-E2E | Live local server on Token Factory + Nebius Sandbox, pinned N1 checkpoint: 12 of 20 normal questions served by the student (all 12 verified; 12 of the 14 templated ones), 8 deferred by the router (all 6 of the website's example questions); 30-question burst: rollback on burst request 14 (limit 25), 0 student answers during or after it; student answers took a median 39 s (max 73 s) on sandbox CPU; spend $0.0331 | PASS | `docs/proofs/evidence/w_e2e.json` |
 
-Spend to date is $15.2245 of the 19.50 cap, plus $1.50 reserved for hosting (global ledger, `STATUS.md`; sandbox is recorded at $0, so it is a lower bound).
+Spend to date is $15.2583 of the 19.50 cap, plus $1.50 reserved for hosting (global ledger, `STATUS.md`; sandbox is recorded at $0, so it is a lower bound).
 
 ## How we built it
 
@@ -81,7 +81,7 @@ Spend to date is $15.2245 of the 19.50 cap, plus $1.50 reserved for hosting (glo
 
 - A complete agent loop that ran live end to end for $4.26 (P4) and recovered from 8 injected faults with one human action, the start (A5).
 - A gate that rejects: two of our own results are REJECT and are published as such.
-- A certified router, gateway, drift guard and receipts page built and tested offline; their measured results are pending (W-C1, W-C2, W-D, W-E2E) and are not claimed.
+- A certified router that keeps the student's served error within its bound on a sealed test split (W-C1, W-C2), a drift guard that rolls back on a burst (W-D), and the whole path run live end to end through the gateway for $0.0331 (W-E2E).
 - An unchanged agent works against the gateway after one base-URL change (W-G, a test).
 - Detailed feedback on Token Factory, Sandboxes, fine-tuning, embeddings and AI Cloud in `FEEDBACK.md`.
 
@@ -94,7 +94,7 @@ Spend to date is $15.2245 of the 19.50 cap, plus $1.50 reserved for hosting (glo
 
 ## What's next
 
-Score the router on its sealed test split (W-C1, W-C2); run the drift burst (W-D); measure the student's serving cost on AI Cloud (W-$); the live end-to-end run (W-E2E); more task packs and a human-written natural question set.
+Measure the student's serving cost on a GPU endpoint (W-$; the student currently runs on sandbox CPU, tens of seconds per answer); widen the certificate beyond templated traffic; more task packs and a human-written natural question set.
 
 ## Built with
 

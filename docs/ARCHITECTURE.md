@@ -20,7 +20,7 @@ One agent produces a certified specialist; one gateway delivers it; one guard an
  sealed FIT / CAL / TEST splits -> signals (exec_ok, mean log-prob, nn_sim via Qwen3-Embedding-8B)
    -> router.py logistic score -> stats.certify (Learn-then-Test) -> model.json + cert.json
                                          |
-                              SERVE (server/gateway.py)                         [offline: W-E2E pending]
+                              SERVE (server/gateway.py)                         [live: W-E2E PASS]   
  client (openai SDK, only base_url changed) --POST /v1/chat/completions--> skill detection (system-prompt sha256)
    -> embed question -> router.precheck -> student (Sandbox CPU / AI Cloud H1) -> run SQL read-only -> router.decide
         served iff certified score >= lambda  --> student answer

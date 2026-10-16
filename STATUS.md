@@ -1,6 +1,6 @@
 # STATUS
 
-**Date:** 2026-10-14 · **Phase:** final build (WIN PLAN H1-H6) toward the Nebius x NVIDIA Global AI Hackathon; **Devpost deadline 2026-10-30 10:00 PT** (our internal submit date is 2026-10-27; judging runs 2026-12-01 to 12-15 and the site must stay up). Baseline of proven and broken claims: `GROUND_TRUTH.md` (28 claims). Pre-registrations and results: `DECISIONS.md`. Older status detail is in git history.
+**Date:** 2026-10-16 · **Phase:** final build (WIN PLAN H1-H6) toward the Nebius x NVIDIA Global AI Hackathon; **Devpost deadline 2026-10-30 10:00 PT** (our internal submit date is 2026-10-27; judging runs 2026-12-01 to 12-15 and the site must stay up). Baseline of proven and broken claims: `GROUND_TRUTH.md` (29 claims). Pre-registrations and results: `DECISIONS.md`. Older status detail is in git history.
 
 ## Results (all evidence in `docs/proofs/evidence/`)
 | Round | Decision | Key numbers | Evidence |
@@ -13,6 +13,7 @@
 | H3 certified router, W-C1 (sealed test, n=490) | **PASS** | λ̂ 0.917 certified on calibration (n=489). Student serves 240 (coverage 0.490) with 10 wrong (selective error 0.042, 95% upper 0.070, alpha 0.08); system 0.951 vs teacher-only 0.935 | `router_eval_test.json`, `router_cert.json` |
 | H3 W-C2 | **PASS** (small separation) | 115/117 wrong student answers deferred (lower bound 0.947), but 113/123 right natural + stress answers deferred too (0.919) | `router_eval_test.json` |
 | H6 W-D drift burst (30 credit-grant questions) | **PASS** | rollback on burst request 13 (limit 25), 0 false alarms, 0 wrong student answers during the burst; 295/300 seeds pass | `drift_burst.json`, `h3_drift_report.json`, `h3_burst_counts.json` |
+| W-E2E live end to end (local live server, 2026-10-16) | **PASS** | 12/20 normal questions served by the student (all verified, all templated), 8 deferred (all 6 website examples); rollback on burst request 14 (limit 25), 0 student answers after it; student median 39 s on sandbox CPU; $0.0331 | `w_e2e.json` |
 
 **Reading.** The agent is autonomous and the in-distribution win is real. Training on naturally phrased, teacher-verified questions moved the student from indistinguishable-from-base to clearly better than base, but not to the 0.85 bound. The two agent-authored sets differ, so that is not a measured improvement; teacher accuracy on them is inflated by construction. The plan turns this limit into the feature: a certified router (H3) serves the student only where it can guarantee the error rate and defers the rest. Certified adapter: N1 (`7d6ce813…`).
 
@@ -25,21 +26,19 @@
 | A5 | 4.1918 |
 | N1 (ceiling was 5.00) | 3.8289 |
 | H3 (natural-question drafting 0.6860 + fit/cal/test/burst signals 0.3433) | 1.0293 |
-| **Total** (global ledger) | **15.2245** of the 19.50 cap |
+| W-E2E (smoke 0.0007 + run 0.0331) | 0.0338 |
+| **Total** (global ledger) | **15.2583** of the 19.50 cap |
 | Hosted-demo reservation (through Dec 15) | 1.50 |
-| **Available to build with** | **about 2.78** (19.50 - 15.2245 - 1.50), plus sandbox seconds, which are unpriced |
+| **Available to build with** | **about 2.74** (19.50 - 15.2583 - 1.50), plus sandbox seconds, which are unpriced |
 
 ## What is next (WIN PLAN)
-- **H1** Measure the student on a time-boxed Nebius AI Cloud L40S vLLM + LoRA endpoint (deleted in `finally`) to get a real cost per 1k requests. Paid, about 1.55.
-- **H2** OpenAI-compatible gateway (`/v1/chat/completions`) plus the Acme analyst agent: only the base URL changes.
-- **H3** Done: W-C1 and W-C2 PASS (see above).
-- **H4** UI: the Playground becomes the Acme agent (served by, confidence, SQL and rows, cost, server-side savings counter).
-- **H5** Receipts: every claim with its value, permalink, pre-registration commit and timestamp, sealed-set and adapter hashes, and ledger total; a `/receipts` route.
-- **H6** Drift replay done: W-D PASS (see above). Live drift through the gateway is part of W-E2E.
+- **H1 / W-$** Measure the student on a time-boxed Nebius AI Cloud L40S vLLM + LoRA endpoint (deleted in `finally`) to get a real cost per 1k requests. Paid, about 1.55 (preemptible about 0.74); not approved; needs the AI Cloud login and bucket.
+- **H2, H4, H5** Done: gateway, Acme analyst, receipts; the site now opens on a product Overview (`/`), the distillation story is at `/mission`.
+- **H3, H6** Done: W-C1, W-C2, W-D and W-E2E PASS. The certified router and the N1 checkpoint ship in the image (`deploy/router`, `deploy/student`).
+- **Deploy** Render dashboard checklist in `docs/DEPLOY.md`, then Manual Deploy, `scripts/smoke_live.py`, and the hosted W-E2E check (`scripts/w_e2e.py --hosted`).
 
 ## Blockers (you)
+- Render dashboard: the live service reported `DISTILLERY_PLAYGROUND_DAILY_CAP_USD` 0.5 and student `Qwen/Qwen3-0.6B`; fix both per `docs/DEPLOY.md`, then Manual Deploy.
 - Console balance reading and the Sandboxes usage line, so sandbox seconds can be priced and the totals above stop being lower bounds.
-- Render: switch **Auto-Deploy off** on service `distillery` (`srv-dauuokk1nsns73fqcv70`) and confirm. No push before that.
 - Nebius AI Cloud login and billing for H1, and whether the hackathon credits cover AI Cloud.
-- Approval of each paid step: H1 (about 1.55), the end-to-end run (about 0.10).
-- Yours as agreed: the demo video (under 3:00, public on YouTube), the Devpost submit, making the repo public.
+- Yours as agreed: the demo video (under 3:00, public on YouTube), the Devpost submit.
