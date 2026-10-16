@@ -29,6 +29,12 @@ describe("overview", () => {
     expect(pending?.status).toBe("pending");
   });
 
+  it("explains a rolled-back gateway instead of calling it certified", async () => {
+    stubFetch(contractFetch({ gatewayDrift: { ...contract.gatewayDrift, enabled: true, state: "TEACHER" } }));
+    renderApp("/");
+    expect(await screen.findByText(/the teacher answers everything until the router is re-certified/)).toBeTruthy();
+  });
+
   it("says when the served checkpoint is not the certified one", async () => {
     stubFetch(contractFetch({
       gatewayStatus: { ...contract.gatewayStatus, student_adapter_sha256: "b".repeat(64), certified_adapter_sha256: "a".repeat(64) },

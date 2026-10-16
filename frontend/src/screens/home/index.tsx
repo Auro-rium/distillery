@@ -18,6 +18,14 @@ export const FEATURED = ["W-C1", "W-C2", "W-D", "W-E2E", "W-G", "W-$"] as const;
 const STATUS_TEXT: Record<Receipt["status"], string> = { verified: "Verified", failed: "Not met", pending: "Pending" };
 const STATUS_TONE = { verified: "ok", failed: "bad", pending: "warn" } as const;
 
+/** What the drift state means for a visitor; chosen by the state only, no figures. */
+export function driftText(state: string | null | undefined): string {
+  if (state === "CERTIFIED") return "the student may serve what the certificate covers";
+  if (state === "ROLLBACK" || state === "TEACHER")
+    return "recent traffic did not look like what the certificate covers, so the teacher answers everything until the router is re-certified";
+  return "not configured on this server";
+}
+
 const short = (sha: string | null | undefined) => (sha ? `${sha.slice(0, 8)}…` : fmtText(null));
 
 function Hero({ config }: { config: Async<Config> }) {
@@ -110,7 +118,7 @@ function Live({ status, drift }: { status: Async<GatewayStatus>; drift: Async<Ga
         <Card className="h-tile">
           <div className="eyebrow">Drift guard</div>
           <div className="num h-big">{d ? fmtText(d.state) : fmtText(s.drift.state)}</div>
-          <p className="muted">{d && d.enabled === false ? "not configured on this server" : "CERTIFIED means the student may serve"}</p>
+          <p className="muted">{driftText(d && d.enabled === false ? null : d ? d.state : s.drift.state)}</p>
         </Card>
       </div>
       <p className="muted h-pin">

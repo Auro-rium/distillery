@@ -20,8 +20,14 @@ The live service `distillery` takes its environment from the dashboard, which ov
 | `DISTILLERY_PLAYGROUND_SANDBOX_MODELS` | delete it, or `1` | the image default `1` turns the student on; a dashboard `0` would keep it off |
 | `DISTILLERY_ROUTER_DIR`, `DISTILLERY_PLAYGROUND_STUDENT_DIR`, `DISTILLERY_GATEWAY_STUDENT_DAILY_MAX` | delete them if present | image defaults: `/app/deploy/router`, `/app/deploy/student`, `60` |
 | `DISTILLERY_GLOBAL_LEDGER` | `none` | unchanged |
+| `NEBIUS_AI_PROJECT` | must exist (secret; check the name only) | without it the sandbox student cannot start and every request goes to the teacher |
+| `DISTILLERY_DRIFT_*` | must NOT be set | they override `deploy/router/drift.json` (the pre-registered W 20, τ 0.90); a half-set group stops the server |
 
 Then Manual Deploy -> "Deploy latest commit", and `uv run python scripts/smoke_live.py https://distillery.onrender.com --no-run`: it fails if the student model, the daily cap, the certificate or the checkpoint pin is wrong.
+
+**After the deploy, in this order:** `smoke_live.py` (its playground call also warms the sandbox serving image), then the hosted check before any other traffic: `uv run python scripts/w_e2e.py --base-url https://distillery.onrender.com --hosted --prereg-commit 705876d --out docs/proofs/evidence/w_e2e_hosted.json` (about $0.01 of that day's $0.02 hosted cap), then record the deployed commit in `DECISIONS.md`.
+
+**Drift rollback on the hosted demo.** The guard rolls the gateway back to teacher-only when 18 of the last 20 routed requests went to the teacher (τ 0.90, W 20, pre-registered). Visitors mostly type naturally phrased questions, and on calibration the router defers about 93% of those, so a run of natural questions is likely to trip it: that is the guard doing its job (the certificate does not cover that traffic), and it is safe, but afterwards the student serves nothing. There is no automatic return; re-certifying needs the admin token, which the public service does not have. The state lives in the service's store under `/data`, which is the free plan's ephemeral disk, so **Restart service** (or a redeploy) in the dashboard should bring a fresh instance back to CERTIFIED; check `GET /api/gateway/drift` afterwards. Changing the drift parameters is possible but is a change to pre-registered values and must be disclosed.
 
 ## Settings (all in `render.yaml` except the two secrets)
 | Variable | Value |
