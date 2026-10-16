@@ -111,7 +111,13 @@ def test_n1_is_failed_in_the_evidence_own_words() -> None:
 
 def test_only_n1_the_router_and_w_e2e_record_a_preregistration_and_no_gate_input_is_null() -> None:
     got = by_id()
-    assert [i for i, r in got.items() if r["prereg"] is not None] == ["N1", "W-C1", "W-C2", "W-D", "W-E2E"]
+    assert [i for i, r in got.items() if r["prereg"] is not None] == [
+        "N1",
+        "W-C1",
+        "W-C2",
+        "W-D",
+        "W-E2E",
+    ]
     for r in got.values():
         if r["gate_inputs"] is not None:
             assert all(v is not None for v in r["gate_inputs"].values()), r["id"]
