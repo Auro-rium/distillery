@@ -28,6 +28,8 @@ python_version = "3.12"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# the repo root on sys.path, so `from tests.x import ...` works under a bare `pytest` (CI) too
+pythonpath = ["."]
 
 [build-system]
 requires = ["hatchling"]
