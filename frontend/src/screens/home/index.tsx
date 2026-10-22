@@ -33,13 +33,7 @@ function Hero({ config }: { config: Async<Config> }) {
   return (
     <section className="h-hero" aria-labelledby="h-title">
       <p className="eyebrow">Nebius Token Factory · NVIDIA Nemotron</p>
-      <h1 id="h-title">Change one base URL. The small model answers only what it can prove.</h1>
-      <p className="h-lead">
-        Distillery distils one skill from a large teacher into a small student, certifies on held-out data how far the
-        student can be trusted, and serves both behind an OpenAI-compatible gateway. The student answers the requests its
-        certificate covers; every other request goes to the teacher, with the reason attached. If traffic drifts, a guard
-        hands everything back to the teacher.
-      </p>
+      <h1 id="h-title" className="sr-only">Overview</h1>
       {models && models.teacher && models.student && (
         <dl className="h-models" aria-label="Models on this server">
           <div><dt>Teacher</dt><dd className="mono">{fmtText(models.teacher)}</dd></div>
