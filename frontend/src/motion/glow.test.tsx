@@ -30,6 +30,20 @@ describe("GlowText", () => {
     expect(screen.getByRole("heading", { level: 1, name: "Neon words" })).toBeTruthy();
     expect(document.querySelector(".glow-halo")!.getAttribute("aria-hidden")).toBe("true");
   });
+  it("with reveal, each word is its own numbered span in both layers, and the heading still reads as one sentence", () => {
+    stubMotion(false);
+    render(<GlowText as="h1" reveal>One two three</GlowText>);
+    const words = [...document.querySelectorAll<HTMLElement>(".glow-text .glow-word")];
+    expect(words.map((w) => w.textContent)).toEqual(["One", "two", "three"]);
+    expect(words.map((w) => w.style.getPropertyValue("--i"))).toEqual(["0", "1", "2"]);
+    expect(document.querySelectorAll(".glow-halo .glow-word")).toHaveLength(3);
+    expect(screen.getByRole("heading", { level: 1, name: "One two three" })).toBeTruthy();
+  });
+  it("without reveal the text is not split into words", () => {
+    stubMotion(false);
+    render(<GlowText>One two three</GlowText>);
+    expect(document.querySelectorAll(".glow-word")).toHaveLength(0);
+  });
   it("moves the light to the pointer, relative to the text", () => {
     stubMotion(false);
     stubRaf();

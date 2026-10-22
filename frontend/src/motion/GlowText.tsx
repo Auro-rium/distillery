@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ElementType } from "react";
+import { Fragment, useEffect, useRef, type CSSProperties, type ElementType } from "react";
 import "./glow.css";
 import { useReducedMotion } from "./useReducedMotion";
 
@@ -7,6 +7,8 @@ interface Props {
   as?: ElementType;
   id?: string;
   className?: string;
+  /** Show the words one after another when the text first appears (all at once under reduced motion). */
+  reveal?: boolean;
   children: string;
 }
 
@@ -17,7 +19,22 @@ const OFF = "-9999px";
  * copy of the text behind them, so it shows only on the text and nowhere else. Skipped (plain text) when the user
  * prefers reduced motion. The copy behind is `aria-hidden`; assistive technology reads the text once.
  */
-export function GlowText({ as: Tag = "p", id, className, children }: Props) {
+/** The text as one span per word; `--i` is the word's position, which the stylesheet turns into its delay. */
+function Words({ text }: { text: string }) {
+  const words = text.split(/\s+/).filter(Boolean);
+  return (
+    <>
+      {words.map((w, i) => (
+        <Fragment key={i}>
+          <span className="glow-word" style={{ "--i": i } as CSSProperties}>{w}</span>
+          {i < words.length - 1 ? " " : null}
+        </Fragment>
+      ))}
+    </>
+  );
+}
+
+export function GlowText({ as: Tag = "p", id, className, reveal = false, children }: Props) {
   const ref = useRef<HTMLElement>(null);
   const reduced = useReducedMotion();
   useEffect(() => {
@@ -54,8 +71,8 @@ export function GlowText({ as: Tag = "p", id, className, children }: Props) {
   }, [reduced]);
   return (
     <Tag ref={ref} id={id} className={["glow", className].filter(Boolean).join(" ")} data-glow={reduced ? "off" : "on"}>
-      <span className="glow-halo" aria-hidden="true">{children}</span>
-      <span className="glow-text">{children}</span>
+      <span className="glow-halo" aria-hidden="true">{reveal ? <Words text={children} /> : children}</span>
+      <span className="glow-text">{reveal ? <Words text={children} /> : children}</span>
     </Tag>
   );
 }

@@ -24,3 +24,10 @@
   opacity: .85;
 }
 .glow[data-glow="off"] .glow-halo { display: none; }
+
+/* Words appear one by one. `visibility` keeps each word's space (nothing reflows) and, unlike opacity or a transform,
+   leaves the word in the glyph clip that carries the neon. Without the animation every word simply shows. */
+@media (prefers-reduced-motion: no-preference) {
+  .glow-word { animation: glow-word-in .01s linear both; animation-delay: calc(200ms + var(--i, 0) * 80ms); }
+}
+@keyframes glow-word-in { from { visibility: hidden; } to { visibility: visible; } }

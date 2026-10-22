@@ -16,7 +16,7 @@ function Hero({ config }: { config: Async<Config> }) {
   return (
     <section className="h-hero" aria-labelledby="h-title">
       <p className="eyebrow">Nebius Token Factory · NVIDIA Nemotron</p>
-      <GlowText as="h1" id="h-title">
+      <GlowText as="h1" id="h-title" reveal>
         An autonomous agent that distils a big model’s narrow skill into a small, certified student, served behind an OpenAI-compatible gateway with automatic rollback.
       </GlowText>
       <GlowText className="h-flow">
