@@ -60,7 +60,7 @@ Student is `Qwen/Qwen3-1.7B` + LoRA, teacher is Nemotron 3 Super. All values are
 | W-G | An unchanged agent works against the gateway after one base-URL change | verified as a test | `tests/test_acme_wg.py` |
 | W-E2E | Live local server on Token Factory + Nebius Sandbox, pinned N1 checkpoint: 12 of 20 normal questions served by the student (all 12 verified; 12 of the 14 templated ones), 8 deferred by the router (all 6 of the website's example questions); 30-question burst: rollback on burst request 14 (limit 25), 0 student answers during or after it; student answers took a median 39 s (max 73 s) on sandbox CPU; spend $0.0331 | PASS | `docs/proofs/evidence/w_e2e.json` |
 
-Spend to date is $15.2583 of the 19.50 cap, plus $1.50 reserved for hosting (global ledger, `STATUS.md`; sandbox is recorded at $0, so it is a lower bound).
+Spend to date is $15.2583 of the 19.50 cap, plus $1.50 reserved for hosting (global ledger, `DECISIONS.md`; sandbox is recorded at $0, so it is a lower bound).
 
 ## How we built it
 

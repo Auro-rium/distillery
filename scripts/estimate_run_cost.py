@@ -5,7 +5,7 @@ Read-only: it opens the reference run's ``index.sqlite`` with ``mode=ro`` and re
 measured token average) is marked MISSING and the grand total is withheld: only a subtotal of the
 priced lines is shown, plus the list of what is missing. Nothing is ever priced at a guess.
 
-``--scale gated`` prices the claims-real design (STATUS.md "Claims-real plan"): teacher originals,
+``--scale gated`` prices the claims-real design (see DECISIONS.md): teacher originals,
 Nano paraphrase calls, teacher verification of paraphrases (up to 3 per original), human-set
 drafting (k=3 teacher calls per question), teacher eval on gate+stress+human, fine-tune tokens from
 the FINAL row count, sandbox generations and a wall-clock estimate from the measured c20 throughput

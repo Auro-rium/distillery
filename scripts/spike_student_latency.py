@@ -52,7 +52,7 @@ DEFAULT_DUMMY_OUT = Path("docs/spikes/s5-qwen3-1_7b-dummy-adapter.json")
 N_PROMPTS = 40
 LEVELS = (1, 5, 10, 20)  # below the 50-operation cap and student_concurrency=20
 MAX_PER_LEVEL = 40
-BASELINE = {  # Qwen3-0.6B, measured live 2026-09-30 (STATUS.md)
+BASELINE = {  # Qwen3-0.6B, measured live 2026-09-30
     "model": "Qwen/Qwen3-0.6B",
     "s_per_sample": 7.8,
     "peak_rss_mb": 2140,  # 2.09 GB
@@ -247,7 +247,7 @@ def format_table(result: dict[str, Any], *, fake: bool = False) -> str:
     head = ["run", "batch", "conc", "n", "s/sample", "load_s", "peak RSS MB", "samples/s", "status"]
     b = BASELINE
     rows = [["0.6B baseline", "-", "-", "-", f(b["s_per_sample"]), "-", f(b["peak_rss_mb"]), "-",
-             "measured (STATUS.md)"]]  # fmt: skip
+             "measured live 2026-09-30"]]  # fmt: skip
     for p in result["phases"]:
         rows.append([
             f"{result['model'].split('/')[-1]}{tag} {p['name']}", f(p.get("batch_size")),

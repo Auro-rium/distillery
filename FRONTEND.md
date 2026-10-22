@@ -112,7 +112,7 @@ Do not:
 
 ## 9. Backend map (for context, not for UI work)
 
-`src/distillery/`: `orchestrator.py` (stage machine), `gate.py` + `stats.py` (decision), `evaluator.py` (only module allowed to read the sealed held-out set), `router*.py` (certified router), `drift.py`, `server/` (API, gateway, SSE, replay), `taskpacks/sql/` (schema, questions, verifier). Docs: `README.md`, `docs/ARCHITECTURE.md`, `docs/API_CONTRACT.md`, `docs/DEPLOY.md`, `DECISIONS.md` (pre-registrations and results), `GROUND_TRUTH.md` (claim audit), `STATUS.md` (current state and spend).
+`src/distillery/`: `orchestrator.py` (stage machine), `gate.py` + `stats.py` (decision), `evaluator.py` (only module allowed to read the sealed held-out set), `router*.py` (certified router), `drift.py`, `server/` (API, gateway, SSE, replay), `taskpacks/sql/` (schema, questions, verifier). Docs: `README.md`, `docs/ARCHITECTURE.md`, `docs/API_CONTRACT.md`, `docs/DEPLOY.md`, `DECISIONS.md` (pre-registrations and results), `docs/proofs/evidence/` (the evidence files).
 
 ## 10. Open items the frontend owner should know
 
