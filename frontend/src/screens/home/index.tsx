@@ -10,6 +10,7 @@ import { ApiErrorState, Badge, Card } from "../../components";
 import { GITHUB_URL } from "../../components/Shell";
 import { GlowText } from "../../motion/GlowText";
 import { Skeleton } from "../../ui";
+import { Robot } from "./Robot";
 import { useAsync, type Async } from "../report/useAsync";
 import "./home.css";
 
@@ -47,7 +48,7 @@ function Hero({ config }: { config: Async<Config> }) {
         </dl>
       )}
       <div className="h-cta">
-        <Link className="btn primary" to="/receipts">Check the receipts</Link>
+        <Link className="btn primary" to="/mission">Go to mission</Link>
         <a className="btn ghost" href={GITHUB_URL} target="_blank" rel="noreferrer noopener">Source on GitHub</a>
       </div>
     </section>
@@ -185,7 +186,10 @@ export default function Home() {
   const [evidence] = useAsync<Evidence>(() => api.evidence(), "evidence");
   return (
     <div className="home">
-      <Hero config={config} />
+      <div className="h-top">
+        <Hero config={config} />
+        <Robot />
+      </div>
       <Swap />
       <Live status={status} drift={drift} />
       <Flow />

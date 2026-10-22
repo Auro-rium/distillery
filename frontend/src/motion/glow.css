@@ -1,10 +1,10 @@
 /* Neon light that follows the pointer, only on the glyphs (see GlowText.tsx). --mx/--my are set from script. */
 .glow {
   --mx: -9999px; --my: -9999px;
-  --glow-base: #fff; --neon-a: #39ff88; --neon-b: #00e5ff;
+  --glow-base: #fff; --neon-a: rgba(57, 255, 136, .62); --neon-b: rgba(0, 229, 255, .42);
   position: relative; isolation: isolate;
 }
-:root[data-theme="light"] .glow { --glow-base: var(--ink); --neon-a: #00a85a; --neon-b: #0088aa; }
+:root[data-theme="light"] .glow { --glow-base: var(--ink); --neon-a: rgba(0, 168, 90, .6); --neon-b: rgba(0, 136, 170, .4); }
 
 .glow-text, .glow-halo { display: block; }
 .glow-text { position: relative; z-index: 1; color: var(--glow-base); }
@@ -16,10 +16,11 @@
 }
 .glow[data-glow="on"] .glow-text {
   background-color: var(--glow-base);
-  background-image: radial-gradient(circle 140px at var(--mx) var(--my), var(--neon-a) 0, var(--neon-b) 42%, transparent 100%);
+  background-image: radial-gradient(circle 150px at var(--mx) var(--my), var(--neon-a) 0, var(--neon-b) 45%, transparent 100%);
 }
 .glow[data-glow="on"] .glow-halo {
-  background-image: radial-gradient(circle 190px at var(--mx) var(--my), var(--neon-a) 0, var(--neon-b) 45%, transparent 100%);
-  filter: blur(9px) saturate(1.5) brightness(1.2);
+  background-image: radial-gradient(circle 230px at var(--mx) var(--my), var(--neon-a) 0, var(--neon-b) 50%, transparent 100%);
+  filter: blur(14px) saturate(1.2);
+  opacity: .85;
 }
 .glow[data-glow="off"] .glow-halo { display: none; }
