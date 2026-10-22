@@ -9,7 +9,8 @@ describe("overview", () => {
   it("leads with the product and links the receipts and the distillation story", async () => {
     stubFetch(contractFetch());
     renderApp("/");
-    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Overview");
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toMatch(/^An autonomous agent that distils a big model’s narrow skill/);
+    expect(screen.getByText(/^Write → Test in Sandboxes → Fine-tune on Token Factory → Gate → Certify the router → Serve → Guard$/)).toBeTruthy();
     expect(screen.queryByText(/Change one base URL/)).toBeNull();
     expect(screen.queryByRole("link", { name: /Acme analyst/ })).toBeNull();
     expect(screen.getByRole("link", { name: "Check the receipts" }).getAttribute("href")).toBe("/receipts");

@@ -33,7 +33,11 @@ function Hero({ config }: { config: Async<Config> }) {
   return (
     <section className="h-hero" aria-labelledby="h-title">
       <p className="eyebrow">Nebius Token Factory · NVIDIA Nemotron</p>
-      <h1 id="h-title" className="sr-only">Overview</h1>
+      <h1 id="h-title">
+        An autonomous agent that distils a big model’s narrow skill into a small, certified student, served behind an
+        OpenAI-compatible gateway with automatic rollback.
+      </h1>
+      <p className="h-flow">Write → Test in Sandboxes → Fine-tune on Token Factory → Gate → Certify the router → Serve → Guard</p>
       {models && models.teacher && models.student && (
         <dl className="h-models" aria-label="Models on this server">
           <div><dt>Teacher</dt><dd className="mono">{fmtText(models.teacher)}</dd></div>
