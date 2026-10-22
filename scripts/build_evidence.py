@@ -328,7 +328,6 @@ def n1(commit: str) -> dict[str, Any]:
 #   drift_burst       `scripts/drift_sim.py --out` document (distillery.drift_sim)
 #   h3_burst_counts   `scripts/h3_burst_counts.py` (W-D's prereg, burst hashes, adapter)
 #   extras_from       stem of a companion file the prereg/sealed/adapter paths are read from
-#   h1_endpoint       `scripts/h1_endpoint.py` evidence (write_evidence)
 #   w_e2e             PLACEHOLDER: no writer exists yet; path and keys are NOT decided
 _GATE_P4 = {
     "n": "gate_heldout.n",
@@ -518,25 +517,6 @@ KEYS: dict[str, dict[str, Any]] = {
         "adapter": "adapter_sha256",
         "gate": "params",
     },
-    "W-$": {
-        "claim": "The student's cost per 1k requests is measured on a real endpoint at its "
-        "measured throughput.",
-        "file": "h1_endpoint",
-        "fail_if": "error",
-        "value": "student USD {usd} per 1k requests (hourly price {hourly} USD at {rph} requests "
-        "per hour, projected)",
-        "value_keys": {
-            "usd": "costs.student.usd_per_1k",
-            "hourly": "costs.student.hourly_usd",
-            "rph": "costs.student.req_per_hour",
-        },
-        "gate": {
-            "hourly_usd": "costs.student.hourly_usd",
-            "req_per_hour": "costs.student.req_per_hour",
-            "utilization": "costs.student.utilization",
-        },
-        "ledger": ("h1_endpoint", "ledger.delta_usd"),
-    },
     "W-E2E": {
         "claim": "The whole path runs end to end on the live gateway: certified router, student, "
         "deferral and the drift guard.",
@@ -553,7 +533,7 @@ KEYS: dict[str, dict[str, Any]] = {
 W_G_ARTIFACT = "tests/test_acme_wg.py"
 W_G_CLAIM = "An unchanged agent works against the gateway after one base-URL change."
 W_G_VALUE = "same agent code, base URL swapped; test passes"
-PENDING_ORDER = ("W-C1", "W-C2", "W-D", "W-$", "W-G", "W-E2E")
+PENDING_ORDER = ("W-C1", "W-C2", "W-D", "W-G", "W-E2E")
 # A proof whose own verdict is PARTIAL met only part of its claim: it is "failed" here, never
 # "verified" (the verdict itself stays in `verdict` so the page can say "partly met").
 PARTIAL_STATUS = "failed"

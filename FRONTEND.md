@@ -18,7 +18,7 @@ generate tasks -> cross-check gold -> verifier self-test -> split + seal held-ou
 The real results are mixed, and the UI must keep showing them honestly (`README.md`, Results table):
 - The student **PROMOTEd on templated questions** (P4) and **REJECTed on naturally phrased ones** (Gate B, N1).
 - The router serves the student on 49% of sealed-test traffic with a certified selective error; on natural phrasing it mostly defers to the teacher.
-- **W-$** (student cost per 1k requests) is **not measured**. It must stay "pending" everywhere: no number, no estimate.
+- The student's **serving cost per request is not measured**. The UI must not show a per-request cost or saving for the student beyond what the API returns (it labels the basis).
 
 ## 2. Architecture in one picture
 
@@ -77,7 +77,7 @@ This project's whole value is that numbers are real. The UI must never invent, r
 6. **Live screen:** if the SSE stream disconnects or is silent for 30 s, show "Disconnected / stale" and mark values as last known. Reconnect with `?last_event_id=`. `observed_at` is "seen", never "when it happened"; only `stage.at` is an event time. Never compute durations.
 7. **The production bundle contains no mock, no `synthetic`, no `docs/fixtures` values.** `truth.test.ts` builds without `VITE_MOCK` and inspects the output.
 8. **Provenance:** `src/screens/provenance.test.tsx` renders every screen from real API shapes and checks every visible number against the payload. A number that is not in a payload must be allow-listed in that test with a reason.
-9. **Pending means pending.** W-$ and anything else without an evidence file shows "pending: not yet measured". Do not "fill in" a number from the docs. Allowed numbers live in `docs/proofs/evidence/*.json` and the README Results table.
+9. **Pending means pending.** Anything without an evidence file shows "pending: not yet measured". Do not "fill in" a number from the docs. Allowed numbers live in `docs/proofs/evidence/*.json` and the README Results table.
 10. **Never put a secret in the bundle.** Anything `VITE_*` ends up in public JS. The admin token is typed by the operator at runtime and sent as `X-Admin-Token` only by the typed client (`src/api/client.ts`, admin calls); it is held in memory only (a module variable) and is not stored in source, env or browser storage.
 
 ## 6. API contract and how drift is caught
@@ -117,5 +117,4 @@ Do not:
 ## 10. Open items the frontend owner should know
 
 - The demo video link is not in the README yet; add it when the video is public (owner: the repo author).
-- W-$ stays pending (the Nebius AI Cloud run was blocked on 2026-10-22: bucket creation `AccessDenied`, project reported `SUSPENDED`). If it is ever measured, the backend writes `deploy/serving_price.json` and `docs/proofs/evidence/h1_endpoint.json`, and the savings panel switches from "pending H1" to the measured basis by itself. No frontend change is needed.
 - Submission deadline: Devpost 2026-10-30 10:00 PT (internal date 2026-10-27). Judging runs 2026-12-01 to 12-15, so the hosted site must stay up and stable.

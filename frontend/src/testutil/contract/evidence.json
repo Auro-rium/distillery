@@ -681,20 +681,6 @@
     },
     {
       "adapter_sha256": null,
-      "artifact": "docs/proofs/evidence/h1_endpoint.json",
-      "claim": "The student's cost per 1k requests is measured on a real endpoint at its measured throughput.",
-      "gate_inputs": null,
-      "id": "W-$",
-      "ledger_total_usd": null,
-      "permalink": "https://github.com/Auro-rium/distillery/blob/c6c366fbff7b40c017113c1c4b98dfa088bd7a59/docs/proofs/evidence/h1_endpoint.json",
-      "prereg": null,
-      "sealed_sha256": {},
-      "status": "pending",
-      "value_display": null,
-      "verdict": null
-    },
-    {
-      "adapter_sha256": null,
       "artifact": "tests/test_acme_wg.py",
       "claim": "An unchanged agent works against the gateway after one base-URL change.",
       "gate_inputs": null,

@@ -176,7 +176,7 @@ Module map (all offline-tested; no certificate exists yet, so W-C1 and W-C2 are 
 
 ## H1 serving-cost harness
 
-`aicloud_endpoint.py` builds and runs the `nebius ai endpoint ...` commands for one time-boxed L40S vLLM + LoRA endpoint through an injected command runner, always deletes it in `finally` and confirms via `list`; `h1_measure.py` measures throughput, latency and parity with the sandbox student and does the cost and break-even arithmetic (projections are labelled); `scripts/h1_endpoint.py --plan-only` prints the plan without spending. Offline-tested; not run live (W-$ pending). Until `deploy/serving_price.json` exists the savings counter reports the student cost as "pending H1".
+`aicloud_endpoint.py` builds and runs the `nebius ai endpoint ...` commands for one time-boxed L40S vLLM + LoRA endpoint through an injected command runner, always deletes it in `finally` and confirms via `list`; `h1_measure.py` measures throughput, latency and parity with the sandbox student and does the cost and break-even arithmetic (projections are labelled); `scripts/h1_endpoint.py --plan-only` prints the plan without spending. Offline-tested; not run live. Until `deploy/serving_price.json` exists the savings counter reports the student cost as "pending H1".
 
 ## Other modules
 

@@ -21,7 +21,6 @@ from test_router_eval import build_rows, model
 
 from distillery.drift import DriftParams
 from distillery.drift_sim import run_burst
-from distillery.h1_measure import cost_per_1k
 from distillery.router_eval import evaluate_test
 from distillery.server import create_app
 
@@ -40,7 +39,7 @@ FIELDS = {
     "id", "claim", "status", "verdict", "value_display", "artifact", "permalink", "prereg",
     "sealed_sha256", "adapter_sha256", "gate_inputs", "ledger_total_usd",
 }  # fmt: skip
-PENDING = ["W-$"]  # W-C1/W-C2/W-D scored 2026-10-14, W-E2E 2026-10-16
+PENDING: list[str] = []  # W-C1/W-C2/W-D scored 2026-10-14, W-E2E 2026-10-16
 EVIDENCE = Path(be.EVIDENCE_DIR)
 
 
@@ -69,7 +68,7 @@ def put(root: Path, stem: str, doc: dict[str, Any]) -> None:
 def test_every_proof_has_a_receipt_then_the_preregistered_claims() -> None:
     out = be.build(COMMIT, "t")
     ids = [r["id"] for r in out["receipts"]]
-    assert ids == [p["id"] for p in out["proofs"]] + ["W-C1", "W-C2", "W-D", "W-$", "W-G", "W-E2E"]
+    assert ids == [p["id"] for p in out["proofs"]] + ["W-C1", "W-C2", "W-D", "W-G", "W-E2E"]
     assert len(set(ids)) == len(ids)
     for r in out["receipts"]:
         assert set(r) == FIELDS
@@ -142,7 +141,6 @@ def test_pending_claims_have_no_value_and_point_at_the_file_they_will_use() -> N
     assert got["W-C1"]["artifact"] == "docs/proofs/evidence/router_eval_test.json"
     assert got["W-C2"]["artifact"] == "docs/proofs/evidence/router_eval_test.json"
     assert got["W-D"]["artifact"] == "docs/proofs/evidence/drift_burst.json"
-    assert got["W-$"]["artifact"] == "docs/proofs/evidence/h1_endpoint.json"
 
 
 def test_w_g_is_verified_as_a_test() -> None:
@@ -278,23 +276,6 @@ def test_drift_burst_keys_match_the_simulator(sandbox: Path) -> None:
     assert by_id(sandbox)["W-D"]["status"] == "failed"
 
 
-def test_h1_keys_match_the_measurement_code(sandbox: Path) -> None:
-    doc = {
-        "costs": {"student": cost_per_1k(2.5, 1200.0), "projected": True},
-        "ledger": {"delta_usd": 0.75},
-        "error": None,
-    }
-    put(sandbox, "h1_endpoint", doc)
-    r = by_id(sandbox)["W-$"]
-    assert r["status"] == "verified"
-    assert f"student USD {doc['costs']['student']['usd_per_1k']:.4g} " in r["value_display"]
-    assert r["ledger_total_usd"] == 0.75
-    assert r["gate_inputs"]["hourly_usd"] == 2.5
-    doc["error"] = "endpoint never became ready"
-    put(sandbox, "h1_endpoint", doc)
-    assert by_id(sandbox)["W-$"]["status"] == "failed"
-
-
 def test_a_present_file_with_a_missing_key_stops_the_build(sandbox: Path) -> None:
     doc = _router_doc()
     del doc["W-C2"]["deferred_share_lower_95"]
@@ -326,6 +307,6 @@ def test_the_existing_evidence_endpoint_serves_the_committed_receipts(
     with TestClient(create_app(make_settings(tmp_path))) as c:
         body = c.get("/api/evidence").json()
     assert body["receipts"] == committed["receipts"]
-    assert [r["id"] for r in body["receipts"]][-6:] == list(be.PENDING_ORDER)
-    # W-C1/W-C2 point at one file, W-G at a test: the pending ones are never linked as evidence
-    assert {r["status"] for r in body["receipts"] if r["id"] in PENDING} == {"pending"}
+    assert [r["id"] for r in body["receipts"]][-5:] == list(be.PENDING_ORDER)
+    # every claim is scored now; a pending one (none today) must never carry a value
+    assert all(r["value_display"] is None for r in body["receipts"] if r["status"] == "pending")

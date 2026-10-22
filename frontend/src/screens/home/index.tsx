@@ -13,7 +13,7 @@ import { useAsync, type Async } from "../report/useAsync";
 import "./home.css";
 
 /** The pre-registered serving claims, in reading order. Others (the distillation rungs) live on the Mission page. */
-export const FEATURED = ["W-C1", "W-C2", "W-D", "W-E2E", "W-G", "W-$"] as const;
+export const FEATURED = ["W-C1", "W-C2", "W-D", "W-E2E", "W-G"] as const;
 
 const STATUS_TEXT: Record<Receipt["status"], string> = { verified: "Verified", failed: "Not met", pending: "Pending" };
 const STATUS_TONE = { verified: "ok", failed: "bad", pending: "warn" } as const;

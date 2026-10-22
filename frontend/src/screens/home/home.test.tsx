@@ -20,7 +20,7 @@ describe("overview", () => {
     stubFetch(contractFetch());
     renderApp("/");
     const ids = (await screen.findAllByText(/^W-(C1|C2|D|E2E|G|\$)$/)).map((e) => e.textContent);
-    expect(ids).toEqual(["W-C1", "W-C2", "W-D", "W-E2E", "W-G", "W-$"]);
+    expect(ids).toEqual(["W-C1", "W-C2", "W-D", "W-E2E", "W-G"]);
     const pending = contract.evidence.receipts.find((r: { id: string }) => r.id === "W-E2E");
     const card = screen.getByText("W-E2E").closest(".h-claim") as HTMLElement;
     expect(within(card).getByText("Pending")).toBeTruthy();

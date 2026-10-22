@@ -71,24 +71,36 @@ describe("a verified row", () => {
   });
 });
 
+// No claim is pending in the committed evidence any more, so the pending shape is built from a
+// real row with every result field absent, exactly as scripts/build_evidence.py writes a pending claim.
+const PENDING_ID = "W-E2E";
+const pendingEvidence = () => ({
+  ...EV,
+  receipts: ROWS.map((r) => r.id !== PENDING_ID ? r : {
+    ...r, status: "pending", verdict: null, value_display: null, prereg: null,
+    sealed_sha256: {}, adapter_sha256: null, gate_inputs: null, ledger_total_usd: null,
+  }),
+});
+
 describe("a pending row", () => {
   it("says Pending: pre-registered, not yet scored; no number, no link, only where the result will be written", async () => {
-    await open();
-    const r = row("W-$");
-    const c = card("W-$");
+    await open(pendingEvidence());
+    const r = row(PENDING_ID);
+    const c = card(PENDING_ID);
     expect(c.getByText("PENDING")).toBeTruthy();
     expect(c.getByText("Pending: pre-registered, not yet scored")).toBeTruthy();
     expect(c.queryAllByRole("link")).toEqual([]);
     expect(c.getByText("will be written to")).toBeTruthy();
     expect(c.getByText(r.artifact)).toBeTruthy();
-    const text = document.getElementById("W-$")!.textContent!.replace("W-$", "").replace(r.artifact, "").replace(r.claim, ""); // the claim names "1k"; no result number may appear
+    const text = document.getElementById(PENDING_ID)!.textContent!.replace(PENDING_ID, "").replace(r.artifact, "").replace(r.claim, ""); // no result number may appear
     expect(text).not.toMatch(/\d/);
     expect(text).not.toContain("not measured");
-    expect(document.getElementById("W-$")!.querySelector("details")).toBeNull();
+    expect(document.getElementById(PENDING_ID)!.querySelector("details")).toBeNull();
   });
   it("every pending receipt in the payload renders as pending", async () => {
-    await open();
-    for (const r of ROWS.filter((x) => x.status === "pending")) {
+    const ev = pendingEvidence();
+    await open(ev);
+    for (const r of (ev.receipts as unknown as ReceiptRow[]).filter((x) => x.status === "pending")) {
       expect(card(r.id).getByText("Pending: pre-registered, not yet scored")).toBeTruthy();
       expect(card(r.id).queryByText("VERIFIED")).toBeNull();
     }

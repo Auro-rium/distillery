@@ -32,7 +32,7 @@ Context: Distillery is an agent that distils a text-to-SQL job from Nemotron 3 S
 - **Needs work / unknown:** no live embedding result is recorded in the repo yet, so we make no claim about quality or latency. The router that depends on it is pre-registered and pending (W-C1, W-C2 in [README.md](README.md)).
 
 ### Nebius AI Cloud endpoints (H1)
-- **Used for:** a time-boxed L40S vLLM + LoRA endpoint to measure the student's serving cost (`aicloud_endpoint.py`, `scripts/h1_endpoint.py`). Not run live yet: W-$ is pending.
+- **Used for:** a time-boxed L40S vLLM + LoRA endpoint to measure the student's serving cost (`aicloud_endpoint.py`, `scripts/h1_endpoint.py`). Not run live: on 2026-10-22 bucket creation was refused (`AccessDenied`) and the project reported `SUSPENDED`.
 - **Worked:** `nebius ai endpoint create --help` (nebius 0.12.282, read 2026-10-13) documents image, platform, preset, volume, auth and on-demand/preemptible flags, enough to build a harness and an offline-tested dry plan.
 - **Needs work:** hosting an app needs this separate product, its own CLI and a federated browser login, not the Token Factory key (2026-09-30 entry); the hackathon credit covers Token Factory only ([docs/DEPLOY.md](docs/DEPLOY.md)); several CLI shapes (`get`, `list`, `delete`, state field names) were unverified when the harness was written (listed in the `aicloud_endpoint.py` docstring). `--inject-file` is limited to 64 KiB per file (same `--help`), so a LoRA adapter (tens of MB) cannot be injected and has to come from an Object Storage `--volume s3://…` mount: a first-class "attach these model files" option would make custom-adapter serving one command.
 

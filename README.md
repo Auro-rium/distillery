@@ -6,7 +6,7 @@ Distillery is an autonomous agent that distils a narrow, repetitive job (today: 
 
 Track: Coding and Agentic Engineering (Nebius x NVIDIA Global AI Hackathon). Live demo: <https://distillery.onrender.com> · Source: <https://github.com/Auro-rium/distillery> (MIT).
 
-> **Status (2026-10-22).** The agent loop, gate, certified router, drift guard, gateway and receipts page are built, and every claim in the Results table is backed by a file in `docs/proofs/evidence/`. The student PROMOTEd on templated questions and **does not pass the gate on naturally phrased ones** (Gate B and N1 are both REJECT). The certified router exists because of that: it serves the student only where the error rate is certified and defers the rest to the teacher. The one claim not measured is **W-$** (student cost per 1k requests); it is shown as `pending` and has no number anywhere.
+> **Status (2026-10-22).** The agent loop, gate, certified router, drift guard, gateway and receipts page are built, and every claim in the Results table is backed by a file in `docs/proofs/evidence/`. The student PROMOTEd on templated questions and **does not pass the gate on naturally phrased ones** (Gate B and N1 are both REJECT). The certified router exists because of that: it serves the student only where the error rate is certified and defers the rest to the teacher. No dollar saving per request is claimed: the student's serving cost is not measured.
 
 ## What it does
 
@@ -43,11 +43,10 @@ Every number is copied from the file in the Source column. Student is `Qwen/Qwen
 | W-C2 | Router defers most wrong student answers, few right ones | natural + stress test items: 115 of 117 wrong student answers deferred (0.983, lower 95% bound 0.947, minimum 0.80); but 113 of 123 right answers were deferred too (0.919), so on this traffic the router mostly hands everything to the teacher | **PASS** (both clauses; separation is small) | [router_eval_test.json](docs/proofs/evidence/router_eval_test.json) |
 | W-D | Drift burst trips the guard and rolls back to the teacher | 30 off-distribution questions (a new `credit_grants` table) after 200 test requests: rollback on burst request 13 (limit 25), 0 false alarms before it, 0 wrong student answers during the burst; the router defers each of the 30 distinct burst questions (the student would have got 11 right). Over 300 seeds: 295 pass (5 false alarms before the burst), median rollback at request 15 | **PASS** (all 3 pre-registered clauses) | [drift_burst.json](docs/proofs/evidence/drift_burst.json), [h3_drift_report.json](docs/proofs/evidence/h3_drift_report.json), [h3_burst_counts.json](docs/proofs/evidence/h3_burst_counts.json) |
 | W-E2E (hosted) | The same live check against the deployed service (normal phase only, so the public gateway is not rolled back on purpose) | Render service at commit `e09c606`, 2026-10-22: 12 of 20 normal questions served by the student (all verified), 8 deferred to the teacher, no 5xx; `scripts/smoke_live.py` 18/18 checks passed | **PASS** (C1–C4) | [w_e2e_hosted.json](docs/proofs/evidence/w_e2e_hosted.json) |
-| W-$ | Student cost per 1k requests on a time-boxed AI Cloud L40S vLLM endpoint | `⟨PENDING:W-$⟩` | pending: not yet measured | `h1_endpoint.json` (does not exist yet) |
 | W-G | An unchanged agent works against the gateway after one base-URL change | same agent code, base URL swapped; test passes | verified as a test | [tests/test_acme_wg.py](tests/test_acme_wg.py) |
 | W-E2E | Live end to end: certified router, student, deferral, drift guard | Live local server on Token Factory + Nebius Sandbox, pinned N1 checkpoint: 12 of 20 normal questions served by the student (all 12 verified; 12 of the 14 templated ones), 8 deferred by the router (all 6 of the website's example questions); 30-question burst: rollback on burst request 14 (limit 25), 0 student answers during or after it; student answers took a median 39 s (max 73 s) on sandbox CPU; spend $0.0331 | **PASS** (all 6 pre-registered criteria) | [w_e2e.json](docs/proofs/evidence/w_e2e.json) |
 
-Spend to date (global ledger; sandbox is recorded at $0, so this is a lower bound): $15.2583 of the 19.50 cap, plus $1.50 reserved for hosting the demo ([DECISIONS.md](DECISIONS.md)). Claims, procedures and pre-registrations: [DECISIONS.md](DECISIONS.md). Cost per 1k tasks for the student is not reported until W-$ exists.
+Spend to date (global ledger; sandbox is recorded at $0, so this is a lower bound): $15.2583 of the 19.50 cap, plus $1.50 reserved for hosting the demo ([DECISIONS.md](DECISIONS.md)). Claims, procedures and pre-registrations: [DECISIONS.md](DECISIONS.md).
 
 ## Nebius and NVIDIA usage
 
@@ -65,7 +64,6 @@ Ids are set in [render.yaml](render.yaml) and read through `DISTILLERY_MODEL_PLA
 - **Token Factory fine-tuning:** LoRA on Qwen3-1.7B (the P4, A5 and N1 runs); checkpoints SHA-256-checked.
 - **Token Factory Sandboxes:** every gold, training row and evaluation is executed there; branching is the experiment tree; base and student run on sandbox CPU today.
 - **Token Factory embeddings:** `Qwen/Qwen3-Embedding-8B`.
-- **Nebius AI Cloud (H1):** a time-boxed L40S vLLM + LoRA endpoint harness (`aicloud_endpoint.py`, `h1_measure.py`, `scripts/h1_endpoint.py`), always deleted in `finally`. Offline-tested; not run live. An attempt on 2026-10-22 stopped before any resource was created: bucket creation was refused (`AccessDenied`) and the project reports `SUSPENDED`. W-$ therefore stays pending.
 
 Friction and findings: [FEEDBACK.md](FEEDBACK.md).
 
@@ -87,12 +85,12 @@ Free, offline (fake models, fake prices, labelled "DRY RUN"; proves plumbing, no
 ```bash
 uv run python -m distillery run --pack sql --scale tiny --dry-run
 uv run python -m distillery serve --port 8000        # API + replay; with `make dev`, the Vite UI too
-uv run python -m pytest -q -p no:cacheprovider      # 1267 tests passed on 2026-10-22; all offline, no key needed
+uv run python -m pytest -q -p no:cacheprovider      # 1266 tests passed on 2026-10-22; all offline, no key needed
 uv run python -m distillery ledger status             # spend ledger
 uv run python scripts/build_evidence.py --out /tmp/evidence.json   # rebuild the receipts, free
 ```
 
-Paid or certified steps (all need `--i-approve-spend` / an admin token; read `--help` first): `run --scale gated`, `router build-splits | signals | fit | certify | evaluate`, `scripts/h1_endpoint.py` (`--plan-only` is free), `scripts/acme_agent.py --base-url <url>`. Container: `make docker`, then `docker run --rm -p 8000:8000 --env-file .env distillery:local` (without a key it starts in replay-only mode). Hosting notes: [docs/DEPLOY.md](docs/DEPLOY.md).
+Paid or certified steps (all need `--i-approve-spend` / an admin token; read `--help` first): `run --scale gated`, `router build-splits | signals | fit | certify | evaluate`, `scripts/acme_agent.py --base-url <url>`. Container: `make docker`, then `docker run --rm -p 8000:8000 --env-file .env distillery:local` (without a key it starts in replay-only mode). Hosting notes: [docs/DEPLOY.md](docs/DEPLOY.md).
 
 ## For judges
 
@@ -106,7 +104,7 @@ Paid or certified steps (all need `--i-approve-spend` / an admin token; read `--
 
 - **The win is in-distribution.** P4 PROMOTEd on templated questions (skeleton overlap with train 0.9467, [p4_run_summary.json](docs/proofs/evidence/p4_run_summary.json)); Gate B and N1 are REJECT. The N1 and Gate B sets are agent-authored (a Claude subagent), not human-written, and their teacher accuracy is inflated by construction.
 - **Toy database:** a synthetic schema with templated gold. Results say little about real-world text-to-SQL. One task pack ships (`sql`); a `toolcall` pack has only a dry-run record ([c3_toolcall_dry_run.json](docs/proofs/evidence/c3_toolcall_dry_run.json)).
-- **Student serving is slow today:** sandbox CPU, with a per-day student call cap in the gateway; sandbox is unpriced, so no student cost per 1k is claimed until W-$.
+- **Student serving is slow today:** sandbox CPU, with a per-day student call cap in the gateway, and sandbox time is unpriced, so no student cost per request is claimed.
 - **One run, one seed** for each result; small sealed sets (n=300, 98, 86) give wide intervals.
 - **Hosted on a free Render plan** (sleeps, ephemeral disk; see [docs/DEPLOY.md](docs/DEPLOY.md)); the autonomy claim is bounded to one instance lifetime.
 - **Streaming and tool-calling are not supported** on the gateway (`400`).
