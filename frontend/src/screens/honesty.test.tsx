@@ -12,7 +12,7 @@ describe("errors are not empty states", () => {
   const EMPTY = /no replay bundles|no sandbox branches|no examples|no runs|no stages/i;
   const screens: [string, string][] = [
     ["replay", "/mission"], ["report", `/runs/${rid}/report`], ["live", `/runs/${rid}`],
-    ["tree", `/runs/${rid}/tree`], ["acme analyst status", "/playground"], ["new run config", "/new"],
+    ["tree", `/runs/${rid}/tree`], ["new run config", "/new"],
   ];
   describe.each(screens)("%s", (_n, path) => {
     it("shows the API error code and message on a 500", async () => {

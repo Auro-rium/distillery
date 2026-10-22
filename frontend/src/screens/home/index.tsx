@@ -47,8 +47,7 @@ function Hero({ config }: { config: Async<Config> }) {
         </dl>
       )}
       <div className="h-cta">
-        <Link className="btn primary" to="/playground">Ask the Acme analyst</Link>
-        <Link className="btn" to="/receipts">Check the receipts</Link>
+        <Link className="btn primary" to="/receipts">Check the receipts</Link>
         <a className="btn ghost" href={GITHUB_URL} target="_blank" rel="noreferrer noopener">Source on GitHub</a>
       </div>
     </section>

@@ -61,12 +61,6 @@ describe("render provenance: numbers on screen come from the contract payloads",
     stubFetch(contractFetch());
     await check("/new", /server default/, [contract.config]);
   });
-  it("acme analyst", async () => {
-    stubFetch(contractFetch());
-    await check("/playground", /Savings so far/, [contract.gatewayStatus, contract.gatewaySavings, contract.gatewayDrift], [
-      { pattern: /\d+ \/ 500/g, why: "character counter against the 500-character input limit (input length / UI constant)" },
-    ]);
-  });
   it("still holds when the payload lacks values (nothing invented for absent data)", async () => {
     const r = { ...contract.run, sandbox: { operations: null, concurrency_peak: null } };
     stubFetch(contractFetch({ run: r }));

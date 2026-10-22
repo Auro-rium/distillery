@@ -6,11 +6,11 @@ import { renderApp, stubFetch } from "../../testutil/render";
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 describe("overview", () => {
-  it("leads with the product and links the analyst, the receipts and the distillation story", async () => {
+  it("leads with the product and links the receipts and the distillation story", async () => {
     stubFetch(contractFetch());
     renderApp("/");
     expect(screen.getByRole("heading", { level: 1 }).textContent).toMatch(/Change one base URL/);
-    expect(screen.getByRole("link", { name: "Ask the Acme analyst" }).getAttribute("href")).toBe("/playground");
+    expect(screen.queryByRole("link", { name: /Acme analyst/ })).toBeNull();
     expect(screen.getByRole("link", { name: "Check the receipts" }).getAttribute("href")).toBe("/receipts");
     expect(screen.getByRole("link", { name: "the distillation run" }).getAttribute("href")).toBe("/mission");
     expect(await screen.findByText("This server, right now")).toBeTruthy();
