@@ -10,13 +10,20 @@ Track: Coding and Agentic Engineering (Nebius x NVIDIA Global AI Hackathon). Liv
 
 ## What it does
 
-```
-generate tasks -> execute gold in Sandboxes -> seal gate/stress sets -> teacher data (execution-verified)
-  -> fine-tune student (Token Factory) -> dev eval -> failure analysis -> next round (sandbox branch)
-  -> sealed held-out, scored once -> GATE (pure Python) -> PROMOTE / REJECT
-  -> certified router (Learn-then-Test threshold on a sealed calibration split)
-  -> gateway POST /v1/chat/completions: student if certified, else teacher
-  -> drift guard CERTIFIED -> ROLLBACK -> TEACHER  -> receipts (every claim, value, hash, commit)
+```mermaid
+flowchart TD
+    A[Generate tasks and gold SQL] --> B[Execute gold in Sandboxes]
+    B --> C[Seal gate and stress sets]
+    C --> D[Teacher data, execution-verified]
+    D --> E[Fine-tune student on Token Factory]
+    E --> F[Dev eval and failure analysis]
+    F -->|next round: a sandbox branch| D
+    F --> G[Sealed held-out, scored once]
+    G --> H{Gate, pure Python}
+    H -->|PROMOTE or REJECT| I[Certified router, Learn-then-Test]
+    I --> J[Gateway: student if certified, else teacher]
+    J --> K[Drift guard: CERTIFIED to ROLLBACK to TEACHER]
+    K --> L[Receipts: every claim with value, hash and commit]
 ```
 
 - **Agent loop** (`orchestrator.py`, optional bounded Ultra controller `controller.py`, off by default): planner clusters dev failures into families, teacher writes SQL, only rows that execute correctly are kept, each round branches the sandbox into an experiment tree. Supervised, resumable, outage-aware (`server/worker.py`, `driver.py`).
@@ -48,24 +55,34 @@ Every number is copied from the file in the Source column. Student is `Qwen/Qwen
 
 Spend to date (global ledger; sandbox is recorded at $0, so this is a lower bound): $15.2583 of the 19.50 cap, plus $1.50 reserved for hosting the demo ([DECISIONS.md](DECISIONS.md)). Claims, procedures and pre-registrations: [DECISIONS.md](DECISIONS.md).
 
-## Nebius and NVIDIA usage
+## How we use Nemotron
 
 | Role | Model id | Job |
 |---|---|---|
 | Planner | `nvidia/Nemotron-3-Ultra-550b-a55b` (Nemotron 3 Ultra) | clusters dev failures into task families; optional bounded controller |
 | Teacher | `nvidia/nemotron-3-super-120b-a12b` (Nemotron 3 Super) | writes training SQL; scored as the ceiling; at runtime it answers every request the router defers |
 | Triage | `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B` (Nemotron 3 Nano) | format triage; one-line summaries in the Acme analyst; the only public passthrough model |
-| Student | `Qwen/Qwen3-1.7B` + LoRA | the small model we distil into |
-| Router embeddings | `Qwen/Qwen3-Embedding-8B` | `nn_sim` signal (Token Factory embeddings) |
 
-Ids are set in [render.yaml](render.yaml) and read through `DISTILLERY_MODEL_PLANNER|TEACHER|TRIAGE|STUDENT`; prices in [deploy/prices.json](deploy/prices.json).
+Nemotron is not fine-tunable on Token Factory, so it is the engineer and the teacher, and the student is `Qwen/Qwen3-1.7B` + LoRA. Ids are set in [render.yaml](render.yaml) and read through `DISTILLERY_MODEL_PLANNER|TEACHER|TRIAGE|STUDENT`; prices in [deploy/prices.json](deploy/prices.json).
 
-- **Token Factory inference and structured output:** all three Nemotron models, `json_schema` strict mode.
-- **Token Factory fine-tuning:** LoRA on Qwen3-1.7B (the P4, A5 and N1 runs); checkpoints SHA-256-checked.
-- **Token Factory Sandboxes:** every gold, training row and evaluation is executed there; branching is the experiment tree; base and student run on sandbox CPU today.
-- **Token Factory embeddings:** `Qwen/Qwen3-Embedding-8B`.
+**Measured cost split in the P4 run** ([p4_run_summary.json](docs/proofs/evidence/p4_run_summary.json); estimates from measured tokens x the API's listed price, not billed amounts): Super 2,638 calls, $1.7328; Nano 684 calls, $0.1883; fine-tune $2.3370; run total $4.2582.
+
+## Where Token Factory accelerated us
+
+- **Fine-tuning API:** the whole student training step is one API job. P4 trained Qwen3-1.7B for 1,488 steps on 5.84M tokens for $2.3370 (billed basis); the job object exposes resolved hyperparameters, per-step loss and downloadable checkpoints, which we SHA-256-check before scoring. A job survived a SIGKILL of our process and was adopted again by id instead of being bought twice ([a5_chaos.json](docs/proofs/evidence/a5_chaos.json)).
+- **Sandboxes:** every gold query, training row and evaluation is executed there, and branching is the experiment tree. The base and student models are also served from sandbox CPU, which is what the live demo uses.
+- **Structured output:** `json_schema` with `strict: true` worked on the first try on Nano, Super and Ultra, for the planner and triage objects the orchestrator parses.
+- **OpenAI-compatible inference:** the plain `openai` SDK works unchanged; the Acme analyst differs between Token Factory and our gateway only in `--base-url`.
+- **Embeddings:** `Qwen/Qwen3-Embedding-8B` supplies the router's nearest-neighbour signal.
 
 Friction and findings: [FEEDBACK.md](FEEDBACK.md).
+
+## Nebius services used
+
+- **Token Factory inference** (Nemotron 3 Ultra, Super, Nano; `json_schema` strict mode).
+- **Token Factory fine-tuning** (LoRA on Qwen3-1.7B: the P4, A5 and N1 runs).
+- **Token Factory Sandboxes** (execution, verification, branching, CPU serving of base and student).
+- **Token Factory embeddings** (`Qwen/Qwen3-Embedding-8B`).
 
 ## Quickstart
 
