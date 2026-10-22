@@ -129,7 +129,7 @@ main.container { padding-top: var(--space-5); padding-bottom: 64px; min-height: 
 main:focus, main:focus-visible { outline: none; } /* focus lands here after a route change; it is not a control */
 .site-header { border-bottom: 1px solid var(--line); background: var(--glass); backdrop-filter: blur(12px) saturate(1.2); -webkit-backdrop-filter: blur(12px) saturate(1.2); position: sticky; top: 0; z-index: var(--z-header); }
 .site-header-row { display: flex; align-items: center; gap: var(--space-4); height: var(--header-h); }
-.brand { font: 700 1.2rem var(--font-display); letter-spacing: -.02em; color: var(--ink); text-decoration: none; display: flex; align-items: center; gap: var(--space-2); white-space: nowrap; overflow-wrap: normal; }
+.brand { font: 700 1.5rem var(--font-display); letter-spacing: -.025em; -webkit-text-stroke: .7px currentColor; color: var(--ink); text-decoration: none; display: flex; align-items: center; gap: var(--space-2); white-space: nowrap; overflow-wrap: normal; }
 .brand::before { content: ""; width: 9px; height: 9px; border-radius: 2px; background: var(--accent); box-shadow: var(--glow); transform: rotate(45deg); transition: transform var(--dur-2) var(--ease); }
 .brand:hover::before { transform: rotate(225deg); }
 .site-nav { display: flex; gap: var(--space-1); flex: 1; min-width: 0; }
