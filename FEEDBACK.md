@@ -4,7 +4,7 @@ Two parts. The first is a per-tool summary of what we used, what worked and what
 
 ## Summary
 
-Context: Distillery is an agent that distils a text-to-SQL job from Nemotron 3 Super into a Qwen3-1.7B LoRA student. One gated run (P4) ran end to end on Token Factory for $4.26 ([p4_run_summary.json](docs/proofs/evidence/p4_run_summary.json)); the project total to date is $14.1952 ([STATUS.md](STATUS.md)).
+Context: Distillery is an agent that distils a text-to-SQL job from Nemotron 3 Super into a Qwen3-1.7B LoRA student. One gated run (P4) ran end to end on Token Factory for $4.26 ([p4_run_summary.json](docs/proofs/evidence/p4_run_summary.json)); the project total to date is $14.1952.
 
 ### Token Factory inference (OpenAI-compatible)
 - **Used for:** the planner, teacher and triage calls; in P4 alone Nano took 684 calls (126,538 input and 753,151 output tokens) and Super 2,638 calls (2,537,916 input, 1,079,412 output) ([p4_run_summary.json](docs/proofs/evidence/p4_run_summary.json)).
@@ -18,7 +18,7 @@ Context: Distillery is an agent that distils a text-to-SQL job from Nemotron 3 S
 
 ### Fine-tuning (LoRA)
 - **Used for:** the student: Qwen3-1.7B at lr 1e-4 (P4: 1,488 steps, 5.84M trained tokens; N1: 1,674 steps) (the evidence files P4 result and row 25; learning rate from the P1.12 pilot, [DECISIONS.md](DECISIONS.md) 2026-10-04).
-- **Worked:** files and jobs endpoints, resolved hyperparameters, trained tokens and per-step loss on the job object, checkpoint download, cancel. A job survived a SIGKILL of our process and was adopted again by id, not re-bought (P4 and A5; [a5_chaos.json](docs/proofs/evidence/a5_chaos.json)). The price is $0.40 per 1M trained tokens ([deploy/prices.json](deploy/prices.json), console 2026-10-04); our recomputation from `trained_tokens` matched the console within a cent in both checks (GROUND_TRUTH row 19).
+- **Worked:** files and jobs endpoints, resolved hyperparameters, trained tokens and per-step loss on the job object, checkpoint download, cancel. A job survived a SIGKILL of our process and was adopted again by id, not re-bought (P4 and A5; [a5_chaos.json](docs/proofs/evidence/a5_chaos.json)). The price is $0.40 per 1M trained tokens ([deploy/prices.json](deploy/prices.json), console 2026-10-04); our recomputation from `trained_tokens` matched the console within a cent in both checks.
 - **Needs work:** defaults silently produce a near-untrained adapter (3 to 9 steps, 2026-10-03 entry); loss masking and the train-time chat template are undocumented; the tokens-per-batch minimum (32768) appears in neither docs nor schema; checkpoint order is unspecified; the job object carries no cost. A fine-tuned model can only be deployed through Dedicated endpoints ("Deployment options currently only include via Dedicated endpoints", models page) and the older "serverless LoRA, per-token billing" page returns Page Not Found ([b4_dedicated_research.md](docs/proofs/evidence/b4_dedicated_research.md), 2026-10-06).
 
 ### Sandboxes (Contree)
