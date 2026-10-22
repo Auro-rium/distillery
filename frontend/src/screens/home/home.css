@@ -9,10 +9,8 @@
   background: radial-gradient(60% 60% at 20% 30%, var(--aur-1), transparent 70%),
               radial-gradient(50% 50% at 70% 20%, var(--aur-2), transparent 70%);
 }
-.h-hero h1 { font-size: var(--step-3); font-weight: 700; color: #fff; max-width: 34ch; margin-top: var(--space-3); }
-.h-flow { font-size: var(--step-1); font-weight: 700; color: #fff; max-width: 62ch; margin: var(--space-4) 0 0; }
-/* white is for the dark theme; on the light background it would vanish, so light keeps the ink colour */
-:root[data-theme="light"] .h-hero h1, :root[data-theme="light"] .h-flow { color: var(--ink); }
+.h-hero h1 { font-size: var(--step-3); font-weight: 700; max-width: 34ch; margin-top: var(--space-3); }
+.h-flow { font-size: var(--step-1); font-weight: 700; max-width: 62ch; margin: var(--space-4) 0 0; }
 .h-models { display: flex; flex-wrap: wrap; gap: var(--space-3) var(--space-5); margin: var(--space-4) 0 0; }
 .h-models div { display: grid; gap: 2px; }
 .h-models dt { font: 500 .72rem/1 var(--font-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--ink-3); }

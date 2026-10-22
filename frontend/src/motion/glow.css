@@ -1,0 +1,25 @@
+/* Neon light that follows the pointer, only on the glyphs (see GlowText.tsx). --mx/--my are set from script. */
+.glow {
+  --mx: -9999px; --my: -9999px;
+  --glow-base: #fff; --neon-a: #39ff88; --neon-b: #00e5ff;
+  position: relative; isolation: isolate;
+}
+:root[data-theme="light"] .glow { --glow-base: var(--ink); --neon-a: #00a85a; --neon-b: #0088aa; }
+
+.glow-text, .glow-halo { display: block; }
+.glow-text { position: relative; z-index: 1; color: var(--glow-base); }
+.glow-halo { position: absolute; inset: 0; z-index: 0; pointer-events: none; user-select: none; }
+
+/* No moving light without script or when motion is reduced: plain bold text. */
+.glow[data-glow="on"] .glow-text, .glow[data-glow="on"] .glow-halo {
+  -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+}
+.glow[data-glow="on"] .glow-text {
+  background-color: var(--glow-base);
+  background-image: radial-gradient(circle 140px at var(--mx) var(--my), var(--neon-a) 0, var(--neon-b) 42%, transparent 100%);
+}
+.glow[data-glow="on"] .glow-halo {
+  background-image: radial-gradient(circle 190px at var(--mx) var(--my), var(--neon-a) 0, var(--neon-b) 45%, transparent 100%);
+  filter: blur(9px) saturate(1.5) brightness(1.2);
+}
+.glow[data-glow="off"] .glow-halo { display: none; }

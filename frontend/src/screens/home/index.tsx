@@ -8,6 +8,7 @@ import { fmtNumber, fmtPercent, fmtText } from "../../api/format";
 import type { Config, Evidence, GatewayDrift, GatewayStatus, Receipt } from "../../api/types";
 import { ApiErrorState, Badge, Card } from "../../components";
 import { GITHUB_URL } from "../../components/Shell";
+import { GlowText } from "../../motion/GlowText";
 import { Skeleton } from "../../ui";
 import { useAsync, type Async } from "../report/useAsync";
 import "./home.css";
@@ -33,11 +34,12 @@ function Hero({ config }: { config: Async<Config> }) {
   return (
     <section className="h-hero" aria-labelledby="h-title">
       <p className="eyebrow">Nebius Token Factory · NVIDIA Nemotron</p>
-      <h1 id="h-title">
-        An autonomous agent that distils a big model’s narrow skill into a small, certified student, served behind an
-        OpenAI-compatible gateway with automatic rollback.
-      </h1>
-      <p className="h-flow">Write → Test in Sandboxes → Fine-tune on Token Factory → Gate → Certify the router → Serve → Guard</p>
+      <GlowText as="h1" id="h-title">
+        An autonomous agent that distils a big model’s narrow skill into a small, certified student, served behind an OpenAI-compatible gateway with automatic rollback.
+      </GlowText>
+      <GlowText className="h-flow">
+        Write → Test in Sandboxes → Fine-tune on Token Factory → Gate → Certify the router → Serve → Guard
+      </GlowText>
       {models && models.teacher && models.student && (
         <dl className="h-models" aria-label="Models on this server">
           <div><dt>Teacher</dt><dd className="mono">{fmtText(models.teacher)}</dd></div>
