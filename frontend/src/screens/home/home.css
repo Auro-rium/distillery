@@ -10,7 +10,7 @@
               radial-gradient(50% 50% at 70% 20%, var(--aur-2), transparent 70%);
 }
 .h-hero h1 { font-size: var(--step-3); font-weight: 700; max-width: 34ch; margin-top: var(--space-3); }
-.h-flow { font-size: var(--step-1); font-weight: 700; max-width: 62ch; margin: var(--space-4) 0 0; }
+.h-pipeline { font-size: var(--step-1); font-weight: 700; max-width: 62ch; margin: var(--space-4) 0 0; }
 .h-models { display: flex; flex-wrap: wrap; gap: var(--space-3) var(--space-5); margin: var(--space-4) 0 0; }
 .h-models div { display: grid; gap: 2px; }
 .h-models dt { font: 500 .72rem/1 var(--font-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--ink-3); }
@@ -35,15 +35,6 @@
 }
 .h-del { color: var(--bad); }
 .h-add { color: var(--ok); }
-
-.h-flow { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-4); grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); counter-reset: none; }
-.h-step { position: relative; padding: var(--card-pad); border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--surface); }
-.h-step h3 { margin: var(--space-3) 0 var(--space-2); }
-.h-step p { margin: 0; font-size: var(--step--1); }
-.h-step-n {
-  display: inline-grid; place-items: center; width: 2rem; height: 2rem; border-radius: var(--radius-pill);
-  background: var(--ok-bg); color: var(--accent); font-weight: 600;
-}
 
 .h-limits { max-width: 62rem; }
 .h-limits ul { margin: 0 0 var(--space-4); padding-left: 1.2em; display: grid; gap: var(--space-2); color: var(--ink-2); }

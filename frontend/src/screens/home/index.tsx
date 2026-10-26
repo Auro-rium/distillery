@@ -7,6 +7,7 @@ import { fmtText } from "../../api/format";
 import type { Config } from "../../api/types";
 import { GITHUB_URL } from "../../components/Shell";
 import { GlowText } from "../../motion/GlowText";
+import { Flow } from "./Flow";
 import { Robot } from "./Robot";
 import { useAsync, type Async } from "../report/useAsync";
 import "./home.css";
@@ -19,7 +20,7 @@ function Hero({ config }: { config: Async<Config> }) {
       <GlowText as="h1" id="h-title" reveal>
         An autonomous agent that distils a big model’s narrow skill into a small, certified student, served behind an OpenAI-compatible gateway with automatic rollback.
       </GlowText>
-      <GlowText className="h-flow">
+      <GlowText className="h-pipeline">
         Write → Test in Sandboxes → Fine-tune on Token Factory → Gate → Certify the router → Serve → Guard
       </GlowText>
       {models && models.teacher && models.student && (
@@ -51,30 +52,6 @@ function Swap() {
         Same request, same response format. Each answer carries who served it, the confidence, the threshold and the
         reason in a <code>distillery</code> field and in response headers.
       </p>
-    </section>
-  );
-}
-
-const STEPS: { title: string; body: string }[] = [
-  { title: "Familiar?", body: "The question is embedded and compared with what the student was certified on. Unfamiliar questions go straight to the teacher, before the student spends anything." },
-  { title: "Student drafts", body: "The fine-tuned student writes the SQL on a Nebius sandbox, and the SQL is run read-only against the database." },
-  { title: "Router decides", body: "A small model scores confidence from whether the SQL ran, the student's token log-probabilities and the similarity. Only a score at or above the certified threshold is served." },
-  { title: "Drift guard", body: "The share of deferred requests is watched over a sliding window and a sample of student answers is audited by the teacher. A burst of unfamiliar traffic rolls the gateway back." },
-];
-
-function Flow() {
-  return (
-    <section aria-labelledby="h-flow-title">
-      <h2 id="h-flow-title">How one request is served</h2>
-      <ol className="h-flow">
-        {STEPS.map((s, i) => (
-          <li key={s.title} className="h-step">
-            <span className="h-step-n mono" aria-hidden="true">{i + 1}</span>
-            <h3>{s.title}</h3>
-            <p className="muted">{s.body}</p>
-          </li>
-        ))}
-      </ol>
     </section>
   );
 }
