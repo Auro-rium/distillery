@@ -54,7 +54,7 @@ describe("replay landing", () => {
   });
   it("the pipeline is drawn twice, a wide layout and a tall stepper, both decorative, neither in a horizontal scroller", () => {
     stubFetch(contractFetch());
-    const { container } = renderApp("/mission");
+    const { container } = renderApp("/how-it-works");
     const pipe = container.querySelector(".pipe")!;
     for (const kind of ["wide", "tall"]) {
       const svg = pipe.querySelector<SVGElement>(`svg.flow-${kind}`)!;
@@ -70,7 +70,7 @@ describe("replay landing", () => {
   });
   it("the diagram shows no number anywhere and its steps are also available as a list for screen readers", () => {
     stubFetch(contractFetch());
-    const { container } = renderApp("/mission");
+    const { container } = renderApp("/how-it-works");
     const pipe = container.querySelector(".pipe")!;
     expect(pipe.textContent).not.toMatch(/\d/);
     const items = [...pipe.querySelectorAll("ol.sr-only li")].map((li) => li.textContent);
@@ -79,7 +79,7 @@ describe("replay landing", () => {
   });
   it("every route is drawn once per layout, the loop is the only accent route, and only strokes and opacity animate", () => {
     stubFetch(contractFetch());
-    const { container } = renderApp("/mission");
+    const { container } = renderApp("/how-it-works");
     for (const kind of ["wide", "tall"]) {
       const svg = container.querySelector(`svg.flow-${kind}`)!;
       expect(svg.querySelectorAll("path.flow-edge")).toHaveLength(9);

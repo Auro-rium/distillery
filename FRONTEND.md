@@ -53,13 +53,13 @@ Stack: React 18, Vite 5, TypeScript, react-router-dom 6, Radix (dialog, tabs, to
 
 | Route | Screen dir | What it shows | Main endpoints |
 |---|---|---|---|
-| `/` | `home` | Product overview: the pitch, gateway status and drift state, headline evidence | `/api/config`, `/api/gateway/status`, `/api/gateway/drift`, `/api/evidence` |
-| `/mission` | `replay` | How it works, proof ladder, stored (recorded) runs, limits | `/api/replay`, `/api/runs`, `/api/runs/{id}/report` |
+| `/` | `home` | Product overview: the pitch (word-by-word headline, dancing robot), the base-URL swap, how one request is served (hover boxes), what it does not claim | `/api/config` |
+| `/mission` | `replay` | Verdict (PROMOTE/REJECT chip > run box with when the test was done), the pulsing "Mission" button with an easy-words explainer, proof ladder (Evidence opens the JSON on the page), training, limits, stored (recorded) runs | `/api/replay`, `/api/runs`, `/api/runs/{id}` (stage times), `/api/runs/{id}/report`, `/api/evidence` |
+| `/how-it-works` | `howitworks` | The method as one diagram (the replay screen's `Pipeline`); no numbers, no run data | none |
 | `/runs/:id` | `live` | Live run: stage timeline, spend, ledger, sandbox, verifier, event log, heartbeat (SSE) | `/api/runs/{id}`, `/api/runs/{id}/events`, `/api/runs/{id}/health` |
 | `/runs/:id/tree` | `tree` | Experiment tree drawn from real sandbox-branch lineage, pan/zoom | `/api/runs/{id}/tree`, `/experiments` |
 | `/runs/:id/report` | `report` | Gate statistics, accuracy tables, charts, per-item examples | `/api/runs/{id}/report`, `/examples` |
 | `/new` | `newrun` | Start a run (locked on the public demo: admin token required) | `POST /api/runs` |
-| `/playground` | `playground` | "Acme analyst": ask a question, see who answered (student/teacher), SQL, rows, cost, savings, drift panel | `POST /api/acme/ask`, `/api/gateway/status|savings|drift`, `/api/config` |
 | `/receipts` | `receipts` | Every claim: value, artifact link, hashes, pre-registration commit | `/api/evidence` |
 | `/humanset` | `humanset` | Human-review tool for natural-question drafts | `/api/humanset/drafts`, `POST /api/humanset/decide` |
 

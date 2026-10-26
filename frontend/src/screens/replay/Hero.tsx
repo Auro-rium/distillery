@@ -7,6 +7,7 @@ import { CountUp } from "../../motion/CountUp";
 import { Skeleton } from "../../ui";
 import type { Async } from "../report/useAsync";
 import { gateOf, P_SHOW_MIN } from "./mission";
+import { MissionHint } from "./MissionHint";
 import { RunBox } from "./RunBox";
 
 const pct = (v: number | null | undefined) => fmtPercent(v, 1);
@@ -101,7 +102,7 @@ export function Hero(props: {
   const busy = replay.state === "loading" || (featured !== null && report.state === "loading");
   return (
     <section className="hero mission-hero" aria-labelledby="mission-h" aria-busy={busy || undefined}>
-      <div className="eyebrow">Mission</div>
+      <MissionHint runId={featured?.run_id ?? null} />
       <h1 id="mission-h">Distil one task into a small model, then prove it on a sealed set.</h1>
       {/* The featured run's label sits first in the hero; the slot is reserved while loading. */}
       <div className="banners">

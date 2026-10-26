@@ -1,0 +1,29 @@
+/* ---------- Mission: the pulsing "Mission" box and its easy-words explainer ---------- */
+.m-hint {
+  display: flex; align-items: center; gap: 8px; width: fit-content; margin: 0 0 var(--space-1); cursor: pointer;
+  font: 600 .8rem/1 var(--font-mono); letter-spacing: .14em; text-transform: uppercase;
+  padding: 8px 12px; border: 1px solid var(--accent); border-radius: var(--radius-sm);
+  background: var(--ok-bg); color: var(--accent);
+}
+.m-hint:hover { filter: brightness(1.2); }
+.m-hint:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.m-hint-q { display: inline-grid; place-items: center; width: 1.2rem; height: 1.2rem; border-radius: 50%; border: 1px solid currentColor; font-size: .72rem; letter-spacing: 0; }
+@media (prefers-reduced-motion: no-preference) {
+  .m-hint { animation: m-bulge 1s ease-in-out infinite; }
+  .m-hint:hover, .m-hint:focus-visible { animation-play-state: paused; }
+}
+@keyframes m-bulge {
+  0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(62, 224, 138, .5); }
+  50% { transform: scale(1.09); box-shadow: 0 0 0 9px rgba(62, 224, 138, 0); }
+}
+.dialog-content.m-help-dialog { width: min(calc(100vw - 2 * var(--gutter)), 560px); }
+.m-help { display: grid; gap: var(--space-3); margin-top: var(--space-3); max-height: min(70vh, 640px); overflow: auto; padding-right: var(--space-2); }
+.m-help > * { margin: 0; }
+.m-help-lead { font: 600 var(--step-1)/1.35 var(--font-display); }
+.m-help ul { padding-left: 1.2em; display: grid; gap: var(--space-2); }
+.m-help h3 { font: 700 var(--step-0)/1.3 var(--font-display); margin: var(--space-2) 0 0; }
+.m-help-parts { display: grid; gap: var(--space-2); }
+.m-help-parts > div { display: grid; grid-template-columns: minmax(0, 12.5rem) minmax(0, 1fr); gap: var(--space-3); align-items: baseline; padding: var(--space-2) var(--space-3); border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface-2); }
+.m-help-parts dt { color: var(--accent); overflow-wrap: anywhere; }
+.m-help-parts dd { margin: 0; color: var(--ink-2); }
+@media (max-width: 520px) { .m-help-parts > div { grid-template-columns: 1fr; gap: 2px; } }

@@ -14,7 +14,6 @@ import { DemoButton } from "./DemoButton";
 import { Hero } from "./Hero";
 import { Limits } from "./Limits";
 import { LiveRuns } from "./LiveRuns";
-import { Pipeline } from "./Pipeline";
 import { ProofLadder } from "./ProofLadder";
 import { Training } from "./Training";
 import "./replay.css";
@@ -114,14 +113,6 @@ export default function Mission() {
       <ReportSection id="training-h" title="Training" lead="What the fine-tune recorded for the featured run." replay={replay} featured={featured} report={report}>
         {(r) => <Training report={r} />}
       </ReportSection>
-
-      <section className="m-section" aria-labelledby="how-h">
-        <div className="m-section-head">
-          <h2 id="how-h">How it works</h2>
-          <p className="muted">Every example and every evaluation is checked by running the SQL.</p>
-        </div>
-        <Pipeline />
-      </section>
 
       <ReportSection id="limits-h" title="Limits & cost" lead="Where the student is weak, and what the run cost." replay={replay} featured={featured} report={report}>
         {(r) => <Limits report={r} />}

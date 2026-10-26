@@ -8,6 +8,7 @@ import { useReducedMotion } from "./motion/useReducedMotion";
 import { useShortcuts } from "./motion/useShortcuts";
 import Home from "./screens/home";
 import Replay from "./screens/replay";
+import HowItWorks from "./screens/howitworks";
 import LiveRun from "./screens/live";
 import Tree from "./screens/tree";
 import ReportScreen from "./screens/report";
@@ -42,6 +43,7 @@ function RouteStage() {
       <Routes location={active}>
         <Route path="/" element={<Home />} />
         <Route path="/mission" element={<Replay />} />
+        <Route path="/how-it-works" element={<HowItWorks />} />
         <Route path="/runs/:id" element={<LiveRun />} />
         <Route path="/runs/:id/tree" element={<Tree />} />
         <Route path="/runs/:id/report" element={<ReportScreen />} />

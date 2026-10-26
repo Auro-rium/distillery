@@ -165,12 +165,12 @@ describe("Mission sections", () => {
     expect(s.querySelector("details.m-basis")!.textContent).toContain(contract.report.cost.basis);
   });
 
-  it("clutter budget: four content sections between the hero and the calls to action, three charts in all", async () => {
+  it("clutter budget: three content sections between the hero and the calls to action (How it works has its own page), three charts in all", async () => {
     serve();
     const { container } = renderApp("/mission");
     await ready();
     const h2 = [...container.querySelectorAll("main h2")].map((h) => h.textContent);
-    expect(h2.slice(0, 5)).toEqual(["Proof ladder", "Training", "How it works", "Limits & cost", "Try it"]);
+    expect(h2.slice(0, 4)).toEqual(["Proof ladder", "Training", "Limits & cost", "Try it"]);
     expect(container.querySelectorAll("figure.chart")).toHaveLength(3);
     const ctas = section("Try it");
     expect(within(ctas).getByRole("button", { name: /Watch a live demo run/ })).toBeTruthy();
