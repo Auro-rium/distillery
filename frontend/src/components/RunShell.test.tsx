@@ -98,6 +98,25 @@ describe("RunShell sticky header", () => {
   });
 });
 
+describe("RunShell on the Evidence (report) tab", () => {
+  it("has no status or verdict badges in the heading (the verdict bar below carries it), and does not fetch the verdict", async () => {
+    const f = vi.fn(contractFetch());
+    vi.stubGlobal("fetch", f);
+    const { container } = shell({ tab: "report" }, `/runs/${id}/report`);
+    await new Promise((r) => setTimeout(r, 30));
+    expect(slot(container, "status")).toBeNull();
+    expect(slot(container, "verdict")).toBeNull();
+    expect(container.querySelector(".run-head-row .badge")).toBeNull();
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("SQL run");
+    expect(f.mock.calls.filter(([u]) => String(u).includes("/report"))).toHaveLength(0);
+  });
+  it("keeps them on the Live run tab, where a run's status matters", () => {
+    const { container } = shell({ tab: "live" });
+    expect(slot(container, "status")!.textContent).toBe(run.status);
+    expect(slot(container, "verdict")).not.toBeNull();
+  });
+});
+
 describe("RunShell heading", () => {
   it("reads as a plain title and one sentence, with the technical id on its own labelled line", () => {
     const { container } = shell();

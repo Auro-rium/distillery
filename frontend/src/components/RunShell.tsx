@@ -45,7 +45,9 @@ function useVerdict(runId: string, complete: boolean): Decision | null {
  */
 export function RunShell(props: { runId: string; tab: RunTab; run?: RunDetail; children: ReactNode }) {
   const { runId, tab, run } = props;
-  const verdict = useVerdict(runId, run?.status === "complete");
+  // The Evidence (Report) tab shows the verdict in its own bar just below, so the heading carries no status or verdict badges there.
+  const showBadges = tab !== "report";
+  const verdict = useVerdict(runId, showBadges && run?.status === "complete");
   // "Latest" is the run the Evidence link points at: the newest recorded run (the one Mission features).
   const { run: featured } = useFeaturedRun();
   const latest = featured !== null && featured.run_id === runId;
@@ -81,12 +83,16 @@ export function RunShell(props: { runId: string; tab: RunTab; run?: RunDetail; c
           </div>
           <div className="run-head-row">
             <h1 className="run-title">{name.pack && <span className="run-pack">{name.pack}</span>}{name.rest}</h1>
-            <span className="run-status" data-slot="status">
-              {run ? <Badge tone={STATUS_TONE[run.status] ?? "neutral"}>{run.status}</Badge> : null}
-            </span>
-            <span className="run-verdict" data-slot="verdict">
-              {verdict ? <Badge tone={verdict === "PROMOTE" ? "ok" : "bad"}>{verdict}</Badge> : null}
-            </span>
+            {showBadges && (
+              <>
+                <span className="run-status" data-slot="status">
+                  {run ? <Badge tone={STATUS_TONE[run.status] ?? "neutral"}>{run.status}</Badge> : null}
+                </span>
+                <span className="run-verdict" data-slot="verdict">
+                  {verdict ? <Badge tone={verdict === "PROMOTE" ? "ok" : "bad"}>{verdict}</Badge> : null}
+                </span>
+              </>
+            )}
           </div>
           <p className="run-about" data-slot="about">{runSentence(runId, latest)}</p>
           <p className="run-idline"><span className="eyebrow">Run ID</span> <code className="mono run-id" data-slot="id">{runId}</code></p>
