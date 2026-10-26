@@ -6,6 +6,7 @@ import { useFeaturedRun } from "../api/useFeaturedRun";
 import { prefersReducedMotion } from "../motion/useReducedMotion";
 import { rememberTabOrigin, takeTabOrigin } from "../motion/tabOpen";
 import { LabelBanner } from ".";
+import { runSentence, runTitle } from "./runName";
 import { Badge, Tabs, TabsContent, TabsList, TabsTrigger, type Tone } from "../ui";
 
 export type RunTab = "live" | "report" | "tree";
@@ -49,6 +50,7 @@ export function RunShell(props: { runId: string; tab: RunTab; run?: RunDetail; c
   const { run: featured } = useFeaturedRun();
   const latest = featured !== null && featured.run_id === runId;
   const base = `/runs/${encodeURIComponent(runId)}`;
+  const name = runTitle(runId);
   const panel = useRef<HTMLDivElement>(null);
   // Arriving from a tab click: the page grows out of that tab. Reads the click position once; nothing otherwise.
   useLayoutEffect(() => {
@@ -78,7 +80,7 @@ export function RunShell(props: { runId: string; tab: RunTab; run?: RunDetail; c
             {latest ? <Badge tone="ok" size="lg" className="run-latest-tag">LATEST RUN</Badge> : null}
           </div>
           <div className="run-head-row">
-            <h1 className="run-title">Run <span className="mono" data-slot="id">{runId}</span></h1>
+            <h1 className="run-title">{name.pack && <span className="run-pack">{name.pack}</span>}{name.rest}</h1>
             <span className="run-status" data-slot="status">
               {run ? <Badge tone={STATUS_TONE[run.status] ?? "neutral"}>{run.status}</Badge> : null}
             </span>
@@ -86,6 +88,8 @@ export function RunShell(props: { runId: string; tab: RunTab; run?: RunDetail; c
               {verdict ? <Badge tone={verdict === "PROMOTE" ? "ok" : "bad"}>{verdict}</Badge> : null}
             </span>
           </div>
+          <p className="run-about" data-slot="about">{runSentence(runId, latest)}</p>
+          <p className="run-idline"><span className="eyebrow">Run ID</span> <code className="mono run-id" data-slot="id">{runId}</code></p>
           <div className="run-label" data-slot="label" data-state={run ? "ready" : "pending"}>
             {run ? <LabelBanner dry_run={run.dry_run} recorded={run.recorded} recorded_at={run.recorded_at} status={run.status} /> : null}
           </div>

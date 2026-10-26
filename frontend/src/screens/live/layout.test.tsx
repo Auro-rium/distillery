@@ -17,7 +17,8 @@ describe("Live screen structure", () => {
     await region("Spend");
     const h1 = screen.getAllByRole("heading", { level: 1 });
     expect(h1).toHaveLength(1);
-    expect(h1[0].textContent).toContain(rid);
+    expect(h1[0].textContent).toBe("SQL run");
+    expect(document.querySelector("[data-slot=id]")!.textContent).toBe(rid); // the id has its own labelled line
     expect(screen.getByRole("tab", { name: "Live run" }).getAttribute("aria-selected")).toBe("true");
     expect(screen.getAllByRole("status").map((e) => e.textContent)).toContain("DRY RUN — fake models, numbers are NOT results");
   });

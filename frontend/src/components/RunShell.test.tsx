@@ -98,12 +98,26 @@ describe("RunShell sticky header", () => {
   });
 });
 
+describe("RunShell heading", () => {
+  it("reads as a plain title and one sentence, with the technical id on its own labelled line", () => {
+    const { container } = shell();
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("SQL run");
+    expect(container.querySelector(".run-about")!.textContent).toBe("One test of the small model on SQL questions.");
+    const line = container.querySelector(".run-idline")!;
+    expect(line.textContent).toContain("Run ID");
+    expect(slot(container, "id")!.textContent).toBe(id);
+    // the id is not part of the heading any more
+    expect(screen.getByRole("heading", { level: 1 }).textContent).not.toContain(id);
+  });
+});
+
 describe("RunShell latest-run tag", () => {
   const recorded = { ...contract.replay[0], run_id: id, dry_run: false, recorded: true, recorded_at: "2026-10-05T00:04:35Z", decision: "PROMOTE" };
   it("shows LATEST RUN in capitals at the top for the run the Evidence link points at", async () => {
     vi.stubGlobal("fetch", vi.fn(contractFetch({ replay: [recorded] })));
     const { container } = shell();
     await waitFor(() => expect(slot(container, "latest")!.textContent).toBe("LATEST RUN"));
+    expect(container.querySelector(".run-about")!.textContent).toBe("The newest recorded test of the small model on SQL questions.");
     // it is the first thing in the header, above the run title
     const head = container.querySelector(".run-head")!;
     expect(head.firstElementChild).toBe(slot(container, "latest"));
