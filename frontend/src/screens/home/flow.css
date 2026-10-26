@@ -1,0 +1,74 @@
+/* "How one request is served": four boxes in one row. Only the title shows; hover or focus opens a box downward over what
+   is below it (nothing shifts), decodes the text from 0s and 1s, and runs binary rain and a scanline inside the box. */
+.h-steps { list-style: none; margin: 0 0 var(--space-5); padding: 0; display: grid; gap: var(--space-4); grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.h-step-slot { position: relative; min-height: 8.75rem; }
+
+.h-step {
+  position: absolute; inset: 0 0 auto 0; min-height: 100%; z-index: 1; overflow: hidden;
+  padding: var(--card-pad); border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--surface);
+  transition: border-color .08s ease-out, box-shadow .08s ease-out;
+}
+.h-step > * { position: relative; z-index: 1; }
+.h-step h3 { margin: var(--space-3) 0 0; }
+.h-step-n {
+  display: inline-grid; place-items: center; width: 2rem; height: 2rem; border-radius: var(--radius-pill);
+  background: var(--ok-bg); color: var(--accent); font-weight: 600;
+}
+.h-step:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.h-step[data-open="true"], .h-step:focus-visible {
+  z-index: 5; border-color: var(--accent);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, .4), 0 0 22px rgba(62, 224, 138, .28), inset 0 0 18px rgba(62, 224, 138, .08);
+}
+
+/* the paragraph: height and opacity open together */
+/* opening is fast and front-loaded (most of the movement in the first frames); closing is quicker still */
+.h-desc { display: grid; grid-template-rows: 0fr; opacity: 0; transition: grid-template-rows .1s ease-in, opacity .06s ease-in; }
+.h-step[data-open="true"] .h-desc, .h-step:focus-visible .h-desc {
+  grid-template-rows: 1fr; opacity: 1; transition: grid-template-rows .11s cubic-bezier(.2, .9, .3, 1), opacity .06s ease-out;
+}
+.h-desc-in { overflow: hidden; min-height: 0; }
+.h-desc-text { margin: var(--space-2) 0 0; font-size: var(--step--1); color: var(--ink-2); }
+.h-word { white-space: nowrap; }
+
+/* letters still being decoded: invisible, with a 0 or 1 drawn in their place */
+.h-bit { position: relative; color: transparent; }
+.h-bit::after { content: attr(data-b); position: absolute; inset: 0; text-align: center; font-family: var(--font-mono); color: var(--accent); text-shadow: 0 0 8px rgba(62, 224, 138, .8); }
+
+/* binary rain behind the text (the bits come from --rain, so they are not page text) */
+.h-step::after {
+  content: var(--rain) / ""; position: absolute; left: 0; right: 0; top: 0; z-index: 0; pointer-events: none;
+  white-space: pre; font: 11px/1.35 var(--font-mono); letter-spacing: .12em; text-align: center; color: var(--accent);
+  opacity: 0; transition: opacity .08s ease-out;
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 28%, #000 72%, transparent); mask-image: linear-gradient(to bottom, transparent, #000 28%, #000 72%, transparent);
+}
+/* a bright line that sweeps down the box once as it opens */
+.h-step::before {
+  content: ""; position: absolute; left: 0; right: 0; top: -35%; height: 35%; z-index: 2; pointer-events: none; opacity: 0;
+  background: linear-gradient(to bottom, rgba(62, 224, 138, 0), rgba(62, 224, 138, .32), rgba(62, 224, 138, 0));
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .h-step[data-open="true"]::after, .h-step:focus-visible::after { opacity: .2; animation: h-rain 5s linear infinite; }
+  .h-step[data-open="true"]::before, .h-step:focus-visible::before { animation: h-scan .3s ease-out 1; }
+  .h-step[data-open="true"] h3, .h-step:focus-visible h3 { animation: h-glitch .2s steps(2, end) 1; }
+}
+@media (prefers-reduced-motion: reduce) { .h-step::before, .h-step::after { display: none; } }
+
+@keyframes h-rain { from { transform: translateY(0); } to { transform: translateY(-50%); } }
+@keyframes h-scan { 0% { top: -35%; opacity: 1; } 100% { top: 110%; opacity: 1; } }
+@keyframes h-glitch {
+  0% { transform: translateX(0); text-shadow: none; }
+  25% { transform: translateX(-2px); text-shadow: 2px 0 rgba(0, 229, 255, .8), -2px 0 rgba(255, 60, 172, .7); }
+  50% { transform: translateX(2px); text-shadow: -2px 0 rgba(0, 229, 255, .8), 2px 0 rgba(255, 60, 172, .7); }
+  100% { transform: translateX(0); text-shadow: none; }
+}
+
+@media (max-width: 720px) { .h-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* touch screens cannot hover: show everything, as plain stacked boxes */
+@media (hover: none) {
+  .h-step-slot { min-height: 0; }
+  .h-step { position: relative; inset: auto; }
+  .h-desc { grid-template-rows: 1fr; opacity: 1; }
+  .h-step::before, .h-step::after { display: none; }
+}

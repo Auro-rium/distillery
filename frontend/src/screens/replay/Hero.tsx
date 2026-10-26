@@ -1,12 +1,13 @@
 import { Link } from "react-router-dom";
-import { fmtInt, fmtNumber, fmtPercent } from "../../api/format";
+import { fmtNumber, fmtPercent } from "../../api/format";
 import type { Report, RunSummary } from "../../api/types";
-import { CiNumberLine } from "../../charts";
 import { ApiErrorState, Badge, LabelBanner } from "../../components";
 import { CountUp } from "../../motion/CountUp";
 import { Skeleton } from "../../ui";
 import type { Async } from "../report/useAsync";
-import { gateOf, P_SHOW_MIN } from "./mission";
+import { gateOf } from "./mission";
+import { MissionHint } from "./MissionHint";
+import { RunBox } from "./RunBox";
 
 const pct = (v: number | null | undefined) => fmtPercent(v, 1);
 
@@ -27,13 +28,6 @@ function Numeral({ tone, label, value }: { tone: "student" | "teacher" | "base";
   );
 }
 
-function McNemar({ p, alpha }: { p: unknown; alpha: unknown }) {
-  if (typeof p !== "number" || !Number.isFinite(p)) return <>McNemar p {fmtNumber(null)}</>;
-  const below = typeof alpha === "number" && p < alpha;
-  const shown = p >= P_SHOW_MIN ? `p = ${fmtNumber(p, 3)}` : below ? "p far below α" : `p ${fmtNumber(p, 3)}`;
-  return <>McNemar vs base: {shown} (α = {fmtNumber(alpha as number | null, 2)})</>;
-}
-
 function Verdict({ run, report }: { run: RunSummary; report: unknown }) {
   const g = gateOf(report);
   const id = encodeURIComponent(run.run_id);
@@ -46,13 +40,14 @@ function Verdict({ run, report }: { run: RunSummary; report: unknown }) {
     );
   }
   const decision = g.decision ?? (report as Partial<Report>).decision;
-  const pass = decision === "PROMOTE";
+  const tone = decision === "PROMOTE" ? "ok" : decision === "REJECT" ? "bad" : "neutral";
   return (
     <div className="m-verdict">
       <div className="m-left">
-        <div className="m-chiprow">
-          <Badge tone={pass ? "ok" : decision === "REJECT" ? "bad" : "neutral"} size="lg" className="m-chip">{decision ?? fmtNumber(null)}</Badge>
-          <span className="mono m-runid">{run.run_id}</span>
+        <div className="m-chiprow" data-tone={tone}>
+          <Badge tone={tone} size="lg" className="m-chip">{decision ?? fmtNumber(null)}</Badge>
+          <span className="m-arrow" aria-hidden="true">&gt;</span>
+          <RunBox run={run} tone={tone} />
         </div>
         <p className="m-sentence">{sentence(decision)}</p>
         <div className="m-nums" role="group" aria-label="Held-out accuracy">
@@ -63,22 +58,10 @@ function Verdict({ run, report }: { run: RunSummary; report: unknown }) {
         <p className="muted m-numcap">Execution accuracy on the sealed held-out set (gate set).</p>
       </div>
       <div className="m-right">
-        <CiNumberLine
-          className="m-ci"
-          title="Student / teacher accuracy ratio, confidence interval"
-          point={g.ratio_point}
-          lo={g.ratio_lo}
-          hi={g.ratio_hi}
-          threshold={g.thresholds?.ratio_lower_bound_min}
-          thresholdLabel="gate minimum"
-          caption="The gate needs the interval's lower bound at or above the minimum."
-        />
-        <ul className="m-facts" role="list">
-          <li><span className="num">n = {fmtInt(g.n)}</span> sealed held-out tasks</li>
-          <li><McNemar p={g.mcnemar_p} alpha={g.thresholds?.mcnemar_alpha} /></li>
-          <li>Student right, base wrong: <span className="num">{fmtInt(g.student_only_vs_base)}</span> · base right, student wrong: <span className="num">{fmtInt(g.base_only_vs_student)}</span></li>
-        </ul>
-        <Link className="btn primary m-cta" to={`/runs/${id}/report`}>Open the evidence <span aria-hidden="true">→</span></Link>
+        <Link className="m-cta" to={`/runs/${id}/report`}>
+          <span>Open the evidence</span>
+          <span className="m-cta-arrow" aria-hidden="true">→</span>
+        </Link>
       </div>
     </div>
   );
@@ -99,12 +82,15 @@ export function Hero(props: {
   const busy = replay.state === "loading" || (featured !== null && report.state === "loading");
   return (
     <section className="hero mission-hero" aria-labelledby="mission-h" aria-busy={busy || undefined}>
-      <div className="eyebrow">Mission</div>
+      <MissionHint runId={featured?.run_id ?? null} />
       <h1 id="mission-h">Distil one task into a small model, then prove it on a sealed set.</h1>
       {/* The featured run's label sits first in the hero; the slot is reserved while loading. */}
       <div className="banners">
         {replay.state === "loading" && <div className="banner-skeleton" aria-hidden="true" />}
-        {featured && <LabelBanner dry_run={featured.dry_run} recorded={featured.recorded} recorded_at={featured.recorded_at} status={featured.status} />}
+        {/* A recorded run is labelled inside its run box (open the arrow); dry, live and unknown labels stay as banners. */}
+        {featured && !(featured.dry_run === false && featured.recorded === true) && (
+          <LabelBanner dry_run={featured.dry_run} recorded={featured.recorded} recorded_at={featured.recorded_at} status={featured.status} />
+        )}
       </div>
       {busy && (
         <div className="m-loading" role="status" aria-live="polite">

@@ -5,14 +5,17 @@ import { LabelTag } from "./label";
 import { useStickyTop } from "./useStickyTop";
 
 /**
- * Compact, sticky summary: the verdict, which label the numbers carry, n and the thresholds the gate
- * used (all from the payload). The gate's reasons stay collapsed until asked for.
+ * Compact, sticky summary: the verdict and which label the numbers carry. The gate's numbers (n, ratio lower bound,
+ * McNemar p, with the thresholds the gate used, all from the payload) and its reasons each sit behind a button and
+ * stay collapsed until asked for.
  */
 export function Summary({ r }: { r: Report }) {
   const g = r.evaluation.gate;
   const t = g.thresholds;
   const [open, setOpen] = useState(false);
+  const [showNums, setShowNums] = useState(false);
   const panel = useId();
+  const numsPanel = useId();
   const ref = useStickyTop<HTMLElement>();
   const reasons = r.decision_reasons;
   return (
@@ -27,19 +30,28 @@ export function Summary({ r }: { r: Report }) {
           <strong>{r.decision}</strong>
         </span>
         <LabelTag b={r} />
-        <dl className="rp-facts">
-          <div><dt>Held-out</dt><dd>n={fmtInt(g.n)}</dd></div>
-          <div><dt>Ratio lower bound</dt><dd>{fmtNumber(g.ratio_lo)} <span className="rp-need">needs ≥ {fmtNumber(t.ratio_lower_bound_min, 2)}</span></dd></div>
-          <div><dt>McNemar p</dt><dd>{fmtP(g.mcnemar_p)} <span className="rp-need">alpha {fmtNumber(t.mcnemar_alpha, 2)}</span></dd></div>
-        </dl>
-        {reasons.length > 0 ? (
-          <button type="button" className="rp-toggle" aria-expanded={open} aria-controls={panel} onClick={() => setOpen((o) => !o)}>
-            Gate reasons<span className="chev" aria-hidden="true" />
+        <div className="rp-sum-actions">
+          <button type="button" className="rp-toggle" aria-expanded={showNums} aria-controls={numsPanel} onClick={() => setShowNums((o) => !o)}>
+            Gate numbers<span className="chev" aria-hidden="true" />
           </button>
-        ) : (
-          <span className="rp-noreasons muted">No reasons were reported by the gate.</span>
-        )}
+          {reasons.length > 0 ? (
+            <button type="button" className="rp-toggle" aria-expanded={open} aria-controls={panel} onClick={() => setOpen((o) => !o)}>
+              Gate reasons<span className="chev" aria-hidden="true" />
+            </button>
+          ) : (
+            <span className="rp-noreasons muted">No reasons were reported by the gate.</span>
+          )}
+        </div>
       </div>
+      {showNums && (
+        <div id={numsPanel} className="rp-reasons">
+          <dl className="rp-facts">
+            <div><dt>Held-out</dt><dd>n={fmtInt(g.n)}</dd></div>
+            <div><dt>Ratio lower bound</dt><dd>{fmtNumber(g.ratio_lo)} <span className="rp-need">needs ≥ {fmtNumber(t.ratio_lower_bound_min, 2)}</span></dd></div>
+            <div><dt>McNemar p</dt><dd>{fmtP(g.mcnemar_p)} <span className="rp-need">alpha {fmtNumber(t.mcnemar_alpha, 2)}</span></dd></div>
+          </dl>
+        </div>
+      )}
       {open && reasons.length > 0 && (
         <div id={panel} className="rp-reasons">
           <ul>{reasons.map((x) => <li key={x}>{x}</li>)}</ul>

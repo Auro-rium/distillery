@@ -38,8 +38,6 @@
 .bundle-head { display: grid; gap: var(--space-2); }
 .bundle-head h3 { margin: 0; font-size: var(--step-0); overflow-wrap: anywhere; }
 .bundle-tags { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; }
-.bundle-date { margin: 0; font-size: .9rem; }
-.bundle-date time { font-family: var(--font-mono); font-size: .86em; }
 .bundle-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: auto; }
 .demo-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); }
 
@@ -63,10 +61,8 @@
 .m-numcap { margin: 0; font-size: var(--step--1); }
 .m-sk.m-sk { display: block; height: 72px; border-radius: var(--radius); }
 .m-loading { margin-top: var(--space-3); }
-.m-right .m-ci { padding: var(--space-3) var(--space-4); background: var(--glass); border: 1px solid var(--line); border-radius: var(--radius); }
 .m-facts { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font-size: var(--step--1); color: var(--ink-2); }
 .m-facts .num { color: var(--ink); }
-.m-cta.m-cta { justify-self: start; }
 .m-none { margin: var(--space-3) 0 0; }
 @media (min-width: 900px) {
   .m-verdict { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: var(--space-6); align-items: start; }
@@ -84,15 +80,12 @@
 @media (min-width: 720px) { .m-proofs { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
 .m-training, .m-limits { display: grid; gap: var(--space-5); }
-.m-train-side, .m-limit-chart, .m-cost { display: grid; gap: var(--space-3); align-content: start; min-width: 0; }
+.m-limit-chart, .m-cost { display: grid; gap: var(--space-3); align-content: start; min-width: 0; }
 @media (min-width: 900px) {
-  .m-training { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); }
+  .m-training { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
   .m-limits { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); }
 }
-.m-chips { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: var(--space-2); }
-.m-chips li { display: inline-flex; align-items: baseline; gap: 6px; padding: 4px 10px; border: 1px solid var(--line); border-radius: var(--radius-pill); background: var(--surface); font-size: .85rem; overflow-wrap: anywhere; }
-.m-interp, .m-overlap { margin: 0; font-size: var(--step--1); line-height: 1.55; padding: var(--space-3); border-left: 2px solid var(--line); background: var(--surface); border-radius: 0 var(--radius) var(--radius) 0; }
-.m-acc { margin: 0; font-size: var(--step--1); }
+.m-overlap { margin: 0; font-size: var(--step--1); line-height: 1.55; padding: var(--space-3); border-left: 2px solid var(--line); background: var(--surface); border-radius: 0 var(--radius) var(--radius) 0; }
 .m-total .v { font-size: var(--step-4); }
 .m-ftlines { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-2); font-size: var(--step--1); overflow-wrap: anywhere; }
 .m-basis summary { cursor: pointer; font: 500 .78rem var(--font-mono); letter-spacing: .06em; text-transform: uppercase; color: var(--ink-2); }
@@ -105,3 +98,48 @@
 /* ---------- Mission: run lists (compact) ---------- */
 .m-lists { display: grid; gap: var(--space-6); }
 .m-lists h2 { font-size: var(--step-1); margin: 0; }
+
+/* ---------- Mission: sticky title, section dividers, heavier section titles ---------- */
+/* The hero section drops its own box so the h1 is a direct child of the whole page column; sticky then holds it under
+   the header for the entire scroll instead of only inside the short hero. */
+.mission-hero.hero { display: contents; }
+.mission-hero.hero h1 {
+  position: sticky; top: var(--header-h); z-index: var(--z-run);
+  margin: 0; padding: var(--space-3) 0 var(--space-2);
+  background: color-mix(in srgb, var(--bg) 97%, transparent); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+}
+.mission-hero.hero > * + * { margin-top: var(--space-3); }
+
+/* a white rule in the middle of the gap between sections, inset so it never touches the screen edges */
+.mission { --rule: rgba(255, 255, 255, .85); }
+:root[data-theme="light"] .mission { --rule: rgba(14, 23, 20, .55); }
+.mission > .m-section, .mission > .m-lists { position: relative; padding-top: var(--space-5); }
+.mission > .m-section::before, .mission > .m-lists::before {
+  content: ""; position: absolute; left: 6%; right: 6%; top: calc(var(--space-7) / -2); height: 1px;
+  background: var(--rule); pointer-events: none;
+}
+
+/* section titles: Proof ladder, Training, How it works, Limits & cost, Try it, Stored runs, ... */
+.mission h2 { font-weight: 700; letter-spacing: -.015em; -webkit-text-stroke: .35px currentColor; }
+
+/* ---------- Mission: verdict chip > run box (themed like the chip) with a "when was the test done" dropdown ---------- */
+.m-chiprow { --tone: var(--ink-3); }
+.m-chiprow[data-tone="ok"] { --tone: var(--ok); }
+.m-chiprow[data-tone="bad"] { --tone: var(--bad); }
+.m-arrow { font: 700 1.4rem/1 var(--font-mono); color: var(--tone); }
+.m-runbox { position: relative; min-width: 0; max-width: 100%; }
+.m-runbox .m-runbtn.m-runbtn { cursor: pointer; text-transform: none; letter-spacing: .02em; font-size: .9rem; gap: 10px; text-align: left; }
+.m-runbtn .m-runid { overflow-wrap: anywhere; }
+.m-runbtn:hover { filter: brightness(1.18); }
+.m-runbtn:focus-visible { outline: 2px solid var(--tone); outline-offset: 3px; }
+.m-caret { display: inline-block; margin-left: 2px; font-size: 1rem; transition: transform .15s var(--ease); }
+.m-runbtn[aria-expanded="true"] .m-caret { transform: rotate(180deg); }
+.m-runpanel {
+  position: absolute; z-index: 3; top: calc(100% + 8px); left: 0; width: max-content; min-width: 100%; max-width: min(92vw, 26rem);
+  display: grid; gap: var(--space-2); padding: var(--space-3) var(--space-4);
+  background: var(--surface); border: 1px solid var(--tone); border-radius: var(--radius); box-shadow: var(--shadow-2);
+}
+.m-runpanel[hidden] { display: none; }
+.m-run-when { margin: 0; display: grid; gap: 2px; }
+.m-run-when .num { font-size: 1rem; color: var(--ink); }
+.m-run-kind { margin: 0; font-size: var(--step--1); }

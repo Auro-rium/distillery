@@ -30,7 +30,8 @@
 .rp-verdict strong { font-weight: 600; }
 .rp-verdict-icon { width: 1.1em; height: 1.1em; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 @keyframes rp-in { from { opacity: 0; transform: translateY(6px); } }
-.rp-facts { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-5); margin: 0; flex: 1 1 18rem; }
+.rp-facts { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-5); margin: 0;  }
+.rp-sum-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin-left: auto; }
 .rp-facts > div { min-width: 0; }
 .rp-facts dt { font: 500 .68rem/1.3 var(--font-mono); letter-spacing: .1em; text-transform: uppercase; color: var(--ink-2); }
 .rp-facts dd { margin: 0; font-variant-numeric: tabular-nums; font-weight: 500; }

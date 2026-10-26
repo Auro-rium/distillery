@@ -31,8 +31,10 @@ function ApiErrorText({ error }: { error: unknown }) {
  * one below, with a status strip (LIVE pulse from the stream heartbeat) that is sticky on phones. Everything shown
  * is the API payload, overlaid with the events received so far; recorded runs get the ledger from their bundle.
  */
-export default function LiveRun() {
-  const { id = "" } = useParams();
+export default function LiveRun({ runId }: { runId?: string } = {}) {
+  // The run page reads its id from the URL; a screen that shows the run in place (the Mission page's demo) passes it.
+  const params = useParams();
+  const id = runId ?? params.id ?? "";
   const [detail, setDetail] = useState<RunDetail | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [token, setToken] = useState("");

@@ -1,7 +1,7 @@
-import type { CSSProperties, ReactNode } from "react";
+import type { ReactNode } from "react";
 import { NOT_MEASURED, fmtInt, fmtNumber, fmtP, fmtPercent, fmtText, fmtUsd } from "../../api/format";
 import type { AccTriple, FinetuneRecord, Report, SandboxCostPer1k, TeacherCostPer1k } from "../../api/types";
-import { AccuracyBars, ChartLegend, CiNumberLine, DiscordantMatrix, LossChart, MODEL_LABEL, StressBars, type ModelKey } from "../../charts";
+import { AccuracyBars, CiNumberLine, DiscordantMatrix, LossChart, StressBars, type ModelKey } from "../../charts";
 import { Badge, Card, CopyButton, EmptyState, Stat } from "../../components";
 import { AccuracyTable, MODELS, ciOf, ciText, type BarRow, type TableRow } from "./AccuracyTable";
 import { Breakable } from "./Breakable";
@@ -9,8 +9,6 @@ import { Breakable } from "./Breakable";
 function modelRows(acc: Partial<AccTriple> | undefined, studentCi: [number, number] | null | undefined): BarRow[] {
   return MODELS.map((m) => ({ ...m, value: acc?.[m.key] ?? null, ci: m.key === "student" ? studentCi ?? null : null }));
 }
-
-const MODEL_KEY = MODELS.map((m) => ({ key: m.key, label: MODEL_LABEL[m.key], className: `m-${m.key}` }));
 
 /** One sentence that says, in text, which rows have a whisker: the report carries a CI for the student only. */
 function CiNote({ rows }: { rows: BarRow[] }) {
@@ -47,11 +45,6 @@ export function GateDetails({ r }: { r: Report }) {
         baseOnly={g.base_only_vs_student}
         caption={`Held-out items where exactly one of the two models is right; McNemar's exact test compares these two counts (p ${fmtP(g.mcnemar_p)}, alpha ${fmtNumber(t.mcnemar_alpha, 2)}).`}
       />
-      <div className="rp-stats">
-        <Stat label="McNemar exact p" value={fmtP(g.mcnemar_p)} hint={`alpha ${fmtNumber(t.mcnemar_alpha, 2)}`} />
-        <Stat label="Bootstrap resamples" value={fmtInt(g.bootstrap_resamples_used)} hint={`skipped ${fmtInt(g.bootstrap_skipped)}`} />
-        <Stat label="Held-out n" value={fmtInt(g.n)} />
-      </div>
     </Card>
   );
 }
@@ -74,52 +67,6 @@ export function Accuracy({ r }: { r: Report }) {
         Unparseable outputs: base {fmtInt(u?.base)}, student {fmtInt(u?.student)}, teacher {fmtInt(u?.teacher)}
       </p>
       <AccuracyTable caption="Held-out accuracy" columns={MODELS} rows={table} showN nLabel="n" />
-    </Card>
-  );
-}
-
-export function ByClass({ r }: { r: Report }) {
-  const ev = r.evaluation;
-  const classes = Object.keys(ev.accuracy_by_class ?? {});
-  const table: TableRow[] = classes.map((c) => ({ name: c, n: ev.class_counts?.[c] ?? null, values: modelRows(ev.accuracy_by_class[c], null) }));
-  return (
-    <Card title="Accuracy by held-out class" className="rp-cls">
-      {classes.length === 0 ? (
-        <EmptyState title="No class split in this report" />
-      ) : (
-        <>
-          <ChartLegend items={MODEL_KEY} />
-          <div className="rp-multiples">
-            {classes.map((c, i) => (
-              <div className="rp-mult" role="group" aria-label={c} key={c} style={{ "--i": i } as CSSProperties}>
-                <div className="rp-mult-head">
-                  <strong>{c}</strong>
-                  <Badge>n={fmtInt(ev.class_counts?.[c])}</Badge>
-                  {c.startsWith("unseen") && <Badge tone="info">not in training</Badge>}
-                </div>
-                <AccuracyBars title={`Accuracy, class ${c}`} rows={modelRows(ev.accuracy_by_class[c], null)} showCi={false} />
-              </div>
-            ))}
-          </div>
-          <p className="muted rp-note">The report has no per-class confidence interval, so these bars carry no whiskers.</p>
-          <AccuracyTable caption="Accuracy by held-out class" columns={MODELS} rows={table} showN nLabel="n" />
-        </>
-      )}
-    </Card>
-  );
-}
-
-/** Shown only when the payload carries the overlap rate: the gate set shares question shapes with training. */
-export function GateCaveat({ r }: { r: Report }) {
-  const rate = r.data?.heldout_skeleton_overlap_rate;
-  if (typeof rate !== "number") return null;
-  return (
-    <Card title="Gate set is in-distribution" className="rp-caveat" tone="warn">
-      <p role="note" className="rp-caveat-text">
-        Gate set is in-distribution: {fmtPercent(rate, 0)} of gate questions share a question skeleton with a training question
-        {typeof r.data.train_distinct_skeletons === "number" ? ` (${fmtInt(r.data.train_distinct_skeletons)} distinct training skeletons)` : ""}.
-        The gate measures generalisation across literals within known question shapes, not novel query structure.
-      </p>
     </Card>
   );
 }

@@ -8,11 +8,11 @@ import { useReducedMotion } from "./motion/useReducedMotion";
 import { useShortcuts } from "./motion/useShortcuts";
 import Home from "./screens/home";
 import Replay from "./screens/replay";
+import HowItWorks from "./screens/howitworks";
 import LiveRun from "./screens/live";
 import Tree from "./screens/tree";
 import ReportScreen from "./screens/report";
 import NewRun from "./screens/newrun";
-import Playground from "./screens/playground";
 import Humanset from "./screens/humanset";
 import Receipts from "./screens/receipts";
 
@@ -43,11 +43,11 @@ function RouteStage() {
       <Routes location={active}>
         <Route path="/" element={<Home />} />
         <Route path="/mission" element={<Replay />} />
+        <Route path="/how-it-works" element={<HowItWorks />} />
         <Route path="/runs/:id" element={<LiveRun />} />
         <Route path="/runs/:id/tree" element={<Tree />} />
         <Route path="/runs/:id/report" element={<ReportScreen />} />
         <Route path="/new" element={<NewRun />} />
-        <Route path="/playground" element={<Playground />} />
         <Route path="/receipts" element={<Receipts />} />
         <Route path="/humanset" element={<Humanset />} />
         <Route path="*" element={<EmptyState title="Page not found"><Link to="/">Back to the overview</Link></EmptyState>} />
@@ -69,7 +69,7 @@ export function App() {
   useShortcuts({
     help: () => setHelp((h) => !h),
     theme: toggle,
-    go: (t) => nav(t === "replay" ? "/mission" : t === "new" ? "/new" : "/playground"),
+    go: (t) => nav(t === "replay" ? "/mission" : "/new"),
   });
   // Every route gets its own document title. After a client-side navigation focus moves to <main> and
   // the new page is announced, because there is no page load to tell keyboard and screen reader users.

@@ -41,11 +41,11 @@ function gateValue(v: number | string | boolean): string {
 
 /**
  * One claim and the file that backs it. Everything shown is a field of the evidence payload: the status the
- * builder gave it, the value as the evidence states it, the commit-pinned link to the artifact, the
- * pre-registration commit, the sealed-set and adapter hashes, the gate's inputs and the ledger total. A pending
+ * builder gave it, the value as the evidence states it, the artifact (click to read its record on this page), the
+ * pre-registration commit (only when there is one), the sealed-set and adapter hashes, the gate's inputs and the ledger total. A pending
  * claim shows no number at all, only that it is pre-registered and not yet scored.
  */
-export function Receipt({ r }: { r: ReceiptRow }) {
+export function Receipt({ r, onOpen }: { r: ReceiptRow; onOpen?: () => void }) {
   const l = look(r);
   const pending = r.status === "pending";
   const sealed = Object.entries(r.sealed_sha256);
@@ -68,21 +68,12 @@ export function Receipt({ r }: { r: ReceiptRow }) {
           {pending ? (
             <span className="rc-path num">{r.artifact}</span>
           ) : (
-            <a className="rc-path num" href={r.permalink} target="_blank" rel="noreferrer noopener">
-              {r.artifact}
-              <span className="sr-only"> (opens in a new tab)</span>
-            </a>
+            <button type="button" className="rc-path rc-open num" aria-haspopup="dialog" onClick={onOpen}>{r.artifact}</button>
           )}
         </Fact>
-        {!pending && (
+        {!pending && r.prereg && (
           <Fact label="pre-registration">
-            {r.prereg ? (
-              <>
-                <Hash value={r.prereg.commit} len={SHORT_COMMIT} /> <span className="rc-when num">{r.prereg.committed_at}</span>
-              </>
-            ) : (
-              <span className="muted">no pre-registration commit recorded in this evidence</span>
-            )}
+            <Hash value={r.prereg.commit} len={SHORT_COMMIT} /> <span className="rc-when num">{r.prereg.committed_at}</span>
           </Fact>
         )}
         {sealed.length > 0 && (

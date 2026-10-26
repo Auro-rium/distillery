@@ -2,7 +2,7 @@
 // payload; nothing is computed except where a comment says "derived" (and the page labels it so).
 // Payloads are treated as untrusted shapes: a wrong shape yields null, never a throw.
 import { fmtInt, fmtNumber, fmtUsd } from "../../api/format";
-import type { Evidence, FinetuneRecord, Gate, ProofItem, Report, StressEval } from "../../api/types";
+import type { Evidence, FinetuneRecord, Gate, ProofItem, Receipt, Report, StressEval } from "../../api/types";
 import type { ProofStatus } from "../../charts";
 
 const obj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === "object" && !Array.isArray(v);
@@ -97,8 +97,11 @@ export function proofsOf(e: unknown): ProofItem[] | null {
   return (e as unknown as Evidence).proofs.filter((p): p is ProofItem => obj(p) && typeof p.id === "string").slice(0, MAX_PROOFS);
 }
 
-/** Shortest form of a proof id for the card corner: "W1-P1.11" stays as is (it is the payload's id). */
-export const rungOf = (p: ProofItem): string => p.id;
+/** The receipt for a proof (same id) from the evidence payload, or null. Shown as-is in the evidence viewer. */
+export function receiptOf(e: unknown, id: string): Receipt | null {
+  if (!obj(e) || !Array.isArray(e.receipts)) return null;
+  return (e.receipts as unknown[]).find((r): r is Receipt => obj(r) && r.id === id) ?? null;
+}
 
 /** Hyperparameter chips worth showing, in this order, when present. */
 export const HP_KEYS = ["lora_r", "lora_alpha", "learning_rate", "n_epochs", "batch_size"] as const;

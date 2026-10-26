@@ -12,18 +12,18 @@ export const GITHUB_URL = "https://github.com/Auro-rium/distillery";
 interface NavItem { to: string; label: string; end: boolean }
 
 /**
- * Mission · Evidence · Live · Acme analyst · Receipts · New run. Evidence (the featured run's report) and Live (its
- * run page) exist only once /api/replay names a featured run (see useFeaturedRun); with none they are
- * left out rather than pointed at a guessed target. Live uses `end` so it is not also active on the report.
+ * Overview · How it works · Mission · Evidence · Receipts · New run. Evidence (the featured run's report) exists only
+ * once /api/replay names a featured run (see useFeaturedRun); with none it is left out rather than pointed at a guessed
+ * target. The run's live view is the "Live run" tab inside the run screens, so the nav has no separate Live item.
  */
 function useNav(): NavItem[] {
   const { run } = useFeaturedRun();
   const id = run ? encodeURIComponent(run.run_id) : null;
   return [
     { to: "/", label: "Overview", end: true },
+    { to: "/how-it-works", label: "How it works", end: true },
     { to: "/mission", label: "Mission", end: true },
-    ...(id ? [{ to: `/runs/${id}/report`, label: "Evidence", end: true }, { to: `/runs/${id}`, label: "Live", end: true }] : []),
-    { to: "/playground", label: "Acme analyst", end: false },
+    ...(id ? [{ to: `/runs/${id}/report`, label: "Evidence", end: true }] : []),
     { to: "/receipts", label: "Receipts", end: false },
     { to: "/new", label: "New run", end: false },
   ];
@@ -44,8 +44,8 @@ function GitHubLink({ className }: { className: string }) {
 export function pageTitle(pathname: string): string {
   if (pathname === "/") return "Overview";
   if (pathname === "/mission") return "Mission";
+  if (pathname === "/how-it-works") return "How it works";
   if (pathname === "/new") return "New run";
-  if (pathname === "/playground") return "Acme analyst";
   if (pathname === "/receipts") return "Receipts";
   if (pathname === "/humanset") return "Human set";
   const m = /^\/runs\/([^/]+)(?:\/(report|tree))?\/?$/.exec(pathname);
@@ -132,7 +132,6 @@ const HELP: [string, string][] = [
   ["t", "Switch theme"],
   ["g then r", "Go to Mission"],
   ["g then n", "Go to New run"],
-  ["g then p", "Go to Acme analyst"],
   ["+ and −", "Zoom the experiment tree"],
   ["Arrow keys", "Move between tree nodes, or pan the tree"],
   ["Esc", "Close"],

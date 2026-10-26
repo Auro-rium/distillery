@@ -3,7 +3,6 @@
 // run's /api/runs/:id/report, or /api/evidence, formatted by api/format.ts.
 import { Link } from "react-router-dom";
 import { api } from "../../api/client";
-import { NOT_MEASURED } from "../../api/format";
 import type { RunSummary } from "../../api/types";
 import { pickFeatured } from "../../api/useFeaturedRun";
 import { ApiErrorState, Badge, Card, EmptyState, LabelBanner, Spinner } from "../../components";
@@ -14,9 +13,8 @@ import { DemoButton } from "./DemoButton";
 import { Hero } from "./Hero";
 import { Limits } from "./Limits";
 import { LiveRuns } from "./LiveRuns";
-import { Pipeline } from "./Pipeline";
 import { ProofLadder } from "./ProofLadder";
-import { Training } from "./Training";
+import { Training, TrainingData } from "./Training";
 import "./replay.css";
 
 /** One banner per distinct label among the listed runs, except the featured run's (the hero shows that one). */
@@ -31,7 +29,7 @@ function LabelBanners({ runs, skip }: { runs: RunSummary[]; skip: string | null 
   );
 }
 
-/** Label badge, status, decision and date: each only from the payload; the date is shown as the API wrote it. */
+/** Label badge, status and decision: each only from the payload. */
 export function Bundle({ b }: { b: RunSummary }) {
   const id = encodeURIComponent(b.run_id);
   const done = b.status === "complete";
@@ -45,9 +43,6 @@ export function Bundle({ b }: { b: RunSummary }) {
           {b.decision && <Badge tone={b.decision === "PROMOTE" ? "ok" : "bad"}>{b.decision}</Badge>}
         </div>
       </div>
-      <p className="muted bundle-date">
-        Created {b.created_at ? <time dateTime={b.created_at}>{b.created_at}</time> : NOT_MEASURED}
-      </p>
       <div className="bundle-actions">
         {done ? (
           <>
@@ -71,18 +66,28 @@ function ReportSection(props: {
   featured: RunSummary | null;
   report: Async<unknown>;
   children: (report: unknown) => JSX.Element;
+  /** A control for the heading line (e.g. the DATA menu), shown once the report has loaded and joined to the title by an arrow. */
+  head?: (report: unknown) => JSX.Element | null;
 }) {
   const { replay, featured, report } = props;
   let body: JSX.Element;
+  let head: JSX.Element | null = null;
   if (replay.state === "error") body = <p className="muted">Unavailable: the run list did not load (the error is shown above).</p>;
   else if (replay.state === "loading" || (featured && report.state === "loading")) body = <Spinner label={`Loading ${props.title.toLowerCase()}`} lines={2} />;
   else if (!featured) body = <p className="muted">Shown once a recorded run is available to feature.</p>;
   else if (report.state === "error") body = <p className="muted">Unavailable: the featured run&rsquo;s report did not load (the error is shown above).</p>;
-  else body = props.children(report.state === "ok" ? report.data : null);
+  else {
+    body = props.children(report.state === "ok" ? report.data : null);
+    if (props.head && report.state === "ok") head = props.head(report.data);
+  }
   return (
     <section className="m-section" aria-labelledby={props.id}>
       <div className="m-section-head">
-        <h2 id={props.id}>{props.title}</h2>
+        <div className="m-title-row">
+          <h2 id={props.id}>{props.title}</h2>
+          {head && <span className="m-link-arrow" aria-hidden="true" />}
+          {head}
+        </div>
         <p className="muted">{props.lead}</p>
       </div>
       {body}
@@ -111,17 +116,9 @@ export default function Mission() {
 
       <ProofLadder res={evidence} onRetry={retryEvidence} />
 
-      <ReportSection id="training-h" title="Training" lead="What the fine-tune recorded for the featured run." replay={replay} featured={featured} report={report}>
+      <ReportSection id="training-h" title="Training" lead="What the fine-tune recorded for the featured run." replay={replay} featured={featured} report={report} head={(r) => <TrainingData report={r} />}>
         {(r) => <Training report={r} />}
       </ReportSection>
-
-      <section className="m-section" aria-labelledby="how-h">
-        <div className="m-section-head">
-          <h2 id="how-h">How it works</h2>
-          <p className="muted">Every example and every evaluation is checked by running the SQL.</p>
-        </div>
-        <Pipeline />
-      </section>
 
       <ReportSection id="limits-h" title="Limits & cost" lead="Where the student is weak, and what the run cost." replay={replay} featured={featured} report={report}>
         {(r) => <Limits report={r} />}

@@ -36,13 +36,11 @@ describe("render provenance: numbers on screen come from the contract payloads",
   });
   it("overview", async () => {
     stubFetch(contractFetch());
-    await check("/", /This server, right now/, [contract.config, contract.gatewayStatus, contract.gatewayDrift, contract.evidence], [
+    await check("/", /How one request is served/, [contract.config], [
       RUNG,
       { pattern: /\/v1\/?/g, why: "the API path segment in the base-URL example" },
       { pattern: /\/\/[a-z0-9.-]+:\d+/g, why: "the page's own origin (window.location) in the base-URL example" },
-      { pattern: /(?<![\d.])[1-4](?=\s*\n|Familiar|Student|Router|Drift)/g, why: "step numbers of the request diagram" },
-      { pattern: /1 − /g, why: "'1 −' in 'confidence 1 − delta', the complement of the payload's delta" },
-      { pattern: /W-C\d|W-\$|W-E2E/g, why: "claim ids from the evidence payload" },
+      { pattern: /(?<![\d.])[1-4](?=\s*(?:\n|Familiar|Student|Router|Drift))/g, why: "step numbers of the request diagram" },
     ]);
   });
   it("report", async () => {
@@ -60,12 +58,6 @@ describe("render provenance: numbers on screen come from the contract payloads",
   it("new run", async () => {
     stubFetch(contractFetch());
     await check("/new", /server default/, [contract.config]);
-  });
-  it("acme analyst", async () => {
-    stubFetch(contractFetch());
-    await check("/playground", /Savings so far/, [contract.gatewayStatus, contract.gatewaySavings, contract.gatewayDrift], [
-      { pattern: /\d+ \/ 500/g, why: "character counter against the 500-character input limit (input length / UI constant)" },
-    ]);
   });
   it("still holds when the payload lacks values (nothing invented for absent data)", async () => {
     const r = { ...contract.run, sandbox: { operations: null, concurrency_peak: null } };

@@ -1,0 +1,33 @@
+/* Neon light that follows the pointer, only on the glyphs (see GlowText.tsx). --mx/--my are set from script. */
+.glow {
+  --mx: -9999px; --my: -9999px;
+  --glow-base: #fff; --neon-a: rgba(57, 255, 136, .62); --neon-b: rgba(0, 229, 255, .42);
+  position: relative; isolation: isolate;
+}
+:root[data-theme="light"] .glow { --glow-base: var(--ink); --neon-a: rgba(0, 168, 90, .6); --neon-b: rgba(0, 136, 170, .4); }
+
+.glow-text, .glow-halo { display: block; }
+.glow-text { position: relative; z-index: 1; color: var(--glow-base); }
+.glow-halo { position: absolute; inset: 0; z-index: 0; pointer-events: none; user-select: none; }
+
+/* No moving light without script or when motion is reduced: plain bold text. */
+.glow[data-glow="on"] .glow-text, .glow[data-glow="on"] .glow-halo {
+  -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+}
+.glow[data-glow="on"] .glow-text {
+  background-color: var(--glow-base);
+  background-image: radial-gradient(circle 150px at var(--mx) var(--my), var(--neon-a) 0, var(--neon-b) 45%, transparent 100%);
+}
+.glow[data-glow="on"] .glow-halo {
+  background-image: radial-gradient(circle 230px at var(--mx) var(--my), var(--neon-a) 0, var(--neon-b) 50%, transparent 100%);
+  filter: blur(14px) saturate(1.2);
+  opacity: .85;
+}
+.glow[data-glow="off"] .glow-halo { display: none; }
+
+/* Words appear one by one. `visibility` keeps each word's space (nothing reflows) and, unlike opacity or a transform,
+   leaves the word in the glyph clip that carries the neon. Without the animation every word simply shows. */
+@media (prefers-reduced-motion: no-preference) {
+  .glow-word { animation: glow-word-in .01s linear both; animation-delay: calc(200ms + var(--i, 0) * 80ms); }
+}
+@keyframes glow-word-in { from { visibility: hidden; } to { visibility: visible; } }
