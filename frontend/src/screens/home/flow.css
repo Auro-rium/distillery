@@ -6,7 +6,7 @@
 .h-step {
   position: absolute; inset: 0 0 auto 0; min-height: 100%; z-index: 1; overflow: hidden;
   padding: var(--card-pad); border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--surface);
-  transition: border-color var(--dur-2) var(--ease), box-shadow var(--dur-2) var(--ease);
+  transition: border-color .14s ease-out, box-shadow .14s ease-out;
 }
 .h-step > * { position: relative; z-index: 1; }
 .h-step h3 { margin: var(--space-3) 0 0; }
@@ -21,8 +21,11 @@
 }
 
 /* the paragraph: height and opacity open together */
-.h-desc { display: grid; grid-template-rows: 0fr; opacity: 0; transition: grid-template-rows .55s var(--ease), opacity .45s var(--ease) .08s; }
-.h-step[data-open="true"] .h-desc, .h-step:focus-visible .h-desc { grid-template-rows: 1fr; opacity: 1; }
+/* opening is fast and front-loaded (most of the movement in the first frames); closing is quicker still */
+.h-desc { display: grid; grid-template-rows: 0fr; opacity: 0; transition: grid-template-rows .16s ease-in, opacity .1s ease-in; }
+.h-step[data-open="true"] .h-desc, .h-step:focus-visible .h-desc {
+  grid-template-rows: 1fr; opacity: 1; transition: grid-template-rows .2s cubic-bezier(.16, 1, .3, 1), opacity .1s ease-out;
+}
 .h-desc-in { overflow: hidden; min-height: 0; }
 .h-desc-text { margin: var(--space-2) 0 0; font-size: var(--step--1); color: var(--ink-2); }
 .h-word { white-space: nowrap; }
@@ -35,7 +38,7 @@
 .h-step::after {
   content: var(--rain) / ""; position: absolute; left: 0; right: 0; top: 0; z-index: 0; pointer-events: none;
   white-space: pre; font: 11px/1.35 var(--font-mono); letter-spacing: .12em; text-align: center; color: var(--accent);
-  opacity: 0; transition: opacity .4s var(--ease);
+  opacity: 0; transition: opacity .15s ease-out;
   -webkit-mask-image: linear-gradient(to bottom, transparent, #000 28%, #000 72%, transparent); mask-image: linear-gradient(to bottom, transparent, #000 28%, #000 72%, transparent);
 }
 /* a bright line that sweeps down the box once as it opens */
@@ -45,9 +48,9 @@
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  .h-step[data-open="true"]::after, .h-step:focus-visible::after { opacity: .2; animation: h-rain 7s linear infinite; }
-  .h-step[data-open="true"]::before, .h-step:focus-visible::before { animation: h-scan .9s var(--ease) 1; }
-  .h-step[data-open="true"] h3, .h-step:focus-visible h3 { animation: h-glitch .5s steps(2, end) 1; }
+  .h-step[data-open="true"]::after, .h-step:focus-visible::after { opacity: .2; animation: h-rain 5s linear infinite; }
+  .h-step[data-open="true"]::before, .h-step:focus-visible::before { animation: h-scan .45s ease-out 1; }
+  .h-step[data-open="true"] h3, .h-step:focus-visible h3 { animation: h-glitch .28s steps(2, end) 1; }
 }
 @media (prefers-reduced-motion: reduce) { .h-step::before, .h-step::after { display: none; } }
 
