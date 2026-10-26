@@ -7,7 +7,6 @@ import { fmtText } from "../../api/format";
 import type { Config } from "../../api/types";
 import { GITHUB_URL } from "../../components/Shell";
 import { GlowText } from "../../motion/GlowText";
-import { Edges } from "./Edges";
 import { Flow } from "./Flow";
 import { Robot } from "./Robot";
 import { useAsync, type Async } from "../report/useAsync";
@@ -75,7 +74,6 @@ export default function Home() {
   const [config] = useAsync<Config>(() => api.config(), "config");
   return (
     <div className="home">
-      <Edges />
       <div className="h-top">
         <Hero config={config} />
         <Robot />
