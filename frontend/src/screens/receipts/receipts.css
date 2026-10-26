@@ -29,3 +29,10 @@
 .rc .rc-gate-list > div { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0 var(--space-3); }
 .rc .rc-gate-list dt { color: var(--ink-2); overflow-wrap: anywhere; }
 .rc .rc-gate-list dd { margin: 0; overflow-wrap: anywhere; }
+
+/* each claim bulges out a little when the pointer (or keyboard focus) is on it */
+.rc { transition: transform .16s var(--ease), box-shadow .16s var(--ease), border-color .16s; }
+.rc:hover, .rc:focus-within { transform: scale(1.03); z-index: 2; border-color: var(--ok); box-shadow: 0 16px 34px rgba(0, 0, 0, .42), 0 0 22px rgba(62, 224, 138, .2); }
+/* the artifact reads like a link but opens the record on this page */
+.rc button.rc-open { background: none; border: 0; padding: 2px 0; cursor: pointer; color: var(--accent); text-align: left; text-decoration: underline; text-underline-offset: 3px; font-family: var(--font-mono); }
+.rc button.rc-open:hover { filter: brightness(1.2); }

@@ -2,7 +2,7 @@ import { useState } from "react";
 import type { ProofItem } from "../../api/types";
 import { ProofCard, Sparkline } from "../../charts";
 import { ApiErrorState, Spinner } from "../../components";
-import { LazyDialog } from "../../ui/LazyDialog";
+import { EvidenceViewer } from "../../components/EvidenceViewer";
 import type { Async } from "../report/useAsync";
 import { fmtSig, proofsOf, proofStatus, receiptOf } from "./mission";
 
@@ -33,34 +33,6 @@ function Proof({ p, onOpen }: { p: ProofItem; onOpen: () => void }) {
   );
 }
 
-/**
- * The evidence for one rung, shown on this page: the proof entry and its receipt exactly as the evidence endpoint
- * returned them (JSON, nothing added or computed). The repository file is one optional click away from here.
- */
-function EvidenceViewer({ proof, receipt, onClose }: { proof: ProofItem | null; receipt: unknown; onClose: () => void }) {
-  return (
-    <LazyDialog
-      open={proof !== null}
-      onOpenChange={(o) => { if (!o) onClose(); }}
-      title={proof ? `Evidence: ${proof.title}` : "Evidence"}
-      description="The record the server returned for this rung: the proof entry and its receipt."
-      className="json-dialog"
-    >
-      {proof && (
-        <>
-          <pre className="json-view" tabIndex={0} aria-label="Evidence record (JSON)"><code>{JSON.stringify({ proof, receipt }, null, 2)}</code></pre>
-          {proof.evidence_url && (
-            <p className="json-foot muted">
-              The file itself lives in the repository:{" "}
-              <a href={proof.evidence_url} target="_blank" rel="noreferrer noopener">{proof.evidence_path}<span className="sr-only"> (opens in a new tab)</span></a>
-            </p>
-          )}
-        </>
-      )}
-    </LazyDialog>
-  );
-}
-
 export function ProofLadder({ res, onRetry }: { res: Async<unknown>; onRetry: () => void }) {
   const proofs = res.state === "ok" ? proofsOf(res.data) : null;
   const [open, setOpen] = useState<ProofItem | null>(null);
@@ -80,8 +52,9 @@ export function ProofLadder({ res, onRetry }: { res: Async<unknown>; onRetry: ()
         </ul>
       )}
       <EvidenceViewer
-        proof={open}
-        receipt={open && res.state === "ok" ? receiptOf(res.data, open.id) : null}
+        title={open ? `Evidence: ${open.title}` : null}
+        record={open ? { proof: open, receipt: res.state === "ok" ? receiptOf(res.data, open.id) : null } : null}
+        file={open ? { path: open.evidence_path, url: open.evidence_url } : null}
         onClose={() => setOpen(null)}
       />
     </section>

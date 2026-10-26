@@ -1,7 +1,9 @@
+import { useState } from "react";
 import { api } from "../../api/client";
 import { fmtText } from "../../api/format";
-import type { Evidence } from "../../api/types";
+import type { Evidence, Receipt as ReceiptRow } from "../../api/types";
 import { ApiErrorState, EmptyState } from "../../components";
+import { EvidenceViewer } from "../../components/EvidenceViewer";
 import { Spinner } from "../../ui";
 import { useAsync } from "../report/useAsync";
 import { Receipt } from "./Receipt";
@@ -16,15 +18,14 @@ import "./receipts.css";
 export default function Receipts() {
   const [res, retry] = useAsync<Evidence>(() => api.evidence(), "evidence");
   const rows = res.state === "ok" && Array.isArray(res.data.receipts) ? res.data.receipts : null;
+  const [open, setOpen] = useState<ReceiptRow | null>(null);
+  // the proof entry with the same id (when there is one) travels with the receipt, as on the Mission page
+  const proof = open && res.state === "ok" && Array.isArray(res.data.proofs) ? res.data.proofs.find((p) => p.id === open.id) : undefined;
   return (
     <div className="rc-page">
       <header className="rc-head">
         <h1>Receipts</h1>
-        <p className="muted rc-lead">
-          Each claim, the status it earned, and the file in the repository that backs it. Open the artifact and check
-          it yourself. A claim marked pending is pre-registered and has not been scored: it shows no number until its
-          evidence file exists.
-        </p>
+        <p className="muted rc-lead">Every claim and the proof behind it. Click an artifact to read it here. Pending means not scored yet.</p>
         {res.state === "ok" && (
           <p className="muted rc-meta">
             Built from commit <code className="rc-hash num">{res.data.commit}</code> at <span className="num">{fmtText(res.data.generated_at)}</span>.
@@ -39,9 +40,15 @@ export default function Receipts() {
       {rows && rows.length === 0 && <p className="muted">The evidence file lists no receipts.</p>}
       {rows && rows.length > 0 && (
         <ul className="rc-list" role="list" aria-label="Receipts">
-          {rows.map((r) => <li key={r.id}><Receipt r={r} /></li>)}
+          {rows.map((r) => <li key={r.id}><Receipt r={r} onOpen={() => setOpen(r)} /></li>)}
         </ul>
       )}
+      <EvidenceViewer
+        title={open ? `Evidence: ${proof?.title ?? open.id}` : null}
+        record={open ? (proof ? { proof, receipt: open } : { receipt: open }) : null}
+        file={open ? { path: open.artifact, url: open.permalink } : null}
+        onClose={() => setOpen(null)}
+      />
     </div>
   );
 }
