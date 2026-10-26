@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fmtInt, fmtNumber, fmtP, fmtPercent, fmtText, fmtUsd } from "./format";
+import { fmtDateTimeUtc, fmtInt, fmtNumber, fmtP, fmtPercent, fmtText, fmtUsd } from "./format";
 
 const ABSENT = [null, undefined, NaN, Infinity];
 describe("format helpers", () => {
@@ -33,5 +33,19 @@ describe("fmtP", () => {
     expect(fmtP(1.6e-57)).toBe("1.6e-57");
     expect(fmtP(0)).toBe("0.0000");
     expect(fmtP(null)).toBe(fmtNumber(null));
+  });
+});
+
+describe("fmtDateTimeUtc", () => {
+  it("writes the instant in UTC with day, month name, year and seconds", () => {
+    expect(fmtDateTimeUtc("2026-10-04T18:54:32.241734+00:00")).toBe("4 Oct 2026, 18:54:32 (UTC)");
+    expect(fmtDateTimeUtc("2026-09-30T14:58:06Z")).toBe("30 Sep 2026, 14:58:06 (UTC)");
+    expect(fmtDateTimeUtc("2026-10-04T20:54:32+02:00")).toBe("4 Oct 2026, 18:54:32 (UTC)");
+  });
+  it("shows absent or unreadable times as not measured", () => {
+    expect(fmtDateTimeUtc(null)).toBe(fmtNumber(null));
+    expect(fmtDateTimeUtc(undefined)).toBe(fmtNumber(null));
+    expect(fmtDateTimeUtc("")).toBe(fmtNumber(null));
+    expect(fmtDateTimeUtc("not a date")).toBe(fmtNumber(null));
   });
 });

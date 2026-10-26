@@ -1,5 +1,5 @@
 // Cross-screen honesty rules: errors are not empty states; labels are never silently "real".
-import { act, cleanup, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DRY_RUN_TEXT } from "../components";
 import { contract, contractFetch } from "../testutil/contract";
@@ -55,7 +55,7 @@ const ROUTES: [string, string][] = [
   ["replay", "/mission"], ["report", `/runs/${rid}/report`], ["live", `/runs/${rid}`], ["tree", `/runs/${rid}/tree`],
 ];
 
-describe.each(ROUTES)("label banner: %s", (_n, path) => {
+describe.each(ROUTES)("label banner: %s", (name, path) => {
   const banner = () => screen.getAllByRole("status").map((e) => e.textContent);
   it("shows the exact dry-run text when dry_run is true", async () => {
     stubFetch(withFlags({ dry_run: true, recorded: false, recorded_at: null }));
@@ -66,6 +66,13 @@ describe.each(ROUTES)("label banner: %s", (_n, path) => {
   it("shows the recorded label when recorded is true", async () => {
     stubFetch(withFlags({ dry_run: false, recorded: true, recorded_at: "2026-01-02T03:04:05Z" }));
     renderApp(path);
+    if (name === "replay") {
+      // the Mission verdict labels a recorded run inside its run box (the arrow), not in a banner
+      const box = await waitFor(() => { const b = document.querySelector<HTMLElement>(".m-runbtn"); expect(b).not.toBeNull(); return b!; });
+      fireEvent.click(box);
+      expect(await screen.findByText("Recorded run · real Token Factory jobs")).toBeTruthy();
+      return;
+    }
     await waitFor(() => expect(banner()).toContain("Recorded run · 2026-01-02T03:04:05Z · real Token Factory jobs"));
   });
   it("never renders missing flags as real", async () => {

@@ -7,6 +7,7 @@ import { CountUp } from "../../motion/CountUp";
 import { Skeleton } from "../../ui";
 import type { Async } from "../report/useAsync";
 import { gateOf, P_SHOW_MIN } from "./mission";
+import { RunBox } from "./RunBox";
 
 const pct = (v: number | null | undefined) => fmtPercent(v, 1);
 
@@ -46,13 +47,14 @@ function Verdict({ run, report }: { run: RunSummary; report: unknown }) {
     );
   }
   const decision = g.decision ?? (report as Partial<Report>).decision;
-  const pass = decision === "PROMOTE";
+  const tone = decision === "PROMOTE" ? "ok" : decision === "REJECT" ? "bad" : "neutral";
   return (
     <div className="m-verdict">
       <div className="m-left">
-        <div className="m-chiprow">
-          <Badge tone={pass ? "ok" : decision === "REJECT" ? "bad" : "neutral"} size="lg" className="m-chip">{decision ?? fmtNumber(null)}</Badge>
-          <span className="mono m-runid">{run.run_id}</span>
+        <div className="m-chiprow" data-tone={tone}>
+          <Badge tone={tone} size="lg" className="m-chip">{decision ?? fmtNumber(null)}</Badge>
+          <span className="m-arrow" aria-hidden="true">&gt;</span>
+          <RunBox run={run} tone={tone} />
         </div>
         <p className="m-sentence">{sentence(decision)}</p>
         <div className="m-nums" role="group" aria-label="Held-out accuracy">
@@ -104,7 +106,10 @@ export function Hero(props: {
       {/* The featured run's label sits first in the hero; the slot is reserved while loading. */}
       <div className="banners">
         {replay.state === "loading" && <div className="banner-skeleton" aria-hidden="true" />}
-        {featured && <LabelBanner dry_run={featured.dry_run} recorded={featured.recorded} recorded_at={featured.recorded_at} status={featured.status} />}
+        {/* A recorded run is labelled inside its run box (open the arrow); dry, live and unknown labels stay as banners. */}
+        {featured && !(featured.dry_run === false && featured.recorded === true) && (
+          <LabelBanner dry_run={featured.dry_run} recorded={featured.recorded} recorded_at={featured.recorded_at} status={featured.status} />
+        )}
       </div>
       {busy && (
         <div className="m-loading" role="status" aria-live="polite">

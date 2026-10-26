@@ -17,7 +17,8 @@ describe("Mission: stored runs", () => {
     view();
     await waitFor(() => screen.getByText("r1"));
     expect(screen.getByText("DRY RUN — fake models, numbers are NOT results")).toBeTruthy();
-    expect(screen.getByText("Recorded run · 2026-01-02 · real Token Factory jobs")).toBeTruthy();
+    // r2 is the featured run: its label lives in its run box and its own bundle tag, not in a banner
+    expect(screen.getByText("recorded")).toBeTruthy();
     expect(screen.getByText("Report").getAttribute("href")).toBe("/runs/r1/report");
     expect(screen.getByText("Experiment tree").getAttribute("href")).toBe("/runs/r1/tree");
     expect(screen.getByText("Watch run (no report yet)").getAttribute("href")).toBe("/runs/r2");

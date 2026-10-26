@@ -128,3 +128,25 @@
 
 /* section titles: Proof ladder, Training, How it works, Limits & cost, Try it, Stored runs, ... */
 .mission h2 { font-weight: 700; letter-spacing: -.015em; -webkit-text-stroke: .35px currentColor; }
+
+/* ---------- Mission: verdict chip > run box (themed like the chip) with a "when was the test done" dropdown ---------- */
+.m-chiprow { --tone: var(--ink-3); }
+.m-chiprow[data-tone="ok"] { --tone: var(--ok); }
+.m-chiprow[data-tone="bad"] { --tone: var(--bad); }
+.m-arrow { font: 700 1.4rem/1 var(--font-mono); color: var(--tone); }
+.m-runbox { position: relative; min-width: 0; max-width: 100%; }
+.m-runbox .m-runbtn.m-runbtn { cursor: pointer; text-transform: none; letter-spacing: .02em; font-size: .9rem; gap: 10px; text-align: left; }
+.m-runbtn .m-runid { overflow-wrap: anywhere; }
+.m-runbtn:hover { filter: brightness(1.18); }
+.m-runbtn:focus-visible { outline: 2px solid var(--tone); outline-offset: 3px; }
+.m-caret { display: inline-block; margin-left: 2px; font-size: 1rem; transition: transform .15s var(--ease); }
+.m-runbtn[aria-expanded="true"] .m-caret { transform: rotate(180deg); }
+.m-runpanel {
+  position: absolute; z-index: 3; top: calc(100% + 8px); left: 0; width: max-content; min-width: 100%; max-width: min(92vw, 26rem);
+  display: grid; gap: var(--space-2); padding: var(--space-3) var(--space-4);
+  background: var(--surface); border: 1px solid var(--tone); border-radius: var(--radius); box-shadow: var(--shadow-2);
+}
+.m-runpanel[hidden] { display: none; }
+.m-run-when { margin: 0; display: grid; gap: 2px; }
+.m-run-when .num { font-size: 1rem; color: var(--ink); }
+.m-run-kind { margin: 0; font-size: var(--step--1); }
