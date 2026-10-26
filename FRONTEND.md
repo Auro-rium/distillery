@@ -54,7 +54,7 @@ Stack: React 18, Vite 5, TypeScript, react-router-dom 6, Radix (dialog, tabs, to
 | Route | Screen dir | What it shows | Main endpoints |
 |---|---|---|---|
 | `/` | `home` | Product overview: the pitch (word-by-word headline, dancing robot), the base-URL swap, how one request is served (hover boxes), what it does not claim | `/api/config` |
-| `/mission` | `replay` | Verdict (PROMOTE/REJECT chip > run box with when the test was done), the pulsing "Mission" button with an easy-words explainer, proof ladder (Evidence opens the JSON on the page), training, limits, stored (recorded) runs | `/api/replay`, `/api/runs`, `/api/runs/{id}` (stage times), `/api/runs/{id}/report`, `/api/evidence` |
+| `/mission` | `replay` | Verdict (PROMOTE/REJECT chip > run box with when the test was done), the pulsing "Mission" button with an easy-words explainer, an "Open the evidence" button (the threshold chart is gone), proof ladder (Evidence opens the JSON on the page), training (the loss chart plus a green DATA menu; train and validation loss open a short definition), limits, "Try it" (the demo dry run opens in a dialog on the page, reusing the Live screen), stored (recorded) runs | `/api/replay`, `/api/runs` (POST for the demo), `/api/runs/{id}` (stage times, demo), `/api/runs/{id}/report`, `/api/evidence` |
 | `/how-it-works` | `howitworks` | The method as one diagram (the replay screen's `Pipeline`); no numbers, no run data | none |
 | `/runs/:id` | `live` | Live run: stage timeline, spend, ledger, sandbox, verifier, event log, heartbeat (SSE) | `/api/runs/{id}`, `/api/runs/{id}/events`, `/api/runs/{id}/health` |
 | `/runs/:id/tree` | `tree` | Experiment tree drawn from real sandbox-branch lineage, pan/zoom | `/api/runs/{id}/tree`, `/experiments` |

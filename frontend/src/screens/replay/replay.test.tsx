@@ -23,7 +23,7 @@ describe("Mission: stored runs", () => {
     expect(screen.getByText("Experiment tree").getAttribute("href")).toBe("/runs/r1/tree");
     expect(screen.getByText("Watch run (no report yet)").getAttribute("href")).toBe("/runs/r2");
   });
-  it("each card is a list item with the run id, the label badge, the decision and the date exactly as the payload gave them", async () => {
+  it("each card is a list item with the run id, the label badge and the decision, and no created time (the run box says when)", async () => {
     const at = "2026-02-03T04:05:06Z";
     stub([{ ...run, created_at: at }, { ...run, run_id: "r2", dry_run: false, recorded: true, recorded_at: "2026-01-02", decision: "PROMOTE", created_at: at }]);
     const { container } = view();
@@ -34,17 +34,16 @@ describe("Mission: stored runs", () => {
     expect(first.querySelector("h3")!.textContent).toBe("r1");
     expect([...first.querySelectorAll(".badge")].map((b) => b.textContent)).toEqual(["dry run", "complete", "REJECT"]);
     expect([...second.querySelectorAll(".badge")].map((b) => b.textContent)).toEqual(["recorded", "complete", "PROMOTE"]);
-    const t = first.querySelector("time")!;
-    expect(t.textContent).toBe(at);
-    expect(t.getAttribute("datetime")).toBe(at);
+    expect(container.querySelector(".bundles time")).toBeNull();
+    expect(container.querySelector(".bundles")!.textContent).not.toMatch(/Created/);
+    expect(container.querySelector(".bundles")!.textContent).not.toContain(at);
     expect(container.querySelector(".bundles")).not.toBeNull();
   });
-  it("a card whose payload has no date or decision says so in words, and shows no decision badge it was not given", async () => {
+  it("a card whose payload has no decision shows no decision badge it was not given", async () => {
     stub([{ ...run, created_at: null, decision: null, status: "running" }]);
     const { container } = view();
     await waitFor(() => screen.getByText("r1"));
     const item = container.querySelector<HTMLElement>(".bundles > li")!;
-    expect(item.textContent).toContain("not measured");
     expect(item.querySelector("time")).toBeNull();
     expect([...item.querySelectorAll(".badge")].map((b) => b.textContent)).toEqual(["dry run", "running"]);
     expect(item.textContent).not.toContain("PROMOTE");

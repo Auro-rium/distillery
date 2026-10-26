@@ -3,7 +3,6 @@
 // run's /api/runs/:id/report, or /api/evidence, formatted by api/format.ts.
 import { Link } from "react-router-dom";
 import { api } from "../../api/client";
-import { NOT_MEASURED } from "../../api/format";
 import type { RunSummary } from "../../api/types";
 import { pickFeatured } from "../../api/useFeaturedRun";
 import { ApiErrorState, Badge, Card, EmptyState, LabelBanner, Spinner } from "../../components";
@@ -30,7 +29,7 @@ function LabelBanners({ runs, skip }: { runs: RunSummary[]; skip: string | null 
   );
 }
 
-/** Label badge, status, decision and date: each only from the payload; the date is shown as the API wrote it. */
+/** Label badge, status and decision: each only from the payload. */
 export function Bundle({ b }: { b: RunSummary }) {
   const id = encodeURIComponent(b.run_id);
   const done = b.status === "complete";
@@ -44,9 +43,6 @@ export function Bundle({ b }: { b: RunSummary }) {
           {b.decision && <Badge tone={b.decision === "PROMOTE" ? "ok" : "bad"}>{b.decision}</Badge>}
         </div>
       </div>
-      <p className="muted bundle-date">
-        Created {b.created_at ? <time dateTime={b.created_at}>{b.created_at}</time> : NOT_MEASURED}
-      </p>
       <div className="bundle-actions">
         {done ? (
           <>

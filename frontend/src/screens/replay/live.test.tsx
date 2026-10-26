@@ -1,6 +1,7 @@
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { contract } from "../../testutil/contract";
 import Replay from ".";
 
 const base = { dry_run: true, recorded: false, recorded_at: null, status: "complete", decision: "PROMOTE", created_at: "2026-01-01T00:00:00Z" };
@@ -13,6 +14,10 @@ function stub(runs: () => Response, post: () => Promise<Response> | Response = (
   const fn = vi.fn((url: string, init?: RequestInit) => {
     const u = String(url);
     if (isPost(init)) return Promise.resolve(post());
+    // the demo dialog shows the Live screen for the new run
+    if (/\/runs\/demo-1\/experiments$/.test(u)) return Promise.resolve(j({ run_id: "demo-1", source: "store", experiments: [] }));
+    if (/\/runs\/demo-1\/report$/.test(u)) return Promise.resolve(j(contract.report));
+    if (/\/runs\/demo-1$/.test(u)) return Promise.resolve(j({ ...contract.run, run_id: "demo-1", dry_run: true, status: "complete" }));
     return Promise.resolve(u.endsWith("/runs") ? runs() : j([]));
   });
   vi.stubGlobal("fetch", fn);
@@ -78,7 +83,7 @@ describe("live runs section", () => {
 });
 
 describe("demo run button", () => {
-  it("creates a dry tiny sql run, is disabled while in flight, and navigates to it", async () => {
+  it("creates a dry tiny sql run, is disabled while in flight, and shows the run in a dialog on the same page", async () => {
     let release: (r: Response) => void = () => undefined;
     const fn = stub(() => j([]), () => new Promise<Response>((r) => { release = r; }));
     view();
@@ -89,7 +94,14 @@ describe("demo run button", () => {
     expect(String(post[0])).toMatch(/\/api\/runs$/);
     expect(JSON.parse(String(post[1]!.body))).toEqual({ pack: "sql", scale: "tiny", dry_run: true });
     await act(async () => { release(j({ run_id: "demo-1" }, 202)); });
-    await waitFor(() => screen.getByText("run page"));
+    const dlg = await screen.findByRole("dialog", { name: "Demo run" });
+    // the Live screen for that run, with its DRY RUN label, inside the dialog; the page did not navigate
+    expect(await within(dlg).findByText("demo-1")).toBeTruthy();
+    await waitFor(() => expect(within(dlg).getByText("DRY RUN — fake models, numbers are NOT results")).toBeTruthy());
+    expect(screen.queryByText("run page")).toBeNull();
+    fireEvent.keyDown(dlg, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(demoBtn().disabled).toBe(false);
   });
   it.each([[401, "unauthorized"], [403, "forbidden"], [429, "rate_limited"]])("shows the server's message for HTTP %i", async (status, code) => {
     stub(() => j([]), () => j({ error: code, message: `server says no ${status}` }, status));
