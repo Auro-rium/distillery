@@ -414,13 +414,16 @@ mark.diff-gold { background: var(--bad-bg); box-shadow: 0 0 0 1px var(--bad-bg);
 .kbd-list dt, .kbd-list dd { margin: 0; }
 
 /* ---------- run shell: header + tabs shared by the run screens ---------- */
-.run-sticky { position: sticky; top: var(--header-h); z-index: var(--z-run); background: var(--glass); backdrop-filter: blur(12px) saturate(1.2); -webkit-backdrop-filter: blur(12px) saturate(1.2); border-bottom: 1px solid var(--line); margin: 0 calc(-1 * var(--gutter)) var(--space-4); padding: var(--space-3) var(--gutter) 0; }
+.run-sticky { position: sticky; top: var(--header-h); z-index: var(--z-run); background: color-mix(in srgb, var(--bg) 97%, transparent); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border-bottom: 1px solid var(--line); margin: 0 calc(-1 * var(--gutter)); padding: var(--space-3) var(--gutter) var(--space-2); }
 .run-head-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); min-height: 2.5rem; }
 .run-title { margin: 0; font-size: var(--step-2); }
 .run-status, .run-verdict { display: inline-flex; min-width: 5.5rem; min-height: 1.6rem; align-items: center; }
 .run-label { min-height: 3rem; margin-top: var(--space-2); }
 .run-label .label-banner { border: 1px solid currentColor; border-radius: var(--radius); }
-.run-tabbar { overflow-x: auto; scrollbar-width: none; }
+/* the tabs are not sticky: they sit under the sticky header and scroll away; a white rule, inset from the edges, separates the header box from the sections below */
+.run-tabbar { overflow-x: auto; scrollbar-width: none; margin: 0 calc(-1 * var(--gutter)); padding: 0 var(--gutter); background: var(--glass); border-bottom: 1px solid var(--line); }
+.run-sep { --rule: rgba(255, 255, 255, .85); height: 1px; margin: var(--space-5) 6% var(--space-5); background: var(--rule); }
+:root[data-theme="light"] .run-sep { --rule: rgba(14, 23, 20, .55); }
 .run-tabbar::-webkit-scrollbar { display: none; }
 .tabs-list { display: flex; gap: var(--space-1); min-width: max-content; }
 .tabs-trigger { position: relative; display: inline-flex; align-items: center; min-height: var(--control-h); padding: 6px 16px; color: var(--ink-2); font-weight: 500; text-decoration: none; white-space: nowrap; overflow-wrap: normal; border-radius: var(--radius) var(--radius) 0 0; transition: background-color var(--dur-1), color var(--dur-1); }
@@ -571,7 +574,6 @@ button.proof-link:hover { filter: brightness(1.2); }
   .kbd-list > div { grid-template-columns: 1fr; gap: 2px; }
   .run-sticky { position: static; }
   .run-label { min-height: 4rem; }
-  .run-tabbar { position: sticky; top: var(--header-h); background: var(--bg); z-index: var(--z-run); margin: 0 calc(-1 * var(--gutter)); padding: 0 var(--gutter); }
 }
 @media (max-width: 480px) {
   main.container { padding-top: 20px; }

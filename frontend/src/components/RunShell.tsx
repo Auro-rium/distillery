@@ -8,7 +8,7 @@ import { Badge, Tabs, TabsContent, TabsList, TabsTrigger, type Tone } from "../u
 export type RunTab = "live" | "report" | "tree";
 
 const TABS: { value: RunTab; label: string; path: string }[] = [
-  { value: "live", label: "Run", path: "" },
+  { value: "live", label: "Live run", path: "" },
   { value: "report", label: "Report", path: "/report" },
   { value: "tree", label: "Tree", path: "/tree" },
 ];
@@ -34,7 +34,7 @@ function useVerdict(runId: string, complete: boolean): Decision | null {
 }
 
 /**
- * Header and tab bar shared by the run screens, one sticky block below the site header. Every header slot is
+ * Header and tab bar shared by the run screens. Only the header (run, status, label) stays in view while scrolling; the tab bar scrolls away. Every header slot is
  * always rendered (empty while `run` is still loading) so nothing moves when the data arrives; the
  * label slot then holds the LabelBanner built from the payload's dry_run / recorded flags, and says
  * "Label unknown" only when a loaded payload lacks them.
@@ -60,8 +60,9 @@ export function RunShell(props: { runId: string; tab: RunTab; run?: RunDetail; c
             {run ? <LabelBanner dry_run={run.dry_run} recorded={run.recorded} recorded_at={run.recorded_at} status={run.status} /> : null}
           </div>
         </div>
-        <div className="run-tabbar">
-          <TabsList aria-label="Run sections">
+      </header>
+      <div className="run-tabbar">
+        <TabsList aria-label="Run sections">
             {TABS.map((t) => (
               <TabsTrigger
                 key={t.value}
@@ -73,9 +74,9 @@ export function RunShell(props: { runId: string; tab: RunTab; run?: RunDetail; c
                 <Link to={`${base}${t.path}`} aria-current={t.value === tab ? "page" : undefined}>{t.label}</Link>
               </TabsTrigger>
             ))}
-          </TabsList>
-        </div>
-      </header>
+        </TabsList>
+      </div>
+      <div className="run-sep" aria-hidden="true" />
       <TabsContent value={tab} className="run-panel">{props.children}</TabsContent>
     </Tabs>
   );

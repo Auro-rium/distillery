@@ -95,16 +95,16 @@ describe("featured-run nav", () => {
   const rec = (run_id: string, at: string, over: Record<string, unknown> = {}) => ({
     run_id, dry_run: false, recorded: true, recorded_at: at, status: "complete", decision: "PROMOTE", created_at: null, ...over,
   });
-  it("adds Evidence and Live for the newest recorded non-dry PROMOTE run, in nav order", async () => {
+  it("adds Evidence (and no separate Live item) for the newest recorded non-dry PROMOTE run, in nav order", async () => {
     stubFetch(contractFetch({ replay: [rec("older-promote", "2026-01-01T00:00:00Z"), rec("new-promote", "2026-02-01T00:00:00Z"), rec("newest-reject", "2026-03-01T00:00:00Z", { decision: "REJECT" })] }));
     renderApp("/");
     const nav = screen.getByRole("navigation", { name: "Main" });
     const ev = await within(nav).findByRole("link", { name: "Evidence" });
     expect(ev.getAttribute("href")).toBe("/runs/new-promote/report");
-    expect(within(nav).getByRole("link", { name: "Live" }).getAttribute("href")).toBe("/runs/new-promote");
-    expect(within(nav).getAllByRole("link").map((l) => l.textContent)).toEqual(["Overview", "How it works", "Mission", "Evidence", "Live", "Receipts", "New run"]);
+    expect(within(nav).queryByRole("link", { name: "Live" })).toBeNull(); // the run page is the Live run tab on the Evidence page
+    expect(within(nav).getAllByRole("link").map((l) => l.textContent)).toEqual(["Overview", "How it works", "Mission", "Evidence", "Receipts", "New run"]);
   });
-  it("leaves Evidence and Live out when the replay list fails", async () => {
+  it("leaves Evidence out when the replay list fails", async () => {
     stubFetch((u) => (u.endsWith("/replay") ? new Response("{}", { status: 500 }) : contractFetch()(u)));
     renderApp("/");
     await waitFor(() => expect(screen.getByRole("link", { name: "Mission" })).toBeTruthy());

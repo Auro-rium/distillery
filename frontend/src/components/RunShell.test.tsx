@@ -73,9 +73,29 @@ describe("RunShell while the run is still loading", () => {
     expect(slot(container, "id")!.textContent).toBe(id);
     expect(slot(container, "status")!.textContent).toBe("");
     expect(screen.queryByRole("status")).toBeNull();
-    expect(container.textContent).not.toMatch(/DRY RUN|Label unknown|Live run|Recorded run/);
+    // "Live run" is also the first tab's name, so the label is checked in its own slot
+    expect(slot(container, "label")!.textContent).toBe("");
+    expect(container.textContent).not.toMatch(/DRY RUN|Label unknown|Recorded run/);
     expect(slot(container, "label")!.getAttribute("data-state")).toBe("pending");
     expect(within(container).getByText("panel body")).toBeTruthy();
+  });
+});
+
+describe("RunShell sticky header", () => {
+  it("only the header (run, status, label) is sticky; the tab bar is outside it and a separator follows the tabs", () => {
+    const { container } = shell();
+    const sticky = container.querySelector(".run-sticky")!;
+    expect(sticky.querySelector(".run-head")).not.toBeNull();
+    expect(sticky.querySelector(".run-tabbar")).toBeNull();
+    expect(sticky.querySelector("[role=tablist]")).toBeNull();
+    const tabbar = container.querySelector(".run-tabbar")!;
+    expect(tabbar.querySelector("[role=tablist]")).not.toBeNull();
+    const sep = container.querySelector(".run-sep")!;
+    expect(sep.getAttribute("aria-hidden")).toBe("true");
+    // header, then tabs, then the separator, then the panel
+    expect(sticky.compareDocumentPosition(tabbar) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(tabbar.compareDocumentPosition(sep) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(sep.compareDocumentPosition(container.querySelector(".run-panel")!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 });
 
@@ -83,7 +103,7 @@ describe("RunShell tabs", () => {
   it("are links to the run, report and tree routes, with the current one selected", () => {
     shell({ tab: "report" }, `/runs/${id}/report`);
     const tabs = screen.getAllByRole("tab");
-    expect(tabs.map((t) => t.textContent)).toEqual(["Run", "Report", "Tree"]);
+    expect(tabs.map((t) => t.textContent)).toEqual(["Live run", "Report", "Tree"]);
     expect(tabs.map((t) => t.getAttribute("href"))).toEqual([`/runs/${id}`, `/runs/${id}/report`, `/runs/${id}/tree`]);
     expect(tabs.map((t) => t.getAttribute("aria-selected"))).toEqual(["false", "true", "false"]);
     expect(tabs.map((t) => t.getAttribute("aria-current"))).toEqual([null, "page", null]);

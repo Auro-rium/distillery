@@ -18,7 +18,7 @@ describe("Live screen structure", () => {
     const h1 = screen.getAllByRole("heading", { level: 1 });
     expect(h1).toHaveLength(1);
     expect(h1[0].textContent).toContain(rid);
-    expect(screen.getByRole("tab", { name: "Run" }).getAttribute("aria-selected")).toBe("true");
+    expect(screen.getByRole("tab", { name: "Live run" }).getAttribute("aria-selected")).toBe("true");
     expect(screen.getAllByRole("status").map((e) => e.textContent)).toContain("DRY RUN — fake models, numbers are NOT results");
   });
 
