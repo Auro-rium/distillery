@@ -44,12 +44,12 @@
 .m-cta:hover .m-cta-arrow { transform: translateX(5px); }
 
 /* DATA: a green box that opens downward into the fine-tune record */
-.m-data { position: relative; min-width: 0; display: flex; align-items: flex-start; flex-wrap: wrap; gap: var(--space-3); }
+.m-data { position: relative; min-width: 0; }
 .m-data-btn.m-data-btn { cursor: pointer; gap: 10px; font-size: .9rem; letter-spacing: .14em; }
 .m-data-btn:hover { filter: brightness(1.18); }
 .m-data-btn:focus-visible { outline: 2px solid var(--ok); outline-offset: 3px; }
 .m-data-btn[aria-expanded="true"] .m-caret { transform: rotate(180deg); }
-.m-data-list { list-style: none; margin: 0; padding: var(--space-2); width: min(100%, 15rem); flex: 0 1 15rem; display: grid; gap: 2px; background: var(--surface); border: 1px solid var(--ok); border-radius: var(--radius); box-shadow: var(--shadow-2); }
+.m-data-list { position: absolute; z-index: 6; top: 0; left: calc(100% + 12px); list-style: none; margin: 0; padding: var(--space-2); width: 15rem; display: grid; gap: 2px; background: var(--surface); border: 1px solid var(--ok); border-radius: var(--radius); box-shadow: var(--shadow-2); }
 .m-data-list[hidden] { display: none; }
 .m-data-item { position: relative; }
 .m-data-row { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-3); width: 100%; padding: 7px 10px; border-radius: var(--radius-sm); font-size: .88rem; text-align: left; overflow-wrap: anywhere; color: var(--ink); }
@@ -71,3 +71,18 @@ button.m-data-row:focus-visible { outline: 2px solid var(--ok); outline-offset: 
 
 /* the Stored runs / live runs titles: as large as the other section titles, and heavier */
 .mission .m-lists h2 { font-size: var(--step-2); -webkit-text-stroke: .7px currentColor; letter-spacing: -.02em; }
+
+/* the Training heading line: Training ──► DATA. The arrow is a green line with a moving glint, "loading" toward the button */
+.m-title-row { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-3); }
+.m-link-arrow { position: relative; display: block; flex: none; width: clamp(5rem, 14vw, 9rem); height: 2px; border-radius: 2px; background: color-mix(in srgb, var(--ok) 55%, transparent); overflow: visible; }
+.m-link-arrow::after { content: ""; position: absolute; right: -1px; top: 50%; width: 9px; height: 9px; border-top: 2px solid var(--ok); border-right: 2px solid var(--ok); transform: translateY(-50%) rotate(45deg); }
+.m-link-arrow::before { content: ""; position: absolute; left: 0; top: -1px; height: 4px; width: 38%; border-radius: 4px; background: linear-gradient(90deg, transparent, var(--ok), transparent); box-shadow: 0 0 8px var(--ok); opacity: 0; }
+@media (prefers-reduced-motion: no-preference) {
+  .m-link-arrow::before { opacity: 1; animation: m-load 1.4s ease-in-out infinite; }
+}
+@keyframes m-load { from { transform: translateX(-30%); } to { transform: translateX(180%); } }
+@media (max-width: 720px) {
+  .m-data-list { top: calc(100% + 8px); left: 0; }
+  .m-data-pop.right { position: static; transform: none; width: auto; margin: 4px 6px 6px; }
+  .m-data-pop.right::before { display: none; }
+}

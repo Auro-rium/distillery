@@ -80,7 +80,7 @@
 @media (min-width: 720px) { .m-proofs { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
 .m-training, .m-limits { display: grid; gap: var(--space-5); }
-.m-train-side, .m-limit-chart, .m-cost { display: grid; gap: var(--space-3); align-content: start; min-width: 0; }
+.m-limit-chart, .m-cost { display: grid; gap: var(--space-3); align-content: start; min-width: 0; }
 @media (min-width: 900px) {
   .m-training { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
   .m-limits { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); }

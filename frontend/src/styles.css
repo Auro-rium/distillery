@@ -422,6 +422,10 @@ mark.diff-gold { background: var(--bad-bg); box-shadow: 0 0 0 1px var(--bad-bg);
 .run-label .label-banner { border: 1px solid currentColor; border-radius: var(--radius); }
 /* the tabs are not sticky: they sit under the sticky header and scroll away; a white rule, inset from the edges, separates the header box from the sections below */
 .run-tabbar { overflow-x: auto; scrollbar-width: none; margin: 0 calc(-1 * var(--gutter)); padding: 0 var(--gutter); background: var(--glass); border-bottom: 1px solid var(--line); }
+.run-tabbar .tabs-list { display: grid; grid-template-columns: 1fr auto 1fr; width: 100%; min-width: 0; gap: var(--space-3); }
+.run-tabbar .tabs-list > :nth-child(1) { justify-self: start; }
+.run-tabbar .tabs-list > :nth-child(2) { justify-self: center; }
+.run-tabbar .tabs-list > :nth-child(3) { justify-self: end; }
 .run-sep { --rule: rgba(255, 255, 255, .85); height: 1px; margin: var(--space-5) 6% var(--space-5); background: var(--rule); }
 :root[data-theme="light"] .run-sep { --rule: rgba(14, 23, 20, .55); }
 .run-tabbar::-webkit-scrollbar { display: none; }

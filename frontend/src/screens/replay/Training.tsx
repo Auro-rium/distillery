@@ -6,11 +6,11 @@ import { candidateDevAcc, finetuneOf, fmtSig, gateOf, hpChips } from "./mission"
 const TRAIN_LOSS_HELP = "How wrong the model is on the practice questions it learns from. Lower means it is fitting them better.";
 const VALID_LOSS_HELP = "How wrong it is on questions kept out of training. If it rises while train loss falls, the model may be memorising.";
 
-/** Fine-tune record of the featured run: the loss curve, and everything else recorded in a DATA menu. */
-export function Training({ report }: { report: unknown }) {
+/** The DATA menu for the Training heading line: everything recorded for the fine-tune, or nothing when there is no record. */
+export function TrainingData({ report }: { report: unknown }) {
   const f = finetuneOf(report);
   const g = gateOf(report);
-  if (!f) return <p className="muted">This run&rsquo;s report has no fine-tune record (it was recorded before that field existed).</p>;
+  if (!f) return null;
   const points = Array.isArray(f.loss_curve) ? f.loss_curve : [];
   const last = points.length > 0 ? points[points.length - 1] : null;
   const rows: DataRow[] = [
@@ -23,6 +23,14 @@ export function Training({ report }: { report: unknown }) {
     { key: "dev_acc", label: "dev accuracy", value: <span className="num">{fmtPercent(candidateDevAcc(report), 1)}</span> },
     { key: "heldout_acc", label: "sealed held-out accuracy", value: <span className="num">{fmtPercent(g?.student_acc, 1)}</span> },
   ];
+  return <DataMenu rows={rows} />;
+}
+
+/** Fine-tune record of the featured run: the loss curve. The rest of the record is in the DATA menu beside the heading. */
+export function Training({ report }: { report: unknown }) {
+  const f = finetuneOf(report);
+  if (!f) return <p className="muted">This run&rsquo;s report has no fine-tune record (it was recorded before that field existed).</p>;
+  const points = Array.isArray(f.loss_curve) ? f.loss_curve : [];
   return (
     <div className="m-training">
       <LossChart
@@ -30,9 +38,6 @@ export function Training({ report }: { report: unknown }) {
         title="Train and validation loss by checkpoint"
         caption="Loss at each recorded checkpoint of the first fine-tune round, no smoothing."
       />
-      <div className="m-train-side">
-        <DataMenu rows={rows} />
-      </div>
     </div>
   );
 }

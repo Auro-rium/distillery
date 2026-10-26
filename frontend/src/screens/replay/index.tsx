@@ -14,7 +14,7 @@ import { Hero } from "./Hero";
 import { Limits } from "./Limits";
 import { LiveRuns } from "./LiveRuns";
 import { ProofLadder } from "./ProofLadder";
-import { Training } from "./Training";
+import { Training, TrainingData } from "./Training";
 import "./replay.css";
 
 /** One banner per distinct label among the listed runs, except the featured run's (the hero shows that one). */
@@ -66,18 +66,28 @@ function ReportSection(props: {
   featured: RunSummary | null;
   report: Async<unknown>;
   children: (report: unknown) => JSX.Element;
+  /** A control for the heading line (e.g. the DATA menu), shown once the report has loaded and joined to the title by an arrow. */
+  head?: (report: unknown) => JSX.Element | null;
 }) {
   const { replay, featured, report } = props;
   let body: JSX.Element;
+  let head: JSX.Element | null = null;
   if (replay.state === "error") body = <p className="muted">Unavailable: the run list did not load (the error is shown above).</p>;
   else if (replay.state === "loading" || (featured && report.state === "loading")) body = <Spinner label={`Loading ${props.title.toLowerCase()}`} lines={2} />;
   else if (!featured) body = <p className="muted">Shown once a recorded run is available to feature.</p>;
   else if (report.state === "error") body = <p className="muted">Unavailable: the featured run&rsquo;s report did not load (the error is shown above).</p>;
-  else body = props.children(report.state === "ok" ? report.data : null);
+  else {
+    body = props.children(report.state === "ok" ? report.data : null);
+    if (props.head && report.state === "ok") head = props.head(report.data);
+  }
   return (
     <section className="m-section" aria-labelledby={props.id}>
       <div className="m-section-head">
-        <h2 id={props.id}>{props.title}</h2>
+        <div className="m-title-row">
+          <h2 id={props.id}>{props.title}</h2>
+          {head && <span className="m-link-arrow" aria-hidden="true" />}
+          {head}
+        </div>
         <p className="muted">{props.lead}</p>
       </div>
       {body}
@@ -106,7 +116,7 @@ export default function Mission() {
 
       <ProofLadder res={evidence} onRetry={retryEvidence} />
 
-      <ReportSection id="training-h" title="Training" lead="What the fine-tune recorded for the featured run." replay={replay} featured={featured} report={report}>
+      <ReportSection id="training-h" title="Training" lead="What the fine-tune recorded for the featured run." replay={replay} featured={featured} report={report} head={(r) => <TrainingData report={r} />}>
         {(r) => <Training report={r} />}
       </ReportSection>
 

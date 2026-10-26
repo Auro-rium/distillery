@@ -155,6 +155,21 @@ describe("Mission sections", () => {
     expect(text).toContain(`validation loss ${fmtSig(last.valid_loss)}`);
   });
 
+  it("training: the DATA button is on the heading line, joined to the title by an arrow, and not in the body", async () => {
+    serve();
+    renderApp("/mission");
+    await ready();
+    const s = section("Training");
+    const row = s.querySelector(".m-title-row")!;
+    expect([...row.children].map((c) => c.className.split(" ")[0])).toEqual(["", "m-link-arrow", "m-data"]);
+    expect(row.querySelector("h2")!.textContent).toBe("Training");
+    expect(row.querySelector(".m-link-arrow")!.getAttribute("aria-hidden")).toBe("true");
+    expect(within(row as HTMLElement).getByRole("button", { name: /^Data/ })).toBeTruthy();
+    expect(s.querySelector(".m-training .m-data")).toBeNull();
+    // the other sections have no such control, so no arrow either
+    expect(section("Limits & cost").querySelector(".m-link-arrow")).toBeNull();
+  });
+
   it("training: clicking train loss or validation loss opens a short definition beside it, and clicking again closes it", async () => {
     serve();
     renderApp("/mission");
