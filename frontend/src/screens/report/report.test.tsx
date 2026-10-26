@@ -14,17 +14,36 @@ beforeEach(() => stubFetch(() => json([])));
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
 describe("summary", () => {
-  it("shows the decision, the label, n and the thresholds the gate used, all from the payload", () => {
+  it("shows the decision and the label up front; n, the ratio lower bound and McNemar p sit behind one Gate numbers button", () => {
     view(base);
     const s = screen.getByRole("region", { name: "Gate decision" });
     expect(within(s).getByText(base.decision)).toBeTruthy();
     expect(within(s).getByText("dry run")).toBeTruthy();
     const g = base.evaluation.gate;
+    const btn = within(s).getByRole("button", { name: /Gate numbers/ });
+    expect(btn.getAttribute("aria-expanded")).toBe("false");
+    expect(s.textContent).not.toContain(`n=${g.n}`);
+    fireEvent.click(btn);
+    expect(btn.getAttribute("aria-expanded")).toBe("true");
     expect(s.textContent).toContain(`n=${g.n}`);
     expect(s.textContent).toContain(g.ratio_lo.toFixed(3));
     expect(s.textContent).toContain(g.thresholds.ratio_lower_bound_min.toFixed(2));
     expect(s.textContent).toContain(g.thresholds.mcnemar_alpha.toFixed(2));
     expect(s.textContent).toContain(g.mcnemar_p.toFixed(4));
+    fireEvent.click(btn);
+    expect(s.textContent).not.toContain(`n=${g.n}`);
+  });
+
+  it("Gate numbers and Gate reasons are two separate buttons that open independently", () => {
+    view(base);
+    const s = screen.getByRole("region", { name: "Gate decision" });
+    fireEvent.click(within(s).getByRole("button", { name: /Gate reasons/ }));
+    expect(within(s).getByRole("button", { name: /Gate numbers/ }).getAttribute("aria-expanded")).toBe("false");
+    expect(s.textContent).toContain(base.decision_reasons[0]);
+    expect(s.textContent).not.toContain(`n=${base.evaluation.gate.n}`);
+    fireEvent.click(within(s).getByRole("button", { name: /Gate numbers/ }));
+    expect(s.textContent).toContain(base.decision_reasons[0]);
+    expect(s.textContent).toContain(`n=${base.evaluation.gate.n}`);
   });
 
   it("keeps the gate reasons collapsed until asked, then shows them verbatim", () => {
@@ -96,6 +115,7 @@ describe("accuracy", () => {
     expect(container.querySelector(".rp-gate .rp-stats")).toBeNull();
     expect(screen.queryByText("Bootstrap resamples")).toBeNull();
     expect(screen.queryByText("McNemar exact p")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /Gate numbers/ }));
     expect(container.querySelector(".rp-summary")!.textContent).toContain(`n=${base.evaluation.gate.n}`);
   });
 

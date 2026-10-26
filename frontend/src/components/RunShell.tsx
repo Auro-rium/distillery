@@ -1,7 +1,10 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api/client";
 import type { Decision, RunDetail } from "../api/types";
+import { useFeaturedRun } from "../api/useFeaturedRun";
+import { prefersReducedMotion } from "../motion/useReducedMotion";
+import { rememberTabOrigin, takeTabOrigin } from "../motion/tabOpen";
 import { LabelBanner } from ".";
 import { Badge, Tabs, TabsContent, TabsList, TabsTrigger, type Tone } from "../ui";
 
@@ -42,11 +45,38 @@ function useVerdict(runId: string, complete: boolean): Decision | null {
 export function RunShell(props: { runId: string; tab: RunTab; run?: RunDetail; children: ReactNode }) {
   const { runId, tab, run } = props;
   const verdict = useVerdict(runId, run?.status === "complete");
+  // "Latest" is the run the Evidence link points at: the newest recorded run (the one Mission features).
+  const { run: featured } = useFeaturedRun();
+  const latest = featured !== null && featured.run_id === runId;
   const base = `/runs/${encodeURIComponent(runId)}`;
+  const panel = useRef<HTMLDivElement>(null);
+  // Arriving from a tab click: the page grows out of that tab. Reads the click position once; nothing otherwise.
+  useLayoutEffect(() => {
+    const o = takeTabOrigin();
+    const el = panel.current;
+    if (!o || !el || prefersReducedMotion()) return;
+    const r = el.getBoundingClientRect();
+    el.style.setProperty("--ox", `${o.x - r.left}px`);
+    el.style.setProperty("--oy", `${o.y - r.top}px`);
+    // the first frame shows only a strip under the tab (its width, from the top of the page); it opens to the full page
+    el.style.setProperty("--cl", `${Math.max(0, o.left - r.left)}px`);
+    el.style.setProperty("--cr", `${Math.max(0, r.right - o.right)}px`);
+    el.style.setProperty("--cb", `${Math.max(0, r.height - 44)}px`);
+    el.dataset.opening = "true";
+    const clear = () => { delete el.dataset.opening; };
+    // animationend bubbles: only this animation's own end counts, not a child's (a child ending would cut the opening short)
+    const onEnd = (e: AnimationEvent) => { if (e.target === el && e.animationName === "run-open") clear(); };
+    el.addEventListener("animationend", onEnd);
+    const t = setTimeout(clear, 900);
+    return () => { clearTimeout(t); el.removeEventListener("animationend", onEnd); };
+  }, []);
   return (
     <Tabs value={tab} activationMode="manual" className="run-shell">
       <header className="run-sticky">
         <div className="run-head">
+          <div className="run-latest" data-slot="latest">
+            {latest ? <Badge tone="ok" size="lg" className="run-latest-tag">LATEST RUN</Badge> : null}
+          </div>
           <div className="run-head-row">
             <h1 className="run-title">Run <span className="mono" data-slot="id">{runId}</span></h1>
             <span className="run-status" data-slot="status">
@@ -71,13 +101,13 @@ export function RunShell(props: { runId: string; tab: RunTab; run?: RunDetail; c
                 // Only the mounted panel exists; the inactive tabs must not point at a panel that is not in the DOM.
                 aria-controls={t.value === tab ? undefined : (undefined as unknown as string)}
               >
-                <Link to={`${base}${t.path}`} aria-current={t.value === tab ? "page" : undefined}>{t.label}</Link>
+                <Link to={`${base}${t.path}`} aria-current={t.value === tab ? "page" : undefined} onClick={(e) => rememberTabOrigin(e.currentTarget)}>{t.label}</Link>
               </TabsTrigger>
             ))}
         </TabsList>
       </div>
-      <div className="run-sep" aria-hidden="true" />
-      <TabsContent value={tab} className="run-panel">{props.children}</TabsContent>
+      {/* The opening animation runs on an inner wrapper: Radix sets animation-duration: 0s on the panel itself when it mounts. */}
+      <TabsContent value={tab} className="run-panel"><div ref={panel} className="run-body">{props.children}</div></TabsContent>
     </Tabs>
   );
 }

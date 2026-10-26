@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { RunDetail } from "../api/types";
@@ -58,7 +58,8 @@ describe("RunShell header", () => {
     const running = shell({ run: { ...run, status: "running" } });
     await new Promise((r) => setTimeout(r, 20));
     expect(slot(running.container, "verdict")!.textContent).toBe("");
-    expect(f).not.toHaveBeenCalled();
+    // a run that is still going has no report to read (the run list is fetched for the Latest tag, nothing else)
+    expect(f.mock.calls.filter(([u]) => String(u).includes("/report"))).toHaveLength(0);
   });
 });
 
@@ -82,7 +83,7 @@ describe("RunShell while the run is still loading", () => {
 });
 
 describe("RunShell sticky header", () => {
-  it("only the header (run, status, label) is sticky; the tab bar is outside it and a separator follows the tabs", () => {
+  it("only the header (run, status, label) is sticky; the tab bar is outside it, and there is no white rule under the tabs", () => {
     const { container } = shell();
     const sticky = container.querySelector(".run-sticky")!;
     expect(sticky.querySelector(".run-head")).not.toBeNull();
@@ -90,12 +91,58 @@ describe("RunShell sticky header", () => {
     expect(sticky.querySelector("[role=tablist]")).toBeNull();
     const tabbar = container.querySelector(".run-tabbar")!;
     expect(tabbar.querySelector("[role=tablist]")).not.toBeNull();
-    const sep = container.querySelector(".run-sep")!;
-    expect(sep.getAttribute("aria-hidden")).toBe("true");
-    // header, then tabs, then the separator, then the panel
+    expect(container.querySelector(".run-sep")).toBeNull();
+    // header, then tabs, then the panel
     expect(sticky.compareDocumentPosition(tabbar) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(tabbar.compareDocumentPosition(sep) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(sep.compareDocumentPosition(container.querySelector(".run-panel")!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(tabbar.compareDocumentPosition(container.querySelector(".run-panel")!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+});
+
+describe("RunShell latest-run tag", () => {
+  const recorded = { ...contract.replay[0], run_id: id, dry_run: false, recorded: true, recorded_at: "2026-10-05T00:04:35Z", decision: "PROMOTE" };
+  it("shows LATEST RUN in capitals at the top for the run the Evidence link points at", async () => {
+    vi.stubGlobal("fetch", vi.fn(contractFetch({ replay: [recorded] })));
+    const { container } = shell();
+    await waitFor(() => expect(slot(container, "latest")!.textContent).toBe("LATEST RUN"));
+    // it is the first thing in the header, above the run title
+    const head = container.querySelector(".run-head")!;
+    expect(head.firstElementChild).toBe(slot(container, "latest"));
+  });
+  it("is not shown for any other run, and the slot is still there so nothing shifts", async () => {
+    vi.stubGlobal("fetch", vi.fn(contractFetch({ replay: [{ ...recorded, run_id: "some-newer-run" }] })));
+    const { container } = shell();
+    await new Promise((r) => setTimeout(r, 30));
+    expect(slot(container, "latest")).not.toBeNull();
+    expect(slot(container, "latest")!.textContent).toBe("");
+  });
+});
+
+describe("RunShell opens out of the clicked tab", () => {
+  const motionOk = () => vi.stubGlobal("matchMedia", (q: string) => ({ matches: false, media: q, addEventListener: () => undefined, removeEventListener: () => undefined }));
+  it("a page reached by a tab click grows out of that tab: origin set once, then cleared", () => {
+    motionOk();
+    const first = shell();
+    const tab = [...first.container.querySelectorAll<HTMLElement>(".run-tabbar a")].find((a) => a.textContent === "Report")!;
+    tab.getBoundingClientRect = () => ({ left: 100, top: 10, width: 60, height: 20, right: 160, bottom: 30 }) as DOMRect;
+    fireEvent.click(tab);
+    first.unmount();
+    const second = shell({}, `/runs/${id}/report`);
+    const panel = second.container.querySelector<HTMLElement>(".run-body")!;
+    expect(panel.dataset.opening).toBe("true");
+    expect(panel.style.getPropertyValue("--ox")).toMatch(/px$/);
+    // the opening window starts as a strip the width of the clicked tab, from the top of the page
+    for (const v of ["--oy", "--cl", "--cr", "--cb"]) expect(panel.style.getPropertyValue(v), v).toMatch(/px$/);
+    second.unmount();
+    // the origin was used once: a page opened any other way (typed URL, link elsewhere) does not animate
+    const third = shell();
+    expect(third.container.querySelector<HTMLElement>(".run-body")!.dataset.opening).toBeUndefined();
+  });
+  it("does not animate under reduced motion", () => {
+    vi.stubGlobal("matchMedia", (q: string) => ({ matches: q.includes("reduce"), media: q, addEventListener: () => undefined, removeEventListener: () => undefined }));
+    const first = shell();
+    fireEvent.click(first.container.querySelector<HTMLElement>(".run-tabbar a")!);
+    first.unmount();
+    expect(shell().container.querySelector<HTMLElement>(".run-body")!.dataset.opening).toBeUndefined();
   });
 });
 
