@@ -526,6 +526,14 @@ mark.diff-gold { background: var(--bad-bg); box-shadow: 0 0 0 1px var(--bad-bg);
 .proof-card.is-fail .proof-value { color: var(--bad); }
 .proof-detail { margin: 0; font-size: var(--step--1); }
 .proof-link { justify-self: start; font: 500 .78rem var(--font-mono); letter-spacing: .06em; text-transform: uppercase; }
+.proof-head .badge { margin-left: auto; }
+button.proof-link { background: none; border: 0; padding: 2px 0; cursor: pointer; color: var(--accent); text-decoration: underline; text-underline-offset: 3px; }
+button.proof-link:hover { filter: brightness(1.2); }
+/* the evidence viewer (a dialog on the Mission page) */
+.dialog-content.json-dialog { width: min(calc(100vw - 2 * var(--gutter)), 860px); }
+.json-view { margin: var(--space-3) 0 0; padding: var(--space-4); max-height: min(62vh, 560px); overflow: auto; background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--radius); font-size: .8rem; line-height: 1.55; white-space: pre; tab-size: 2; }
+.json-view code { font-size: inherit; }
+.json-foot { margin: var(--space-3) 0 0; font-size: var(--step--1); word-break: break-word; }
 
 /* stage rail */
 .stage-rail { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }

@@ -1,4 +1,4 @@
-import { cleanup, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { fmtInt, fmtPercent } from "../../api/format";
 import { contract, contractFetch, type Overrides } from "../../testutil/contract";
@@ -93,7 +93,11 @@ describe("Mission sections", () => {
       const p = proofs[i];
       expect(c.querySelector(".proof-title")!.textContent).toBe(p.title);
       expect(c.querySelector(".proof-value")!.textContent).toBe(fmtSig(p.headline.value));
-      expect(c.querySelector<HTMLAnchorElement>("a.proof-link")!.getAttribute("href")).toBe(p.evidence_url);
+      // Evidence opens on this page (a button), not another one (no link), and the internal id is not shown
+      expect(c.querySelector("button.proof-link")!.textContent).toMatch(/^Evidence/);
+      expect(c.querySelector("a.proof-link")).toBeNull();
+      expect(c.querySelector(".proof-rung")).toBeNull();
+      expect(c.textContent).not.toContain(p.id);
       expect(c.querySelector(".proof-head .badge")!.textContent).toBe(p.verdict);
       if (p.verdict === "PARTIAL") expect(c.classList.contains("is-partial")).toBe(true);
     });
@@ -101,6 +105,23 @@ describe("Mission sections", () => {
     const withSeries = proofs.findIndex((p) => (p.series ?? []).length > 0);
     expect(withSeries).toBeGreaterThanOrEqual(0);
     expect(cards[withSeries].querySelector(".spark svg")).not.toBeNull();
+  });
+
+  it("proof ladder: Evidence opens the record as JSON in a dialog on the same page, and closes again", async () => {
+    serve();
+    renderApp("/mission");
+    await waitFor(() => screen.getByRole("list", { name: "Proof ladder" }));
+    const p = evidence.proofs[0];
+    const receipt = evidence.receipts.find((r) => r.id === p.id)!;
+    fireEvent.click(section("Proof ladder").querySelector<HTMLButtonElement>(".proof-card button.proof-link")!);
+    const dlg = await screen.findByRole("dialog");
+    const view = within(dlg).getByLabelText("Evidence record (JSON)");
+    // the text is exactly the payload's proof entry and receipt, pretty-printed
+    expect(JSON.parse(view.textContent!)).toEqual({ proof: p, receipt });
+    expect(within(dlg).getByRole("link", { name: new RegExp(p.evidence_path) }).getAttribute("href")).toBe(p.evidence_url);
+    expect(window.location.pathname).toBe("/"); // the test router is in memory: nothing navigated away
+    fireEvent.keyDown(dlg, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
   });
 
   it("proof ladder: an API error is an error, while the hero still shows the verdict", async () => {
