@@ -3,7 +3,7 @@ import { useEffect, useRef } from "react";
 export interface Shortcuts {
   help: () => void;
   theme: () => void;
-  go: (target: "replay" | "new" | "playground") => void;
+  go: (target: "replay" | "new") => void;
 }
 
 const GO_WINDOW_MS = 1200;
@@ -12,7 +12,7 @@ const editable = (t: EventTarget | null): boolean => {
   return !!el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName));
 };
 
-/** Global keys: ? help, t theme, g then r / n / p to go somewhere. Ignored while typing or with modifiers. */
+/** Global keys: ? help, t theme, g then r / n to go somewhere. Ignored while typing or with modifiers. */
 export function useShortcuts(s: Shortcuts): void {
   const cb = useRef(s);
   cb.current = s;
@@ -23,7 +23,7 @@ export function useShortcuts(s: Shortcuts): void {
       const now = Date.now();
       if (armed && now - armed < GO_WINDOW_MS) {
         armed = 0;
-        const to = { r: "replay", n: "new", p: "playground" } as const;
+        const to = { r: "replay", n: "new" } as const;
         const k = e.key.toLowerCase();
         if (k in to) { e.preventDefault(); cb.current.go(to[k as keyof typeof to]); return; }
       }

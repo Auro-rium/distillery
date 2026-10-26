@@ -48,9 +48,9 @@ describe("focus and title on route change", () => {
     await waitFor(() => expect(document.activeElement).toBe(document.querySelector("main")));
     expect(document.title).toMatch(/^New run/);
     expect(document.title).toMatch(/Distillery$/);
-    fireEvent.click(screen.getByRole("link", { name: "Acme analyst" }));
-    await screen.findByRole("heading", { name: "Acme analyst" });
-    expect(document.title).toMatch(/^Acme analyst/);
+    fireEvent.click(screen.getByRole("link", { name: "Receipts" }));
+    await screen.findByRole("heading", { name: "Receipts" });
+    expect(document.title).toMatch(/^Receipts/);
   });
   it("announces the new page politely without adding a status role", async () => {
     renderApp("/");
@@ -70,7 +70,7 @@ describe("phone menu", () => {
     fireEvent.click(btn);
     const dlg = await screen.findByRole("dialog", { name: "Menu" }); // dialog code is lazy-loaded
     // The contract replay list holds only a dry run, so no featured run: Evidence and Live are left out.
-    expect(within(dlg).getAllByRole("link").map((l) => l.textContent)).toEqual(["Overview", "Mission", "Acme analyst", "Receipts", "New run", "GitHub"]);
+    expect(within(dlg).getAllByRole("link").map((l) => l.textContent)).toEqual(["Overview", "How it works", "Mission", "Receipts", "New run", "GitHub"]);
     expect(within(dlg).getByRole("link", { name: "Overview" }).getAttribute("aria-current")).toBe("page");
     fireEvent.click(within(dlg).getByRole("link", { name: "New run" }));
     await screen.findByRole("heading", { name: "New run" });
@@ -95,16 +95,16 @@ describe("featured-run nav", () => {
   const rec = (run_id: string, at: string, over: Record<string, unknown> = {}) => ({
     run_id, dry_run: false, recorded: true, recorded_at: at, status: "complete", decision: "PROMOTE", created_at: null, ...over,
   });
-  it("adds Evidence and Live for the newest recorded non-dry PROMOTE run, in nav order", async () => {
+  it("adds Evidence (and no separate Live item) for the newest recorded non-dry PROMOTE run, in nav order", async () => {
     stubFetch(contractFetch({ replay: [rec("older-promote", "2026-01-01T00:00:00Z"), rec("new-promote", "2026-02-01T00:00:00Z"), rec("newest-reject", "2026-03-01T00:00:00Z", { decision: "REJECT" })] }));
     renderApp("/");
     const nav = screen.getByRole("navigation", { name: "Main" });
     const ev = await within(nav).findByRole("link", { name: "Evidence" });
     expect(ev.getAttribute("href")).toBe("/runs/new-promote/report");
-    expect(within(nav).getByRole("link", { name: "Live" }).getAttribute("href")).toBe("/runs/new-promote");
-    expect(within(nav).getAllByRole("link").map((l) => l.textContent)).toEqual(["Overview", "Mission", "Evidence", "Live", "Acme analyst", "Receipts", "New run"]);
+    expect(within(nav).queryByRole("link", { name: "Live" })).toBeNull(); // the run page is the Live run tab on the Evidence page
+    expect(within(nav).getAllByRole("link").map((l) => l.textContent)).toEqual(["Overview", "How it works", "Mission", "Evidence", "Receipts", "New run"]);
   });
-  it("leaves Evidence and Live out when the replay list fails", async () => {
+  it("leaves Evidence out when the replay list fails", async () => {
     stubFetch((u) => (u.endsWith("/replay") ? new Response("{}", { status: 500 }) : contractFetch()(u)));
     renderApp("/");
     await waitFor(() => expect(screen.getByRole("link", { name: "Mission" })).toBeTruthy());

@@ -42,6 +42,45 @@ describe("receipts: one row per claim from /api/evidence", () => {
   });
 });
 
+describe("the artifact opens on the page itself", () => {
+  it("clicking an artifact shows its record as JSON in a dialog (the proof entry and the receipt), with no new page", async () => {
+    await open();
+    const r = row("W4");
+    const proof = (EV.proofs as { id: string }[]).find((p) => p.id === "W4");
+    expect(proof).toBeTruthy(); // this claim has a proof entry, which travels with the receipt
+    fireEvent.click(card("W4").getByRole("button", { name: r.artifact }));
+    const dlg = await screen.findByRole("dialog");
+    const view = within(dlg).getByLabelText("Evidence record (JSON)");
+    expect(JSON.parse(view.textContent!)).toEqual({ proof, receipt: r });
+    // the repository file is only an opt-in link inside the dialog
+    expect(within(dlg).getByRole("link", { name: new RegExp(r.artifact.replace(/[.]/g, "\\.")) }).getAttribute("href")).toBe(r.permalink);
+    expect(window.location.pathname).toBe("/");
+    fireEvent.keyDown(dlg, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  });
+  it("a receipt with no proof entry shows just the receipt", async () => {
+    await open();
+    const r = row("W-G");
+    expect((EV.proofs as { id: string }[]).some((p) => p.id === "W-G")).toBe(false);
+    fireEvent.click(card("W-G").getByRole("button", { name: r.artifact }));
+    const dlg = await screen.findByRole("dialog");
+    expect(JSON.parse(within(dlg).getByLabelText("Evidence record (JSON)").textContent!)).toEqual({ receipt: r });
+  });
+  it("a pending claim has no artifact to open: its future path is plain text", async () => {
+    await open();
+    const pending = ROWS.find((r) => r.status === "pending")!;
+    const c = card(pending.id);
+    expect(c.queryByRole("button")).toBeNull();
+    expect(c.getByText(pending.artifact)).toBeTruthy();
+  });
+  it("the intro is one short plain sentence group, and the page has no external links in its cards", async () => {
+    await open();
+    const lead = document.querySelector(".rc-lead")!.textContent!;
+    expect(lead).toBe("Every claim and the proof behind it. Click an artifact to read it here. Pending means not scored yet.");
+    expect(document.querySelectorAll(".rc a[target=_blank]")).toHaveLength(0);
+  });
+});
+
 describe("a verified row", () => {
   const r = row("W4");
   it("is badged VERIFIED and shows the value, the pinned artifact link, the adapter and the sealed hashes", async () => {
@@ -49,10 +88,9 @@ describe("a verified row", () => {
     const c = card("W4");
     expect(c.getByText("VERIFIED")).toBeTruthy();
     expect(c.getByText(r.value_display!)).toBeTruthy();
-    const link = c.getByRole("link", { name: new RegExp(r.artifact.replace(/[.]/g, "\\.")) });
-    expect(link.getAttribute("href")).toBe(r.permalink);
-    expect(link.getAttribute("target")).toBe("_blank");
-    expect(link.getAttribute("rel")).toContain("noreferrer");
+    // the artifact opens its record on this page: a button, not a link to another site
+    expect(c.getByRole("button", { name: r.artifact })).toBeTruthy();
+    expect(c.queryByRole("link")).toBeNull();
     const adapter = c.getByText(r.adapter_sha256!.slice(0, SHORT_SHA));
     expect(adapter.getAttribute("title")).toBe(r.adapter_sha256);
     for (const [name, sha] of Object.entries(r.sealed_sha256)) {
@@ -60,7 +98,9 @@ describe("a verified row", () => {
       expect(c.getByText(sha.slice(0, SHORT_SHA)).getAttribute("title")).toBe(sha);
     }
     expect(c.getByText("$4.2582")).toBeTruthy(); // ledger_total_usd, formatted
-    expect(c.getByText("no pre-registration commit recorded in this evidence")).toBeTruthy();
+    // no pre-registration commit in this evidence: the row is left out rather than saying so on every card
+    expect(c.queryByText("pre-registration")).toBeNull();
+    expect(document.body.textContent).not.toContain("no pre-registration commit recorded");
   });
   it("keeps the gate inputs in a details block, values as the evidence has them", async () => {
     await open();
@@ -127,23 +167,23 @@ describe("a failed row", () => {
     expect(card("W2").getByText("PARTLY MET")).toBeTruthy();
     expect(card("W2").queryByText("NOT MET")).toBeNull();
   });
-  it("W-G, a test, is verified with its value and a link to the test file", async () => {
+  it("W-G, a test, is verified with its value and its test file as an artifact button", async () => {
     await open();
     const c = card("W-G");
     expect(c.getByText("VERIFIED")).toBeTruthy();
     expect(c.getByText("same agent code, base URL swapped; test passes")).toBeTruthy();
-    expect(c.getByRole("link").getAttribute("href")).toBe(row("W-G").permalink);
+    expect(c.getByRole("button", { name: row("W-G").artifact })).toBeTruthy();
   });
 });
 
 describe("a receipt that has been scored since (pending -> verified)", () => {
-  it("shows the value and a live link once the payload says verified", async () => {
+  it("shows the value and an artifact button once the payload says verified", async () => {
     const scored = { ...row("W-C2"), status: "verified", verdict: "PASS", value_display: "9 of 10 wrong answers deferred", prereg: { commit: "0123456789abcdef0123456789abcdef01234567", committed_at: "2026-10-20T10:00:00+05:30" }, sealed_sha256: { test_split: "a".repeat(64) } };
     await open({ ...EV, receipts: EV.receipts.map((r) => (r.id === "W-C2" ? scored : r)) });
     const c = card("W-C2");
     expect(c.getByText("VERIFIED")).toBeTruthy();
     expect(c.getByText("9 of 10 wrong answers deferred")).toBeTruthy();
-    expect(c.getByRole("link").getAttribute("href")).toBe(scored.permalink);
+    expect(c.getByRole("button", { name: scored.artifact })).toBeTruthy();
     expect(c.queryByText(/Pending/)).toBeNull();
   });
 });

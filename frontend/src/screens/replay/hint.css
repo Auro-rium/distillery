@@ -1,0 +1,88 @@
+/* ---------- Mission: the pulsing "Mission" box and its easy-words explainer; evidence button, DATA menu, demo dialog ---------- */
+.m-hint {
+  display: flex; align-items: center; gap: 8px; width: fit-content; margin: 0 0 var(--space-1); cursor: pointer;
+  font: 600 .8rem/1 var(--font-mono); letter-spacing: .14em; text-transform: uppercase;
+  padding: 8px 12px; border: 1px solid var(--accent); border-radius: var(--radius-sm);
+  background: var(--ok-bg); color: var(--accent);
+}
+.m-hint:hover { filter: brightness(1.2); }
+.m-hint:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.m-hint-q { display: inline-grid; place-items: center; width: 1.2rem; height: 1.2rem; border-radius: 50%; border: 1px solid currentColor; font-size: .72rem; letter-spacing: 0; }
+@media (prefers-reduced-motion: no-preference) {
+  .m-hint { animation: m-bulge 1s ease-in-out infinite; }
+  .m-hint:hover, .m-hint:focus-visible { animation-play-state: paused; }
+}
+@keyframes m-bulge {
+  0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(62, 224, 138, .5); }
+  50% { transform: scale(1.09); box-shadow: 0 0 0 9px rgba(62, 224, 138, 0); }
+}
+.dialog-content.m-help-dialog { width: min(calc(100vw - 2 * var(--gutter)), 560px); }
+.m-help { display: grid; gap: var(--space-3); margin-top: var(--space-3); max-height: min(70vh, 640px); overflow: auto; padding-right: var(--space-2); }
+.m-help > * { margin: 0; }
+.m-help-lead { font: 600 var(--step-1)/1.35 var(--font-display); }
+.m-help ul { padding-left: 1.2em; display: grid; gap: var(--space-2); }
+.m-help h3 { font: 700 var(--step-0)/1.3 var(--font-display); margin: var(--space-2) 0 0; }
+.m-help-parts { display: grid; gap: var(--space-2); }
+.m-help-parts > div { display: grid; grid-template-columns: minmax(0, 12.5rem) minmax(0, 1fr); gap: var(--space-3); align-items: baseline; padding: var(--space-2) var(--space-3); border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface-2); }
+.m-help-parts dt { color: var(--accent); overflow-wrap: anywhere; }
+.m-help-parts dd { margin: 0; color: var(--ink-2); }
+@media (max-width: 520px) { .m-help-parts > div { grid-template-columns: 1fr; gap: 2px; } }
+
+/* the evidence button: the one thing in the verdict's right-hand column */
+.m-right { align-content: center; justify-items: start; }
+.m-cta {
+  display: inline-flex; align-items: center; gap: 12px; padding: 16px 26px; border-radius: var(--radius-lg);
+  font: 700 var(--step-0)/1 var(--font-display); letter-spacing: -.01em; text-decoration: none;
+  color: var(--accent-ink); background: linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 70%, #00e5ff));
+  border: 1px solid color-mix(in srgb, var(--accent) 60%, #fff);
+  box-shadow: 0 0 0 1px rgba(62, 224, 138, .25), 0 8px 24px rgba(62, 224, 138, .22);
+  transition: transform .14s ease-out, box-shadow .14s ease-out, filter .14s;
+}
+.m-cta:hover { transform: translateY(-2px) scale(1.03); filter: brightness(1.06); box-shadow: 0 0 0 1px rgba(62, 224, 138, .4), 0 12px 30px rgba(62, 224, 138, .38); }
+.m-cta:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.m-cta-arrow { display: inline-block; transition: transform .14s ease-out; }
+.m-cta:hover .m-cta-arrow { transform: translateX(5px); }
+
+/* DATA: a green box that opens downward into the fine-tune record */
+.m-data { position: relative; min-width: 0; }
+.m-data-btn.m-data-btn { cursor: pointer; gap: 10px; font-size: .9rem; letter-spacing: .14em; }
+.m-data-btn:hover { filter: brightness(1.18); }
+.m-data-btn:focus-visible { outline: 2px solid var(--ok); outline-offset: 3px; }
+.m-data-btn[aria-expanded="true"] .m-caret { transform: rotate(180deg); }
+.m-data-list { position: absolute; z-index: 6; top: 0; left: calc(100% + 12px); list-style: none; margin: 0; padding: var(--space-2); width: 15rem; display: grid; gap: 2px; background: var(--surface); border: 1px solid var(--ok); border-radius: var(--radius); box-shadow: var(--shadow-2); }
+.m-data-list[hidden] { display: none; }
+.m-data-item { position: relative; }
+.m-data-row { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-3); width: 100%; padding: 7px 10px; border-radius: var(--radius-sm); font-size: .88rem; text-align: left; overflow-wrap: anywhere; color: var(--ink); }
+.m-data-label { flex: 1 1 auto; line-height: 1.35; }
+.m-data-value { flex: none; margin-left: auto; text-align: right; white-space: nowrap; }
+button.m-data-row { background: none; border: 0; cursor: pointer; font-family: inherit; }
+button.m-data-row:hover, button.m-data-row[aria-expanded="true"] { background: var(--ok-bg); }
+button.m-data-row:focus-visible { outline: 2px solid var(--ok); outline-offset: -2px; }
+.m-data-i { flex: none; display: inline-grid; place-items: center; width: 1.1rem; height: 1.1rem; border: 1px solid var(--ok); border-radius: 50%; color: var(--ok); font: 700 .68rem/1 var(--font-mono); }
+.m-data-pop { z-index: 4; width: 230px; padding: var(--space-3); background: var(--surface); color: var(--ink); border: 1px solid var(--ok); border-radius: var(--radius); box-shadow: var(--shadow-3); font-size: .86rem; line-height: 1.5; }
+.m-data-pop.right { position: absolute; left: calc(100% + 12px); top: 50%; transform: translateY(-50%); }
+.m-data-pop.right::before { content: ""; position: absolute; left: -6px; top: 50%; width: 10px; height: 10px; background: var(--surface); border-left: 1px solid var(--ok); border-bottom: 1px solid var(--ok); transform: translateY(-50%) rotate(45deg); }
+.m-data-pop.below { position: static; width: auto; margin: 4px 6px 6px; }
+
+/* the dry run opens here, on the Mission page, as the Live screen inside a dialog */
+.dialog-content.demo-dialog { width: min(calc(100vw - 2 * var(--gutter)), 1180px); }
+.demo-dialog .run-tabbar { display: none; }
+.demo-dialog .run-sticky { position: static; margin: 0 0 var(--space-3); padding: 0; background: none; backdrop-filter: none; -webkit-backdrop-filter: none; border: 0; }
+
+/* the Stored runs / live runs titles: as large as the other section titles, and heavier */
+.mission .m-lists h2 { font-size: var(--step-2); -webkit-text-stroke: .7px currentColor; letter-spacing: -.02em; }
+
+/* the Training heading line: Training ──► DATA. The arrow is a green line with a moving glint, "loading" toward the button */
+.m-title-row { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-3); }
+.m-link-arrow { position: relative; display: block; flex: none; width: clamp(5rem, 14vw, 9rem); height: 2px; border-radius: 2px; background: color-mix(in srgb, var(--ok) 55%, transparent); overflow: visible; }
+.m-link-arrow::after { content: ""; position: absolute; right: -1px; top: 50%; width: 9px; height: 9px; border-top: 2px solid var(--ok); border-right: 2px solid var(--ok); transform: translateY(-50%) rotate(45deg); }
+.m-link-arrow::before { content: ""; position: absolute; left: 0; top: -1px; height: 4px; width: 38%; border-radius: 4px; background: linear-gradient(90deg, transparent, var(--ok), transparent); box-shadow: 0 0 8px var(--ok); opacity: 0; }
+@media (prefers-reduced-motion: no-preference) {
+  .m-link-arrow::before { opacity: 1; animation: m-load 1.4s ease-in-out infinite; }
+}
+@keyframes m-load { from { transform: translateX(-30%); } to { transform: translateX(180%); } }
+@media (max-width: 720px) {
+  .m-data-list { top: calc(100% + 8px); left: 0; }
+  .m-data-pop.right { position: static; transform: none; width: auto; margin: 4px 6px 6px; }
+  .m-data-pop.right::before { display: none; }
+}

@@ -28,9 +28,9 @@ describe("route transitions", () => {
     };
     const { container } = renderApp("/");
     expect(container.querySelector(".route")!.className).not.toContain("route-enter");
-    fireEvent.click(screen.getByRole("link", { name: "Acme analyst" }));
-    expect(screen.queryByRole("heading", { name: "Acme analyst" })).toBeNull(); // old page stays until the transition commits
-    await waitFor(() => expect(screen.getByRole("heading", { name: "Acme analyst" })).toBeTruthy());
+    fireEvent.click(screen.getByRole("link", { name: "Receipts" }));
+    expect(screen.queryByRole("heading", { name: "Receipts" })).toBeNull(); // old page stays until the transition commits
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Receipts" })).toBeTruthy());
     expect(calls).toHaveLength(1);
   });
   it("with reduced motion the API is never used", async () => {
@@ -65,8 +65,10 @@ describe("keyboard shortcuts", () => {
     expect(document.documentElement.dataset.theme).toBeTruthy();
     expect(document.documentElement.dataset.theme).not.toBe(before);
     fireEvent.keyDown(window, { key: "g" });
-    act(() => { fireEvent.keyDown(window, { key: "p" }); });
-    expect(await screen.findByRole("heading", { name: "Acme analyst" })).toBeTruthy();
+    act(() => { fireEvent.keyDown(window, { key: "r" }); });
+    await waitFor(() => expect(screen.queryByLabelText("Budget cap (USD)")).toBeNull());
+    await screen.findByRole("heading", { level: 1 });
+    await waitFor(() => expect(document.title).toMatch(/^Mission/));
   });
 });
 

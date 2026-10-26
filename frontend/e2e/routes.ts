@@ -14,6 +14,5 @@ export const ROUTES: RouteSpec[] = [
   { name: "live-complete", path: "/runs/dry-sql-tiny", banner: true },
   { name: "report", path: "/runs/dry-sql-tiny/report", banner: true },
   { name: "tree", path: "/runs/dry-sql-tiny/tree", banner: true },
-  { name: "playground", path: "/playground", banner: false },
   { name: "not-found", path: "/no/such/page", banner: false },
 ];

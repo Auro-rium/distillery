@@ -1,4 +1,4 @@
-/* SQL blocks shared by the report examples and the playground. Loaded before styles.css, so selectors carry a second class. */
+/* SQL blocks shared by the report examples. Loaded before styles.css, so selectors carry a second class. */
 .sql-block { min-width: 0; }
 .sql-head { display: flex; align-items: center; gap: var(--space-2); min-height: 2rem; margin-bottom: 4px; }
 .sql-head .code-cap { margin: 0; flex: 1 1 auto; min-width: 0; }

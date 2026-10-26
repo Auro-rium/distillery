@@ -15,8 +15,8 @@ const STATUS: Record<ProofStatus, { text: string; tone: Tone }> = {
 };
 
 export interface ProofCardProps {
-  /** Short rung id shown in the corner, e.g. "W1". */
-  rung: string;
+  /** Short rung id shown in the corner, e.g. "W1". Left out when the card has no use for it. */
+  rung?: string;
   title: string;
   status: ProofStatus;
   /** The one primary number, already formatted by the caller (api/format.ts). */
@@ -27,6 +27,8 @@ export interface ProofCardProps {
   /** A small visual (e.g. a Sparkline). */
   visual?: ReactNode;
   href?: string | null;
+  /** Opens the evidence in place (a dialog on the same page). Used instead of `href` when both are given. */
+  onOpen?: () => void;
   linkLabel?: string;
   className?: string;
   /** Heading level for the title (default 3). */
@@ -39,7 +41,7 @@ export function ProofCard(props: ProofCardProps) {
   return (
     <article className={cx("proof-card", `is-${props.status}`, props.className)}>
       <header className="proof-head">
-        <span className="proof-rung num">{props.rung}</span>
+        {props.rung && <span className="proof-rung num">{props.rung}</span>}
         <Badge tone={s.tone}>{s.text}</Badge>
       </header>
       <H className="proof-title">{props.title}</H>
@@ -51,7 +53,12 @@ export function ProofCard(props: ProofCardProps) {
       )}
       {props.visual && <div className="proof-visual">{props.visual}</div>}
       {props.detail && <p className="proof-detail muted">{props.detail}</p>}
-      {props.href && (
+      {props.onOpen ? (
+        <button type="button" className="proof-link" aria-haspopup="dialog" onClick={props.onOpen}>
+          {props.linkLabel ?? "Evidence"}
+          <span aria-hidden="true"> →</span>
+        </button>
+      ) : props.href && (
         <a className="proof-link" href={props.href} target="_blank" rel="noreferrer noopener">
           {props.linkLabel ?? "Evidence"}
           <span aria-hidden="true"> →</span>

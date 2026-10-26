@@ -40,6 +40,17 @@ export function fmtInt(v: Val): string {
   return String(Math.round(v));
 }
 
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/** An ISO timestamp as "4 Oct 2026, 18:54:32 (UTC)". Absent or unreadable is "not measured", never a made-up time. */
+export function fmtDateTimeUtc(iso: string | null | undefined): string {
+  if (!iso) return NOT_MEASURED;
+  const t = new Date(iso);
+  if (Number.isNaN(t.getTime())) return NOT_MEASURED;
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${t.getUTCDate()} ${MONTHS[t.getUTCMonth()]} ${t.getUTCFullYear()}, ${p(t.getUTCHours())}:${p(t.getUTCMinutes())}:${p(t.getUTCSeconds())} (UTC)`;
+}
+
 /** Plain text that may be absent (timestamps, ids, free text). */
 export function fmtText(v: string | null | undefined): string {
   return v === null || v === undefined || v === "" ? NOT_MEASURED : v;

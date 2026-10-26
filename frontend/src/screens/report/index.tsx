@@ -8,7 +8,7 @@ import { answerLanguage } from "../../lib/packs";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../ui";
 import { ExamplesCard } from "./Examples";
 import { Summary } from "./Summary";
-import { Accuracy, ByClass, Clusters, CostLatency, Counters, FineTune, GateCaveat, GateDetails, HumanSet, Stress } from "./sections";
+import { Accuracy, Clusters, CostLatency, Counters, FineTune, GateDetails, HumanSet, Stress } from "./sections";
 import { useAsync } from "./useAsync";
 import "./report.css";
 
@@ -47,7 +47,6 @@ export function ReportView({ r }: { r: Report }) {
       <h2 className="sr-only">Report</h2>
       <Summary r={r} />
       <p className="muted rp-meta">Pack {r.pack} · candidate round {fmtInt(r.candidate_round)}</p>
-      <GateCaveat r={r} />
       <Tabs value={tab} onValueChange={setTab} className="rp-tabs">
         <TabsList aria-label="Report sections" className="rp-tablist">
           {TABS.map((t) => <TabsTrigger key={t.value} value={t.value}>{t.label}</TabsTrigger>)}
@@ -56,7 +55,6 @@ export function ReportView({ r }: { r: Report }) {
           <div className="rp-grid">
             <GateDetails r={r} />
             <Accuracy r={r} />
-            <ByClass r={r} />
             <HumanSet r={r} />
           </div>
         </TabsContent>

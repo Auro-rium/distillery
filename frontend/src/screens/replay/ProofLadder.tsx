@@ -1,8 +1,10 @@
+import { useState } from "react";
 import type { ProofItem } from "../../api/types";
 import { ProofCard, Sparkline } from "../../charts";
 import { ApiErrorState, Spinner } from "../../components";
+import { EvidenceViewer } from "../../components/EvidenceViewer";
 import type { Async } from "../report/useAsync";
-import { fmtSig, proofsOf, proofStatus, rungOf } from "./mission";
+import { fmtSig, proofsOf, proofStatus, receiptOf } from "./mission";
 
 function headline(p: ProofItem): string {
   const h = p.headline;
@@ -11,13 +13,12 @@ function headline(p: ProofItem): string {
   return h.unit ? `${v} ${h.unit}` : v;
 }
 
-function Proof({ p }: { p: ProofItem }) {
+function Proof({ p, onOpen }: { p: ProofItem; onOpen: () => void }) {
   const status = proofStatus(p.verdict);
   const key = Array.isArray(p.metrics) ? p.metrics[0] : undefined;
   const series = Array.isArray(p.series) ? p.series : [];
   return (
     <ProofCard
-      rung={rungOf(p)}
       title={p.title}
       status={status}
       metric={headline(p)}
@@ -26,7 +27,7 @@ function Proof({ p }: { p: ProofItem }) {
         <Sparkline values={series.map((s) => s.train_loss)} label="Train loss by checkpoint" format={fmtSig} showLast />
       ) : undefined}
       detail={key ? <>{key.label}: <span className="num">{fmtSig(key.value)}</span></> : undefined}
-      href={p.evidence_url}
+      onOpen={onOpen}
       linkLabel="Evidence"
     />
   );
@@ -34,6 +35,7 @@ function Proof({ p }: { p: ProofItem }) {
 
 export function ProofLadder({ res, onRetry }: { res: Async<unknown>; onRetry: () => void }) {
   const proofs = res.state === "ok" ? proofsOf(res.data) : null;
+  const [open, setOpen] = useState<ProofItem | null>(null);
   return (
     <section className="m-section" aria-labelledby="proof-h">
       <div className="m-section-head">
@@ -46,9 +48,15 @@ export function ProofLadder({ res, onRetry }: { res: Async<unknown>; onRetry: ()
       {res.state === "ok" && proofs !== null && proofs.length === 0 && <p className="muted">The evidence file lists no proofs yet.</p>}
       {proofs && proofs.length > 0 && (
         <ul className="m-proofs" role="list" aria-label="Proof ladder">
-          {proofs.map((p) => <li key={p.id}><Proof p={p} /></li>)}
+          {proofs.map((p) => <li key={p.id}><Proof p={p} onOpen={() => setOpen(p)} /></li>)}
         </ul>
       )}
+      <EvidenceViewer
+        title={open ? `Evidence: ${open.title}` : null}
+        record={open ? { proof: open, receipt: res.state === "ok" ? receiptOf(res.data, open.id) : null } : null}
+        file={open ? { path: open.evidence_path, url: open.evidence_url } : null}
+        onClose={() => setOpen(null)}
+      />
     </section>
   );
 }

@@ -14,17 +14,36 @@ beforeEach(() => stubFetch(() => json([])));
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
 describe("summary", () => {
-  it("shows the decision, the label, n and the thresholds the gate used, all from the payload", () => {
+  it("shows the decision and the label up front; n, the ratio lower bound and McNemar p sit behind one Gate numbers button", () => {
     view(base);
     const s = screen.getByRole("region", { name: "Gate decision" });
     expect(within(s).getByText(base.decision)).toBeTruthy();
     expect(within(s).getByText("dry run")).toBeTruthy();
     const g = base.evaluation.gate;
+    const btn = within(s).getByRole("button", { name: /Gate numbers/ });
+    expect(btn.getAttribute("aria-expanded")).toBe("false");
+    expect(s.textContent).not.toContain(`n=${g.n}`);
+    fireEvent.click(btn);
+    expect(btn.getAttribute("aria-expanded")).toBe("true");
     expect(s.textContent).toContain(`n=${g.n}`);
     expect(s.textContent).toContain(g.ratio_lo.toFixed(3));
     expect(s.textContent).toContain(g.thresholds.ratio_lower_bound_min.toFixed(2));
     expect(s.textContent).toContain(g.thresholds.mcnemar_alpha.toFixed(2));
     expect(s.textContent).toContain(g.mcnemar_p.toFixed(4));
+    fireEvent.click(btn);
+    expect(s.textContent).not.toContain(`n=${g.n}`);
+  });
+
+  it("Gate numbers and Gate reasons are two separate buttons that open independently", () => {
+    view(base);
+    const s = screen.getByRole("region", { name: "Gate decision" });
+    fireEvent.click(within(s).getByRole("button", { name: /Gate reasons/ }));
+    expect(within(s).getByRole("button", { name: /Gate numbers/ }).getAttribute("aria-expanded")).toBe("false");
+    expect(s.textContent).toContain(base.decision_reasons[0]);
+    expect(s.textContent).not.toContain(`n=${base.evaluation.gate.n}`);
+    fireEvent.click(within(s).getByRole("button", { name: /Gate numbers/ }));
+    expect(s.textContent).toContain(base.decision_reasons[0]);
+    expect(s.textContent).toContain(`n=${base.evaluation.gate.n}`);
   });
 
   it("keeps the gate reasons collapsed until asked, then shows them verbatim", () => {
@@ -74,37 +93,38 @@ describe("accuracy", () => {
     const note = main.closest(".card")!.querySelector(".rp-ci-note")!.textContent!;
     expect(note).toContain(ciTxt);
     expect(note).toContain("No CI in report for base, teacher");
-    // headline, class split, stress, loss curve
-    expect(screen.getAllByRole("list", { name: "Chart key" })).toHaveLength(2 + (base.evaluation.stress ? 1 : 0) + (base.finetune?.length ? 1 : 0));
+    // headline, stress, loss curve (there is no separate per-class chart)
+    expect(screen.getAllByRole("list", { name: "Chart key" })).toHaveLength(1 + (base.evaluation.stress ? 1 : 0) + (base.finetune?.length ? 1 : 0));
   });
 
-  it("splits by held-out class as small multiples with their own n, marking classes the student did not train on", () => {
+  it("has no separate per-class accuracy card: the held-out accuracy chart above is the only one on the verdict tab", () => {
     const { container } = view(base);
     const classes = Object.keys(base.evaluation.accuracy_by_class);
     expect(classes.length).toBeGreaterThan(0);
-    for (const c of classes) {
-      const panel = screen.getByRole("group", { name: c });
-      expect(within(panel).getByText(`n=${base.evaluation.class_counts[c]}`)).toBeTruthy();
-      expect(panel.querySelectorAll(".bar")).toHaveLength(3);
-      const a = base.evaluation.accuracy_by_class[c];
-      for (const k of ["base", "student", "teacher"] as const)
-        expect(panel.querySelector(`.bar.m-${k} .bar-value`)!.textContent).toBe(`${(a[k] * 100).toFixed(1)}%`);
-    }
-    expect(screen.queryAllByText("not in training").length).toBe(classes.filter((c) => c.startsWith("unseen")).length);
-    // headline 3 + 3 per class + stress (student and teacher per group: overall + families)
+    expect(screen.queryByText("Accuracy by held-out class")).toBeNull();
+    for (const c of classes) expect(screen.queryByRole("group", { name: c })).toBeNull();
+    // headline 3 + stress (student and teacher per group: overall + families)
     const stressGroups = base.evaluation.stress ? 1 + Object.keys(base.evaluation.stress.accuracy_by_family).length : 0;
-    expect(container.querySelectorAll(".bar")).toHaveLength(3 + 3 * classes.length + 2 * stressGroups);
-    // whiskers exist only on the headline chart: the report has no per-class CI
+    expect(container.querySelectorAll(".bar")).toHaveLength(3 + 2 * stressGroups);
     expect(container.querySelectorAll(".whisker")).toHaveLength(1);
+  });
+
+  it("the verdict tab's gate card has no three-number strip (n and McNemar are in the summary bar above)", () => {
+    const { container } = view(base);
+    expect(container.querySelector(".rp-gate")).not.toBeNull();
+    expect(container.querySelector(".rp-gate .rp-stats")).toBeNull();
+    expect(screen.queryByText("Bootstrap resamples")).toBeNull();
+    expect(screen.queryByText("McNemar exact p")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /Gate numbers/ }));
+    expect(container.querySelector(".rp-summary")!.textContent).toContain(`n=${base.evaluation.gate.n}`);
   });
 
   it("offers a table twin whose cells repeat the drawn values", () => {
     view(base);
     const tables = screen.getAllByRole("table", { hidden: true });
     const text = tables.map((t) => t.textContent).join(" ");
-    expect(text).toContain(`${(Object.values(base.evaluation.accuracy_by_class)[0].base * 100).toFixed(1)}%`);
+    expect(text).toContain(`${(base.evaluation.accuracy.base * 100).toFixed(1)}%`);
     expect(text).toContain(`${(base.evaluation.gate.student_ci![0] * 100).toFixed(1)}% to ${(base.evaluation.gate.student_ci![1] * 100).toFixed(1)}%`);
-    for (const c of Object.keys(base.evaluation.accuracy_by_class)) expect(text).toContain(c);
   });
 
   it("reports unparseable outputs per model", () => {
@@ -144,11 +164,10 @@ describe("counters", () => {
     expect(row.textContent).toContain(String(base.llm_attempt_counters["eval_teacher:schema_retries"]));
     expect(screen.getByText(/LLM errors by purpose: none recorded/)).toBeTruthy();
   });
-  it("says so when a report has no counters or clusters or class split", () => {
+  it("says so when a report has no counters or clusters", () => {
     view({ ...base, counters: {}, llm_attempt_counters: {}, rounds: [], evaluation: { ...base.evaluation, accuracy_by_class: {} } });
     expect(screen.getByText("No drop or error counters in this report")).toBeTruthy();
     expect(screen.getByText("No failure clusters in this report")).toBeTruthy();
-    expect(screen.getByText("No class split in this report")).toBeTruthy();
   });
 });
 
@@ -254,20 +273,18 @@ describe("stress set and in-distribution caveat", () => {
     expect(screen.queryByText("Stress set")).toBeNull();
   });
 
-  it("shows the caveat with the percentage and skeleton count from the payload", () => {
+  it("has no in-distribution warning box, even when the report carries the overlap rate", () => {
     view(withNew);
-    const note = screen.getByRole("note");
-    const d = withNew.data;
-    expect(note.textContent).toContain("Gate set is in-distribution");
-    expect(note.textContent).toContain(`${(d.heldout_skeleton_overlap_rate! * 100).toFixed(0)}% of gate questions`);
-    expect(note.textContent).toContain(`${d.train_distinct_skeletons} distinct training skeletons`);
-    expect(note.textContent).toContain("not novel query structure");
+    expect(typeof withNew.data.heldout_skeleton_overlap_rate).toBe("number"); // the data the old box was built from is still there
+    expect(screen.queryByRole("note")).toBeNull();
+    expect(screen.queryByText(/Gate set is in-distribution/)).toBeNull();
+    expect(screen.queryByText("not novel query structure", { exact: false })).toBeNull();
   });
 
-  it("omits the caveat for an old run and still renders its unseen classes", () => {
+  it("still renders an old run (no stress set, no overlap rate)", () => {
     view(oldRun);
+    expect(screen.getByRole("figure", { name: "Held-out accuracy by model" })).toBeTruthy();
     expect(screen.queryByText(/in-distribution/)).toBeNull();
-    expect(screen.getAllByText("not in training").length).toBeGreaterThan(0);
   });
 });
 

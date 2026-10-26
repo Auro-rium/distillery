@@ -1,22 +1,30 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { lazy, Suspense, useState } from "react";
 import { ApiError, api } from "../../api/client";
-import { ErrorState } from "../../components";
+import { ErrorState, Spinner } from "../../components";
 import { Button } from "../../ui";
+import { LazyDialog } from "../../ui/LazyDialog";
 import { describeCreateError } from "../newrun/errors";
 
+// The run view is the Live screen itself, loaded only when a demo is started.
+const LiveRun = lazy(() => import("../live"));
+
+/**
+ * Starts a dry run (fake models, no spend) and shows it right here, in a dialog on the Mission page: the same live
+ * view as the run page, without leaving. The run carries its own DRY RUN label; the numbers are not results.
+ */
 export function DemoButton() {
-  const nav = useNavigate();
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [runId, setRunId] = useState<string | null>(null);
   async function start() {
     setBusy(true);
     setErr(null);
     try {
       const r = await api.createRun({ pack: "sql", scale: "tiny", dry_run: true });
-      nav(`/runs/${encodeURIComponent(r.run_id)}`);
+      setRunId(r.run_id);
     } catch (e) {
       setErr(e instanceof ApiError && e.message ? `${e.message} (HTTP ${e.status})` : describeCreateError(e));
+    } finally {
       setBusy(false);
     }
   }
@@ -27,6 +35,19 @@ export function DemoButton() {
         <span className="muted">Fake models, no spend, results are NOT real (dry run)</span>
       </div>
       {err && <ErrorState title="Could not start the demo run" message={err} />}
+      <LazyDialog
+        open={runId !== null}
+        onOpenChange={(o) => { if (!o) setRunId(null); }}
+        title="Demo run"
+        description="A dry run: fake models, no spend. Its numbers are NOT results."
+        className="demo-dialog"
+      >
+        {runId && (
+          <Suspense fallback={<Spinner label="Loading the run" />}>
+            <LiveRun runId={runId} />
+          </Suspense>
+        )}
+      </LazyDialog>
     </div>
   );
 }
