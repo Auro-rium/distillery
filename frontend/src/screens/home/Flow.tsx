@@ -9,8 +9,8 @@ const STEPS: { title: string; body: string }[] = [
   { title: "Drift guard", body: "The share of deferred requests is watched over a sliding window and a sample of student answers is audited by the teacher. A burst of unfamiliar traffic rolls the gateway back." },
 ];
 
-const DECODE_MS = 300;
-const FRAME_MS = 40;
+const DECODE_MS = 180;
+const FRAME_MS = 30;
 
 /** A 0 or 1 for a character position and animation frame. A hash, not a random number: the same input gives the same bit. */
 const bit = (i: number, frame: number): string => (((Math.imul(i + 1, 2654435761) ^ Math.imul(frame + 7, 40503)) >>> 9) & 1) === 1 ? "1" : "0";

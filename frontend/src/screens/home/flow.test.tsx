@@ -43,14 +43,14 @@ describe("How one request is served", () => {
     expect(box(0).dataset.open).toBe("true");
     expect(box(1).dataset.open).toBe("false");
     raf.frame(1000); // starts the decode
-    raf.frame(1100);
+    raf.frame(1060);
     const bits = [...document.querySelectorAll<HTMLElement>(".h-bit")];
     expect(bits.length).toBeGreaterThan(50);
     expect(bits.every((b) => b.dataset.b === "0" || b.dataset.b === "1")).toBe(true);
     // assistive technology reads the real text once, not the bits
     expect(document.querySelector(".h-desc-text .sr-only")!.textContent).toContain(FIRST);
     expect(document.querySelector(".h-desc-text [aria-hidden='true']")).toBeTruthy();
-    raf.frame(1000 + 800); // past the decode time: every letter is real
+    raf.frame(1000 + 400); // past the decode time: every letter is real
     expect(document.querySelectorAll(".h-bit")).toHaveLength(0);
     expect(screen.getByText(new RegExp(FIRST))).toBeTruthy();
     fireEvent.pointerLeave(slots()[0]);
