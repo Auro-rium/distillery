@@ -82,7 +82,7 @@
 .m-training, .m-limits { display: grid; gap: var(--space-5); }
 .m-train-side, .m-limit-chart, .m-cost { display: grid; gap: var(--space-3); align-content: start; min-width: 0; }
 @media (min-width: 900px) {
-  .m-training { grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); }
+  .m-training { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
   .m-limits { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); }
 }
 .m-overlap { margin: 0; font-size: var(--step--1); line-height: 1.55; padding: var(--space-3); border-left: 2px solid var(--line); background: var(--surface); border-radius: 0 var(--radius) var(--radius) 0; }

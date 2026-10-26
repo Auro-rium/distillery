@@ -11,12 +11,12 @@ export interface DataRow {
 }
 
 /** Width reserved for a definition beside its row (see `.m-data-pop`); when it does not fit on the right it goes below. */
-const POP_WIDTH = 250;
+const POP_WIDTH = 230;
 const POP_GAP = 12;
 const EDGE = 16;
 
 /**
- * A green "DATA" box that opens downward into a list of everything recorded for the fine-tune. Rows that have a
+ * A green "DATA" box that opens to its right into a list of everything recorded for the fine-tune. Rows that have a
  * definition (train loss, validation loss) open it in a small note to their right when clicked, or just under the
  * row when there is no room on the right. Esc closes the note first, then the list; so does a click elsewhere.
  */
@@ -58,7 +58,7 @@ export function DataMenu({ rows, label = "Fine-tune record" }: { rows: DataRow[]
         onClick={() => { setOpen((o) => !o); setHelp(null); }}
       >
         <span>Data</span>
-        <span className="m-caret" aria-hidden="true">▾</span>
+        <span className="m-caret" aria-hidden="true">▸</span>
       </button>
       <ul id={panel} className="m-data-list" role="list" aria-label={label} hidden={!open}>
         {rows.map((row) => {

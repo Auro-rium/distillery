@@ -585,3 +585,10 @@ button.proof-link:hover { filter: brightness(1.2); }
   .pipe-line { stroke-dasharray: none; }
   .hb-ping, .tl-link .pulse { display: none; }
 }
+
+/* a bold dot before each section heading on the Overview and Mission pages, so sections are easy to spot while scrolling */
+.home h2, .mission h2 { display: flex; align-items: center; gap: .6em; }
+.home h2::before, .mission h2::before {
+  content: ""; flex: none; width: .55em; height: .55em; border-radius: 50%; background: var(--accent);
+  box-shadow: 0 0 0 .16em color-mix(in srgb, var(--accent) 24%, transparent), 0 0 12px color-mix(in srgb, var(--accent) 70%, transparent);
+}
